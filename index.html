@@ -2255,7 +2255,12 @@ if (!mpName) mpName='Pilot-'+Math.floor(100+Math.random()*900);
 // the hub, which relays each pilot's presence to the others. If the hub leaves, the rest elect a new one by racing
 // to claim the same id, so the room carries on.
 function peerLobby(){
-  const PEER_OPTS={debug:0, config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:global.stun.twilio.com:3478'}]}};
+  // STUN finds a direct path; when two networks block that, the TURN relay carries the traffic instead (free public relay)
+  const PEER_OPTS={debug:0, config:{iceServers:[
+    {urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'},{urls:'stun:global.stun.twilio.com:3478'},
+    {urls:['turn:openrelay.metered.ca:80','turn:openrelay.metered.ca:443','turn:openrelay.metered.ca:443?transport=tcp'], username:'openrelayproject', credential:'openrelayproject'}]}};
+  const NET_ERR=['network','server-error','socket-error','socket-closed','disconnected'];
+  const codeOf=err=>(err && NET_ERR.includes(err.type)) ? 'no_server' : 'no_link';
   const okObj=v=>v && typeof v==='object' && !Array.isArray(v);
   const fits=v=>{ try { return JSON.stringify(v).length<6000; } catch (e) { return false; } };
   return { join(name){
@@ -2285,7 +2290,7 @@ function peerLobby(){
     function becomeClient(p,resolve,reject,gen){
       R.hub=false; R.me=p.id; R.peer=p;
       const c=p.connect(hubId,{serialization:'json'});
-      const to=setTimeout(()=>{ if (gen===R.gen && !R.up){ try { p.destroy(); } catch (e) {} reject({code:'upstream_error'}); } },9000);
+      const to=setTimeout(()=>{ if (gen===R.gen && !R.up){ try { p.destroy(); } catch (e) {} reject({code:'no_link'}); } },20000);   // found the host, but no path between the two networks
       c.on('open',()=>{ clearTimeout(to); R.up=c; send(c,{t:'p', pres:R.mine}); resolve(); });
       c.on('data',m=>{ if (!okObj(m)) return;
         if (m.t==='all' && Array.isArray(m.list)) m.list.forEach(x=>{ if (Array.isArray(x) && fits(x[1])) setOther(String(x[0]),x[1]); });
@@ -2308,13 +2313,13 @@ function peerLobby(){
             q.on('open',()=>{ if (gen===R.gen) becomeClient(q,ok,no,gen); });
             q.on('error',e2=>{ if (gen!==R.gen) return;
               if (e2 && e2.type==='peer-unavailable' && !R.up){ try { q.destroy(); } catch (e) {} setTimeout(()=>connect().then(ok,no),400+Math.random()*800); }   // hub just vanished: race again
-              else if (!settled) no({code:'upstream_error'}); });
-          } else if (!settled) no({code:(err && err.type==='browser-incompatible') ? 'not_granted' : 'upstream_error'});
+              else if (!settled) no({code:codeOf(e2)}); });
+          } else if (!settled) no({code:(err && err.type==='browser-incompatible') ? 'not_granted' : 'no_server'});
         });
         p.on('disconnected',()=>{ if (gen===R.gen && !R.left){ try { p.reconnect(); } catch (e) {} } });   // broker link only; peer links keep working
       });
     }
-    function rejoin(){ setTimeout(()=>{ if (!R.left) connect().catch(()=>fail('upstream_error')); }, 300+Math.random()*900); }
+    function rejoin(){ setTimeout(()=>{ if (!R.left) connect().catch(e=>fail((e && e.code) || 'no_link')); }, 300+Math.random()*900); }
     const api={
       peers:()=>list(),
       presence(patch){
@@ -2377,12 +2382,13 @@ function mpUI(){
     jb.disabled=false;
     if (MP.err){ st.className='bad'; st.textContent = (MP.err==='not_granted'||MP.err==='revoked'||MP.err==='not_permitted')
       ? `Multiplayer is not supported in this browser (code ${MP.err}). Try the latest Chrome, Edge or Firefox.`
-      : `Could not reach the room (code ${MP.err}). Check your internet connection and press Join room to try again. Strict office or college Wi-Fi can block direct connections; mobile data usually works.`; }
+      : (MP.err==='no_server' ? `Could not reach the multiplayer server (code no_server). Check your internet connection, wait a minute and press Join room again.` : MP.err==='no_link' ? `Found the room, but your network and the host's network would not connect (code no_link). Press Join room to try again. If it keeps failing: turn off any VPN, use Chrome or Edge, or put one of you on a mobile hotspot. Office and college Wi-Fi often block this.` : `Could not join the room (code ${MP.err}). Press Join room to try again.`); }
     else st.textContent='Pick a callsign and a room code, then Join. Everyone who uses the same code meets in the same sky.';
   } else {
-    jb.disabled=false; jb.textContent='Change room';
+    const typed=cleanCode($('mpCode').value);
+    jb.disabled=false; jb.textContent = typed!==MP.code ? `Join room "${typed}"` : `In room "${MP.code}"`;
     const ps=MP.room.peers().filter(p=>p.kind==='viewer'), n=ps.length;
-    st.className='ok'; st.textContent=`In ${MP.rkind==='raid'?'co-op raid':MP.rkind==='dogfight-pune'?'Pune dogfight':'Kargil dogfight'} room "${MP.code}" · ${n} pilot${n===1?'':'s'}`+(n<2?' · waiting for a friend to join with the same code':MP.rkind==='raid'?' · start the sortie to join the raid':' · start the sortie to fight');
+    st.className='ok'; st.textContent=`In ${MP.rkind==='raid'?'co-op raid':MP.rkind==='dogfight-pune'?'Pune dogfight':'Kargil dogfight'} room "${MP.code}" · ${n} pilot${n===1?'':'s'}`+(typed!==MP.code?` · press Join room to move to "${typed}"`:'')+(n<2?' · waiting for a friend to join with the same code':MP.rkind==='raid'?' · start the sortie to join the raid':' · start the sortie to fight');
     ps.forEach(p=>{
       const d=p.presence && p.presence.mp, li=document.createElement('li');
       const nm=p.sameTab ? mpName : (cleanName(d && d.n) || 'Pilot');
@@ -3364,6 +3370,8 @@ $('resume').addEventListener('click',pauseToggle);
 $('quit').addEventListener('click',()=>{ $('pause').hidden=true; $('radio').hidden=true; $('radio').classList.remove('train'); speechStop();
   applyPrefs(); setState('brief'); $('brief').hidden=false; mpPresence(); $('start').focus(); });
 $('mpJoin').addEventListener('click',mpJoin);
+$('mpCode').addEventListener('input',()=>{ if (!MP.joining) mpUI(); });   // the button says Join as soon as the code differs from the current room
+$('mpCode').addEventListener('keydown',e=>{ if (e.key==='Enter'){ e.preventDefault(); mpJoin(); } });
 document.addEventListener('visibilitychange',()=>{ if (document.hidden && state==='fly') pauseToggle(); });
 
 // ---------- hangar
