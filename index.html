@@ -141,9 +141,24 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
 #touch .tbtn.sm{width:74px;height:38px;}
 #touch .tbtn small{display:block;font-size:10px;font-weight:600;margin-top:2px;letter-spacing:.04em;}
 #touch .tbtn.top{position:absolute;bottom:calc(env(safe-area-inset-bottom,0px) + 166px);width:58px;height:34px;font-size:11px;pointer-events:auto;}
-#tTilt{left:calc(env(safe-area-inset-left,0px) + 18px);}
-#tView{left:calc(env(safe-area-inset-left,0px) + 84px);}
+#tTilt{left:calc(env(safe-area-inset-left,0px) + 50px);}
+#tView{left:calc(env(safe-area-inset-left,0px) + 116px);}
+/* phone layout: a big round FIRE on the right with FLR beside it and WPN above, a thin throttle on the left edge, pause top right */
+#touch .tbtns{position:static;display:block;}
+#touch .tbtns .tbtn{position:absolute;pointer-events:auto;}
+#touch #tFire{right:calc(env(safe-area-inset-right,0px) + 18px);bottom:calc(env(safe-area-inset-bottom,0px) + 18px);width:92px;height:92px;border-radius:50%;
+  border:2px solid rgba(255,90,79,.95);color:#fff;font-size:13px;box-shadow:0 0 0 6px rgba(255,90,79,.16);
+  background:radial-gradient(circle,rgba(255,90,79,.38) 0 20%,rgba(255,90,79,.06) 21% 46%,rgba(255,90,79,.45) 47% 50%,rgba(9,16,28,.32) 51%);}
+#touch #tFire:active{background:radial-gradient(circle,rgba(255,90,79,.7) 0 30%,rgba(255,90,79,.25) 31%);}
+#touch #tFlr{right:calc(env(safe-area-inset-right,0px) + 124px);bottom:calc(env(safe-area-inset-bottom,0px) + 22px);width:62px;height:62px;border-radius:50%;font-size:12px;}
+#touch #tWpn{right:calc(env(safe-area-inset-right,0px) + 18px);bottom:calc(env(safe-area-inset-bottom,0px) + 124px);width:92px;height:32px;border-radius:16px;}
+#touch #tFuel{right:calc(env(safe-area-inset-right,0px) + 18px);bottom:calc(env(safe-area-inset-bottom,0px) + 164px);width:92px;height:32px;border-radius:16px;}
+#touch .throttle{left:calc(env(safe-area-inset-left,0px) + 8px);right:auto;width:30px;height:170px;border-radius:15px;}
+#touch .thr-label{font-size:9px;top:8px;}
+#touch .stick{left:calc(env(safe-area-inset-left,0px) + 50px);}
+#touch .tbtn.pause{left:auto;right:calc(env(safe-area-inset-right,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 12px);}
 #touch[data-tilt="1"] .tbtn.top{bottom:calc(env(safe-area-inset-bottom,0px) + 18px);}
+#touch #tFire.fire{height:92px;color:#fff;border-color:rgba(255,90,79,.95);}
 #tTilt[aria-pressed="true"]{background:rgba(141,255,176,.3);color:#fff;}
 #touch[data-tilt="1"] .stick{display:none;}
 .checks{display:flex;flex-wrap:wrap;gap:8px 18px;}
@@ -2287,8 +2302,22 @@ const pip={o:null, hold:0, pos:new T.Vector3(), look:new T.Vector3(), label:null
 const pipOn=()=>(state==='fly'||state==='ending'||state==='paused') && (pip.o!==null || pip.hold>0);
 function pipRect(){
   const w=Math.round(isTouch ? Math.min(176,W*0.22) : Math.min(300,W*0.32)), h=Math.round(w*0.62);   // a smaller inset on a phone
-  const y = (mode==='dogfight'||mode==='raid') ? 92 : 56;
+  const y = isTouch ? 2*mmR()+34 : (mode==='dogfight'||mode==='raid') ? 92 : 56;   // phone: under the round radar
   return {x:Math.round(safeL+12), y:Math.round(safeT+y), w, h};
+}
+const mmR = () => Math.round(Math.min(62,H*0.17));   // phone: radius of the round radar, top left
+// phone: a compact speed or height bracket beside the centre (side -1 left, +1 right), instead of the tall tapes
+function phoneGauge(x,side,unit,val,label,sub,col,subCol){
+  const cy=H/2, h=Math.round(Math.min(52,H*0.09)), tk=-side*9;
+  c.beginPath(); c.moveTo(x+tk,cy-h); c.lineTo(x,cy-h); c.lineTo(x,cy+h); c.lineTo(x+tk,cy+h); strokeP(HUD,1.5);
+  const bw=60, bh=22, bx = side<0 ? x-8-bw : x+8, tip = side<0 ? bx+bw+6 : bx-6;
+  c.beginPath(); c.moveTo(bx,cy-bh/2); c.lineTo(bx+bw,cy-bh/2); c.lineTo(bx+bw,cy+bh/2); c.lineTo(bx,cy+bh/2); c.closePath();
+  c.moveTo(side<0 ? bx+bw : bx, cy-5); c.lineTo(tip,cy); c.lineTo(side<0 ? bx+bw : bx, cy+5);
+  c.fillStyle='rgba(0,14,7,.42)'; c.fill(); strokeP(col,1.4);
+  txt(val,bx+bw/2,cy,col,'center',13,true);
+  txt(unit,x,cy-h-10,HUD,'center',10,true);
+  txt(label,x,cy+h+12,HUD,'center',10,true);
+  if (sub) txt(sub,x,cy+h+26,subCol||HUD,'center',10,true);
 }
 function pipFollow(o,kind){ pip.o=o; pip.hold=0; pip.label=null; pip.kind=kind; }
 function pipImpact(o,p,v,label,col){
@@ -4418,6 +4447,8 @@ function wpnLabel(){
   const w=TW.sel, n = w==='MSL' ? S.msl : w==='LGM' ? S.agm : w==='BOMB' ? S.bombs : w==='GUN' ? S.gun : 0;
   const lb = w ? `${w} ${n}` : '—';
   if (lb!==TW.lb){ TW.lb=lb; $('tFireW').textContent=lb; }
+  const fl=`FLR ${S.flares}`;   // the flare count lives on its button now that the weapons panel is hidden on phones
+  if (fl!==TW.fl){ TW.fl=fl; $('tFlr').textContent=fl; }
 }
 const tilt={on:false, ok:false, cal:true, r0:0, p0:0, roll:0, pitch:0, last:0, listening:false};
 function tiltRead(e){
@@ -4769,7 +4800,7 @@ function drawThreats(dog){
     if (onScreen(s)){ c.beginPath(); c.arc(s.x,s.y,9,0,Math.PI*2); c.moveTo(s.x-6,s.y-6); c.lineTo(s.x+6,s.y+6); c.moveTo(s.x+6,s.y-6); c.lineTo(s.x-6,s.y+6); strokeP(RED,1.6); }
     else edgeArrow(m.p.x,m.p.y,m.p.z,RED,'MSL');
   }
-  const sx=safeL+(isTouch?72:12);
+  const sx=safeL+(isTouch?2*mmR()+28:12);   // phone: to the right of the round radar
   let by=safeT+34;
   if (dog && MP.on){
     const n=enemies.filter(e=>e.remote && e.alive).length;
@@ -4791,6 +4822,7 @@ function drawThreats(dog){
     if (MP.coop && !S.alive) txt(`RESPAWN IN ${Math.max(1,Math.ceil(MP.respawnT))}`,W/2,H/2+64,AMB,'center',16,true);
   }
   const hcol=S.hp>50?HUD:S.hp>25?AMB:RED;
+  if (isTouch){ if (S.hitFlash>0){ c.fillStyle=`rgba(255,60,50,${0.35*S.hitFlash})`; c.fillRect(0,0,W,H); } return; }   // phone: the hull shows as the ring round the radar
   c.beginPath(); c.rect(sx,by,96,7); c.fillStyle='rgba(0,14,7,.45)'; c.fill(); strokeP(hcol,1);
   c.fillStyle=hcol; c.fillRect(sx+1,by+1,94*S.hp/100,5);
   txt('HULL',sx+104,by+4,hcol,'left',10,true);
@@ -4825,8 +4857,20 @@ function drawHUD(now){
   if (S.maxA) drawAGMCue();
   drawThreats(mode==='dogfight');
 
-  // heading tape
+  // heading tape (phone: just the number)
   const hy=safeT+22, hw=Math.min(300,W*0.42), ppd=hw/50;
+  if (isTouch){
+    txt(`HDG ${String(Math.round(hdg)%360).padStart(3,'0')}`,cx,safeT+12,HUD,'center',11,true);
+    // a mini horizon either side of the centre, so you can see the bank you are holding
+    const bx=Math.min(W*0.2,170), bank=Math.atan2(-vR.y,vU.y), pit=Math.asin(clamp(vF.y,-1,1));
+    c.save(); c.translate(cx,cy); c.rotate(-bank); const oy=clamp(pit*R2D*3,-46,46);
+    c.beginPath(); c.moveTo(-bx+22,oy); c.lineTo(-56,oy); c.moveTo(56,oy); c.lineTo(bx-22,oy); strokeP(HUD,1.3); c.restore();
+    const al=S.pos.y, low=S.agl<300;
+    phoneGauge(cx-bx,-1,'(km/h)',Math.round(S.vel.length()*3.6).toLocaleString('en-US'),'SPEED',S.thr>1?'AB':`THR ${Math.round(S.thr*100)}%`,S.ias*KT<150?RED:HUD,S.thr>1?AMB:HUD);
+    phoneGauge(cx+bx,1,'(m)',Math.round(al).toLocaleString('en-US'),'HEIGHT',S.agl<3000?`RALT ${Math.round(S.agl)} M`:'',low?AMB:HUD,low?AMB:HUD);
+    if ((dog || raid) && (WORLD==='kargil'||WORLD==='ladakh'||WORLD==='jungle'||WORLD==='punjab') && S.dLoc<15000) txt(`${lineName()} ${(Math.max(0,S.dLoc)/1000).toFixed(1)} KM`,cx+bx,H/2+Math.min(52,H*0.09)+40,S.dLoc<LOC_WARN?AMB:HUD,'center',10,true);
+  }
+  if (!isTouch){
   c.beginPath();
   const hl=[];
   for (let d=Math.ceil((hdg-25)/5)*5; d<=hdg+25; d+=5){
@@ -4870,6 +4914,7 @@ function drawHUD(now){
     txt(`FLR ${S.flares}`,cx+tx,dy+18,S.flares?HUD:AMB,'right',13);
     txt(`LOC ${(Math.max(0,S.dLoc)/1000).toFixed(1)} KM`,cx+tx,dy+36,locCol,'right',13);
   }
+  }   // end of the desktop heading tape, speed and altitude tapes and data blocks
 
   // warnings
   const warns=[];
@@ -4892,7 +4937,7 @@ function drawHUD(now){
     { const lim=OUTER ? MP_WARN : 17000; if (Math.abs(S.pos.x)>lim||Math.abs(S.pos.z)>lim) warns.push(['LEAVING SECTOR',AMB,false]); }
     if (brk.on) warns.push([`BREAK ${brk.dir>0?'RIGHT':'LEFT'} → 180`,HUD,false]);
   }
-  let wy=hy+76;
+  let wy=isTouch ? safeT+34 : hy+76;   // phone: warnings and messages along the top
   warns.slice(0,3).forEach(([t,col,fl])=>{ if (!fl||flash) txt(t,cx,wy,col,'center',16,true); wy+=24; });
   if (S.msg) txt(S.msg.text,cx,wy,S.msg.col,'center',14,true);
 
@@ -4904,7 +4949,7 @@ function drawHUD(now){
   }
 
   // weapons panel, bottom centre: one icon per missile (or bomb), filled while still on the jet
-  if (S.alive && state!=='ended'){
+  if (S.alive && state!=='ended' && !isTouch){   // phone: the counts are on the FIRE and FLR buttons
     const air=dog, total=air ? S.maxM : S.maxB, left=air ? S.msl : S.bombs;
     if (total>0){
       const gap=13, w=total*gap, px=cx-w/2, py=radioUp ? hudFloor-20 : H-safeB-(isTouch?30:58), col=left ? HUD : AMB;
@@ -4967,9 +5012,10 @@ function drawHUD(now){
     txt(deliv,r.x+r.w-8,r.y+r.h-12,HUD,'right',11,true);
   }
 
-  // minimap
-  const ms=Math.min(150,W*0.26), mx=W-safeR-12-ms, my=safeT+12;
+  // minimap (phone: a round radar at top left, with the hull as a ring around it)
+  const RR=mmR(), ms=isTouch ? 2*RR : Math.min(150,W*0.26), mx=isTouch ? safeL+12 : W-safeR-12-ms, my=safeT+12;
   const AV=arenaHalf();
+  if (isTouch){ c.save(); c.beginPath(); c.arc(mx+RR,my+RR,RR,0,Math.PI*2); c.fillStyle='rgba(8,20,16,.55)'; c.fill(); c.clip(); }
   if (OUTER){   // the 80 km arena: a radar-style map, with the detailed 40 km area outlined and a 10 km grid
     c.fillStyle='rgba(8,20,16,.82)'; c.fillRect(mx,my,ms,ms);
     c.beginPath(); for (let g=-30000; g<=30000; g+=10000){ const a=mx+(g+AV)/(2*AV)*ms, b=my+(g+AV)/(2*AV)*ms; c.moveTo(a,my); c.lineTo(a,my+ms); c.moveTo(mx,b); c.lineTo(mx+ms,b); }
@@ -4977,7 +5023,7 @@ function drawHUD(now){
     const q=(HALF/(2*AV))*ms; c.beginPath(); c.rect(mx+ms/2-q,my+ms/2-q,2*q,2*q); c.strokeStyle='rgba(141,255,176,.35)'; c.stroke();
     txt('80 KM',mx+ms-4,my+ms-6,'rgba(230,236,242,.7)','right',9,true);
   } else { c.globalAlpha=0.9; c.drawImage((WORLD==='ladakh' && LAD)?LAD.map:(WORLD==='sea' && SEA)?SEA.map:(WORLD==='desert' && DES)?DES.map:(WORLD==='jungle' && JUN)?JUN.map:(WORLD==='punjab' && PUN)?PUN.map:(raid && !PRECISE)?mapGreen:(WORLD==='pune' && PUNE)?PUNE.map:mapCanvas,mx,my,ms,ms); c.globalAlpha=1; }
-  c.beginPath(); c.rect(mx,my,ms,ms); c.lineWidth=1; c.strokeStyle='rgba(141,255,176,.5)'; c.stroke();
+  if (!isTouch){ c.beginPath(); c.rect(mx,my,ms,ms); c.lineWidth=1; c.strokeStyle='rgba(141,255,176,.5)'; c.stroke(); }
   const mp=(wx,wz)=>[mx+clamp((wx+AV)/(2*AV),0,1)*ms, my+clamp((wz+AV)/(2*AV),0,1)*ms];
   if (raid){
     c.save(); c.beginPath(); c.rect(mx,my,ms,ms); c.clip();
@@ -5018,6 +5064,16 @@ function drawHUD(now){
   c.save(); c.translate(px,py); c.rotate(hdg*D2R); c.beginPath(); c.moveTo(0,-7); c.lineTo(5,6); c.lineTo(0,3); c.lineTo(-5,6); c.closePath();
   c.fillStyle=HUD; c.fill(); c.lineWidth=1; c.strokeStyle='#0b1320'; c.stroke(); c.restore();
   txt('N',mx+ms/2,my+9,'#e6ecf2','center',10,true);
+  if (isTouch){
+    const ox=mx+RR, oy=my+RR, sw=(now/1000*1.6)%(Math.PI*2);   // radar sweep
+    c.beginPath(); c.moveTo(ox,oy); c.arc(ox,oy,RR,sw-0.5,sw); c.closePath(); c.fillStyle='rgba(141,255,176,.13)'; c.fill();
+    c.restore();
+    c.beginPath(); c.arc(ox,oy,RR,0,Math.PI*2); c.lineWidth=1.2; c.strokeStyle='rgba(141,255,176,.55)'; c.stroke();
+    const hcol=S.hp>50?HUD:S.hp>25?AMB:RED;   // the hull: a ring that empties anticlockwise from the top
+    c.beginPath(); c.arc(ox,oy,RR+6,Math.PI*0.6,Math.PI*2.4); c.lineWidth=4; c.strokeStyle='rgba(0,14,7,.45)'; c.stroke();
+    c.beginPath(); c.arc(ox,oy,RR+6,Math.PI*0.6,Math.PI*0.6+Math.PI*1.8*clamp(S.hp/100,0,1)); c.lineWidth=4; c.strokeStyle=hcol; c.stroke();
+    c.lineWidth=1;
+  }
 }
 
 // ---------- camera
@@ -5034,7 +5090,7 @@ function updateCamera(dt){
     } else {
       camQ.slerp(S.q,1-Math.exp(-dt*5));
       // chase camera drops back as speed builds
-      if (isTouch) camOff.set(0,6+sp*1.1,27+sp*6).applyQuaternion(camQ);   // phone: closer, so the jet fills more of a small screen
+      if (isTouch) camOff.set(0,7.4+sp,25+sp*5).applyQuaternion(camQ);   // phone: close and a bit higher, so the jet sits low and large in the frame
       else camOff.set(0,8.5+sp*1.5,40+sp*10).applyQuaternion(camQ); camera.position.copy(S.pos).add(camOff); camera.quaternion.copy(camQ).multiply(camTilt);
     }
     // buffet: a slight shake that grows with speed and afterburner
