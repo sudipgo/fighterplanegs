@@ -87,6 +87,30 @@ button.go:disabled{opacity:.45;cursor:not-allowed;filter:none;}
 .opt b .stars{color:#ffc94a;font-size:12px;margin-left:6px;letter-spacing:.06em;}
 .opt b .stars.none{color:var(--muted);opacity:.55;}
 .rankline{font:12px var(--f-num);letter-spacing:.06em;color:var(--muted);margin:-4px 0 10px;}
+/* hangar steps: 1 play, 2 mission, 3 aircraft, 4 briefing; each part shows only on its own step */
+#briefCard:not([data-step="play"]) .st-play,#briefCard:not([data-step="mission"]) .st-mission,
+#briefCard:not([data-step="plane"]) .st-plane,#briefCard:not([data-step="brief"]) .st-brief{display:none !important;}
+#briefCard .opt[hidden],#briefCard .lbl[hidden],.steps span[hidden]{display:none !important;}
+#briefCard[data-step="play"] #briefTitle{display:none;}
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin:-6px 0 -4px;}
+.steps span{font:10px var(--f-num);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:3px;padding:3px 7px;opacity:.6;}
+.steps span.on{color:var(--hud);border-color:var(--hud);opacity:1;}
+.steps span.done{opacity:.9;}
+.seg.playseg{grid-template-columns:1fr;}
+.seg.playseg .opt{padding:16px 16px;}
+.seg.playseg .opt b{font-size:17px;}
+.stepnav{justify-content:space-between;}
+#briefCard[data-step="play"] #stepBack{visibility:hidden;}
+#briefCard[data-step="brief"] #stepNext{display:none;}
+.planes .opt img.thumb{display:block;width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:3px;background:rgba(0,0,0,.28);margin-bottom:3px;}
+.spec{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:2px 0 0;font-size:11.5px;}
+.spec dt{font:9.5px var(--f-num);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);padding-top:2px;}
+.spec dd{margin:0;color:var(--paper);}
+.spec dd.msl{color:var(--hud);}
+.acsum{display:flex;gap:12px;align-items:center;border:1px solid var(--line);border-radius:5px;padding:8px;}
+.acsum img{width:120px;aspect-ratio:16/9;object-fit:cover;border-radius:3px;background:rgba(0,0,0,.28);}
+.acsum b{display:block;font-size:14px;}
+.acsum span{font-size:12px;color:var(--muted);}
 .rankline b{color:#ffc94a;font-weight:700;}
 .endstars{margin:4px 0 12px;}
 .endstars .big{font-size:30px;letter-spacing:.12em;color:#ffc94a;line-height:1.1;}
@@ -238,12 +262,20 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
 <div id="fade"></div>
 
 <section class="overlay" id="brief">
-  <div class="card" id="briefCard" data-mode="strike">
+  <div class="card" id="briefCard" data-mode="strike" data-step="play">
     <div class="eyebrow" id="briefEyebrow">Thin Air · Hangar</div>
+    <div class="steps" id="stepDots"><span data-s="play">1 · Play</span><span data-s="mission">2 · Mission</span><span data-s="plane">3 · Aircraft</span><span data-s="brief">4 · Briefing</span></div>
+    <h1 class="st-play">Choose how to fly</h1>
     <h1 id="briefTitle">Hit the sangar on Point 4875</h1>
-    <div class="rankline" id="rankLine"></div>
-    <div class="lbl">Mode</div>
-    <div class="seg">
+    <div class="rankline st-play" id="rankLine"></div>
+    <div class="lbl st-play">How do you want to fly?</div>
+    <div class="seg playseg st-play">
+      <button class="opt" type="button" data-play="single"><b>Single player</b><span>All 17 missions, from the Kargil strike to AWACS defence</span></button>
+      <button class="opt" type="button" data-play="multi"><b>Multiplayer</b><span>Live dogfight or co-op raid with friends who open this page</span></button>
+      <button class="opt" type="button" data-play="train"><b>Training</b><span>Learn to fly and fight, step by step</span></button>
+    </div>
+    <div class="lbl st-mission" id="modeLabel">Mission</div>
+    <div class="seg st-mission" id="modeOpts">
       <button class="opt" type="button" data-mode-opt="strike"><b>Strike</b><span>Bomb Point 4875 without crossing the LoC</span></button>
       <button class="opt" type="button" data-mode-opt="precision"><b>Precision strike</b><span>Mirage 2000 with laser weapons against three camps, and an F-16 that can appear any time</span></button>
       <button class="opt" type="button" data-mode-opt="dogfight"><b>Dogfight</b><span>Night over the Rajasthan desert: shoot down two JF-17s</span></button>
@@ -265,13 +297,13 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
       <button class="opt" type="button" data-mode-opt="versus"><b>Multiplayer</b><span>Live dogfight against friends who open this page and use the same room code</span></button>
       <button class="opt" type="button" data-mode-opt="coop"><b>Co-op raid</b><span>Fly the base raid together, one Su-30MKI each</span></button>
     </div>
-    <div class="lbl map-only">Map</div>
-    <div class="seg map-only mapseg">
+    <div class="lbl map-only st-mission">Map</div>
+    <div class="seg map-only mapseg st-mission">
       <button class="opt" type="button" data-map-opt="pune"><b>Pune</b><span>City on the Mula-Mutha, Sahyadri hills, Sinhagad, Khadakwasla lake</span></button>
       <button class="opt" type="button" data-map-opt="kargil"><b>Kargil</b><span>Dras sector, high Himalaya, the Line of Control</span></button>
     </div>
-    <div class="lbl mp-only">Multiplayer room</div>
-    <div class="mpbox mp-only">
+    <div class="lbl mp-only st-mission">Multiplayer room</div>
+    <div class="mpbox mp-only st-mission">
       <div class="fields">
         <label>Callsign<input type="text" id="mpName" maxlength="12" autocomplete="off" spellcheck="false"></label>
         <label>Room code<input type="text" id="mpCode" maxlength="20" autocomplete="off" spellcheck="false" placeholder="open"></label>
@@ -280,13 +312,14 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
       <p id="mpStatus">Connecting…</p>
       <ul class="pilots" id="mpPilots"></ul>
     </div>
-    <div class="lbl tr-only">Lesson</div>
-    <div class="lessons tr-only" id="lessonOpts"></div>
-    <div class="lbl" id="acLabel">Aircraft</div>
-    <div class="planes" id="planeOpts"></div>
-    <p id="briefBody"></p>
-    <div class="facts" id="briefFacts"></div>
-    <dl class="keys desk-only">
+    <div class="lbl tr-only st-mission">Lesson</div>
+    <div class="lessons tr-only st-mission" id="lessonOpts"></div>
+    <div class="lbl st-plane" id="acLabel">Aircraft</div>
+    <div class="planes st-plane" id="planeOpts"></div>
+    <div class="acsum st-brief" id="acSum"></div>
+    <p id="briefBody" class="st-brief"></p>
+    <div class="facts st-brief" id="briefFacts"></div>
+    <dl class="keys desk-only st-brief">
       <dt>S / ↓ &nbsp; W / ↑</dt><dd>Pull up / push down</dd>
       <dt>A D / ← →</dt><dd>Roll (bank, then pull S to turn)</dd>
       <dt>R F · wheel</dt><dd>Throttle (above 100% is afterburner)</dd>
@@ -301,8 +334,12 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
       <dt>B</dt><dd>Break turn: automatic hard turn south, away from the LoC</dd>
       <dt>C · P</dt><dd>Chase or cockpit view · pause</dd>
     </dl>
-    <p class="note touch-only" id="touchNote"></p>
-    <div class="row">
+    <p class="note touch-only st-brief" id="touchNote"></p>
+    <div class="row stepnav">
+      <button class="go alt" id="stepBack" type="button">‹ Back</button>
+      <button class="go" id="stepNext" type="button">Next ›</button>
+    </div>
+    <div class="row st-brief">
       <div class="checks">
         <label class="check k-intro"><input type="checkbox" id="introOn" checked> Take-off from Srinagar</label>
         <label class="check k-voice"><input type="checkbox" id="voiceOn" checked> Radio voices</label>
@@ -493,6 +530,21 @@ function vnoise(x,y){ const ix=Math.floor(x), iy=Math.floor(y), fx=x-ix, fy=y-iy
   const a=hash(ix,iy), b=hash(ix+1,iy), c=hash(ix,iy+1), d=hash(ix+1,iy+1);
   return a+(b-a)*ux+(c-a)*uy+(a-b-c+d)*ux*uy; }
 function heightFn(x,z){
+  let h=heightRiver(x,z);
+  for (const p of RAID_PADS){ const w=1-smooth(600,1150,Math.hypot(x-p.x,z-p.z)); if (w>0) h=h*(1-w)+p.y*w; }   // the raid's outlying sites sit on flat pads
+  return h;
+}
+function heightRiver(x,z){
+  const h=heightBase(x,z);
+  // river valleys: a flat bed and banks that rise away from the water, blended into the hills
+  const rd=riverDist(x,z), bank=RIV_BED+0.38*Math.max(0,rd-150);
+  return lerp(bank, Math.min(h,bank), smooth(260,420,rd));
+}
+// base raid: the four targets are spread 4 to 5 km apart: shelter A on the airfield, shelter B at a dispersal site
+// to the west, the fuel depot to the east, the command post to the north (offsets from BASE, in metres)
+const RAID_SITE={B:[-4500,-500], F:[4500,300], C:[300,-4500]};   // each over 1.5 km from the river
+const RAID_PADS=Object.values(RAID_SITE).map(([dx,dz])=>({x:BASE.x+dx, z:BASE.z+dz, y:heightRiver(BASE.x+dx, BASE.z+dz)}));
+function heightBase(x,z){
   let n=0, amp=1, sum=0, f=1/5200;
   for (let i=0;i<5;i++){ let v=1-Math.abs(vnoise(x*f+i*17.3, z*f-i*9.1)*2-1); v*=v; n+=v*amp; sum+=amp; amp*=0.5; f*=2.03; }
   n/=sum;
@@ -504,9 +556,7 @@ function heightFn(x,z){
   h = h*(1-w) + (TARGET.elev - 0.32*d)*w;
   const wb = 1 - smooth(950,2300,Math.hypot(x-BASE.x, z-BASE.z));   // the enemy air base sits on flat ground
   h = h*(1-wb) + BASE.elev*wb;
-  // river valleys: a flat bed and banks that rise away from the water, blended into the hills
-  const rd=riverDist(x,z), bank=RIV_BED+0.38*Math.max(0,rd-150);
-  return lerp(bank, Math.min(h,bank), smooth(260,420,rd));
+  return h;
 }
 
 const heights = new Float32Array(N*N);
@@ -559,7 +609,10 @@ const colKargil=tGeo.attributes.color.array.slice(), colGreen=new Float32Array(c
 }
 
 // ---------- renderer & scene
-const W_ = () => window.innerWidth, H_ = () => window.innerHeight;
+// ROT.a: 0 normally. 90 or -90 when the phone is held sideways but the browser has kept the page upright (rotation
+// lock, or a browser without auto-rotate): the game then turns the whole page itself, and the sizes swap.
+const ROT={a:0, want:0, since:0};
+const W_ = () => ROT.a ? window.innerHeight : window.innerWidth, H_ = () => ROT.a ? window.innerWidth : window.innerHeight;
 const renderer = new T.WebGLRenderer({canvas:$('view'), antialias:true, logarithmicDepthBuffer:true, powerPreference:'high-performance'});
 const PR = Math.min(window.devicePixelRatio||1, isTouch?1.25:1.75);
 renderer.setPixelRatio(PR);
@@ -1545,20 +1598,21 @@ function shelter(dx,dz){
 }
 const RAID={targets:[], ad:[]};
 RAID.targets.push(raidTarget('SHELTER A',-300,90,shelter(-300,90)));
-RAID.targets.push(raidTarget('SHELTER B',-120,90,shelter(-120,90)));
-RAID.targets.push(raidTarget('FUEL',260,160,(I,Wk,sec)=>{
-  base(260,160,0.3,BASE);
+const [SBX,SBZ]=RAID_SITE.B, [FDX,FDZ]=RAID_SITE.F, [CPX,CPZ]=RAID_SITE.C;
+RAID.targets.push(raidTarget('SHELTER B',SBX,SBZ,shelter(SBX,SBZ)));   // the dispersal site, 4.5 km west of the airfield
+RAID.targets.push(raidTarget('FUEL',FDX,FDZ,(I,Wk,sec)=>{   // the fuel depot, 4.5 km east
+  base(FDX,FDZ,0.3,BASE);
   [[-20,0],[0,20],[20,0]].forEach(([a,d])=>{
     put(I,UCYL,0xbdb7a6,a,4,d,16,8,16); put(I,UCYL,0x8f8a7c,a,8.1,d,16.4,0.3,16.4);
     put(Wk,UCYL,BURNT,a,1.4,d,15,2.8,15,0.1,0,0.08);
-    sec.push(secAt(260+a,160+d,5));
+    sec.push(secAt(FDX+a,FDZ+d,5));
   });
   put(I,UBOX,STEEL,0,1,-14,44,0.6,0.6);
   [[0,-38,80,3],[0,38,80,3],[-38,0,3,80],[38,0,3,80]].forEach(([a,d,sx,sz])=>{ put(I,UBOX,0x7a6f58,a,1,d,sx,2,sz); put(Wk,UBOX,0x4a443a,a,0.8,d,sx,1.6,sz); });
   put(Wk,USPH,ASH,0,0.05,5,78,0.5,78);
 }));
-RAID.targets.push(raidTarget('COMMAND',120,380,(I,Wk,sec)=>{
-  base(120,380,0.2,BASE);
+RAID.targets.push(raidTarget('COMMAND',CPX,CPZ,(I,Wk,sec)=>{   // the command post with its radar, 4.5 km north
+  base(CPX,CPZ,0.2,BASE);
   put(I,UBOX,0xb9ad92,0,4,0,26,8,16); put(I,UBOX,0x6a5a48,0,8.3,0,27,0.6,17);
   put(I,UBOX,0xb9ad92,-20,3,6,12,6,10); put(I,UBOX,0x6a5a48,-20,6.3,6,12.6,0.6,10.6);
   put(I,UBOX,STEEL,18,9,0,0.8,18,0.8); put(I,USPH,0xd9d6cc,18,18.5,0,6,3,1.2,0,0.6,0);
@@ -1566,7 +1620,7 @@ RAID.targets.push(raidTarget('COMMAND',120,380,(I,Wk,sec)=>{
   [[-8,1.5,-2,0.3],[6,1.2,3,1.0],[-18,1,6,0.6],[2,2,-5,2.1],[16,0.6,1,0.2]].forEach(([a,b,d,ry])=>put(Wk,UBOX,BURNT,a,b,d,7,2.6,5,0.2,ry,0.15));
   put(Wk,UBOX,STEEL,20,1,4,0.8,14,0.8,Math.PI/2-0.1,0.5,0);
   put(Wk,USPH,ASH,0,0.05,0,50,0.4,40);
-  sec.push(secAt(120,380,4), secAt(100,386,3), secAt(138,380,8));
+  sec.push(secAt(CPX,CPZ,4), secAt(CPX-20,CPZ+6,3), secAt(CPX+18,CPZ,8));
 }));
 // parked JF-17s in front of the shelters; they burn with their shelter (2.05 m = gear height)
 // (built at the end of boot: makeGear's materials are defined further down)
@@ -1608,12 +1662,12 @@ function makeSAM(dx,dz){
   g.traverse(o=>{ if (o.isMesh) o.castShadow=o.receiveShadow=true; }); scene.add(g);
   return {kind:'SAM', g, yaw, pitch, radar, wreck:adWreck(dx,dz,2.2), x:g.position.x, y:g.position.y, z:g.position.z, alive:true, cd:0, track:false, phase:0, burst:0};
 }
-[[-200,-40],[240,40],[40,280]].forEach(([dx,dz],i)=>{
+[[-200,-40],[FDX+70,FDZ-60],[CPX-70,CPZ+60]].forEach(([dx,dz],i)=>{   // AAA: one on the airfield, one at the fuel depot, one (co-op) at the command post
   const a=makeAA(dx,dz,BASE);
   Object.assign(a,{kind:'AAA', wreck:adWreck(dx,dz,1), x:a.g.position.x, y:a.g.position.y, z:a.g.position.z, alive:true, phase:i*1.6});
   RAID.ad.push(a);
 });
-RAID.ad.push(makeSAM(-560,330), makeSAM(520,-560));
+RAID.ad.push(makeSAM(-560,330), makeSAM(SBX+220,SBZ-260));   // SAMs: the airfield's, and (co-op) one at the dispersal site
 RAID.ad[2].coopOnly=true; RAID.ad[4].coopOnly=true;   // flying solo the base keeps 1 SAM and 2 AAA guns; co-op gets all five
 const plainRaid=()=>mode==='raid' && !(NAVAL||PRECISE||SEAD||TANKER||BRIDGE||CSAR||RECON||TANKS);   // the Kargil base raid itself
 // base raid checkpoints: 1 = shoot down the two fighters (the base is not shown and its guns are quiet), 2 = strike the base
@@ -2594,8 +2648,17 @@ function phoneGauge(x,side,unit,val,label,sub,col,subCol){
   txt(label,x,cy+h+12,HUD,'center',10,true);
   if (sub) txt(sub,x,cy+h+26,subCol||HUD,'center',10,true);
 }
-function pipFollow(o,kind){ pip.o=o; pip.hold=0; pip.label=null; pip.kind=kind; }
+// phone: no weapon camera. The bomb or missile is only marked as yours, and when it lands a big banner in the
+// middle of the screen says what happened: TARGET DESTROYED, PLANE DESTROYED or MISSED
+function pipFollow(o,kind){ if (isTouch){ o.pipMine=true; return; } pip.o=o; pip.hold=0; pip.label=null; pip.kind=kind; }
+function touchResult(label,col){
+  const L=String(label||'');
+  const text = L==='SPLASH' ? 'PLANE DESTROYED' : /HIT/.test(L) && !/^MISS/.test(L) ? (L==='HIT' ? 'HIT' : 'TARGET DESTROYED')
+             : L==='DEFEATED' ? 'MISSILE DEFEATED' : /^MISS/.test(L) ? 'MISSED' : L;
+  S.banner={text, col: text==='MISSED' || text==='MISSILE DEFEATED' ? AMB : HUD, t:2.2};
+}
 function pipImpact(o,p,v,label,col){
+  if (isTouch){ if (o && o.pipMine){ o.pipMine=false; touchResult(label,col); } return; }
   if (pip.o!==o) return;
   pip.o=null; pip.hold=3.2; pip.look.copy(p);
   _t.set(v.x,0,v.z); if (_t.lengthSq()<1e-6) _t.set(0,0,-1); _t.normalize();
@@ -2862,7 +2925,7 @@ function raidBombImpact(b){
     else if (TANKER){ S.rtb=true; S.msg={text:'DEPOT DESTROYED · RTB · PLUG IN TO THE TANKER FOR THE TRIP HOME', col:HUD, t:4.5}; }
     else if (SEAD) endMission(true,'Air defences suppressed',`All three radars and all six SAM launchers in the desert are destroyed, so the strike packages can now fly through. AAA guns knocked out: ${RAID.ad.filter(a=>a.kind==='AAA' && !a.alive).length} of ${RAID.ad.filter(a=>a.kind==='AAA').length}. Fighters shot down: ${S.kills} of 2.`,4);
     else if (PRECISE) endMission(true,'All three camps destroyed',`Tiger Hill, Tololing and Muntho Dhalo are burning, and you stayed south of the Line of Control. AAA guns knocked out: ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length}. F-16 ${S.kills ? 'shot down' : 'not engaged'}.`,4);
-    else if (NAVAL) endMission(true,'Port godowns destroyed',`All four godowns behind the quay are burning. You knocked out ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length} AAA guns and shot down ${S.kills} of 2 fighters, flying a single MiG-29K off the carrier.`,4);
+    else if (NAVAL) endMission(true,'Port godowns destroyed',`All four godowns along the coast are burning. You knocked out ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length} AAA guns and shot down ${S.kills} of 2 fighters, flying a single MiG-29K off the carrier.`,4);
     else endMission(true,'Base destroyed',`All four structures are burning: both aircraft shelters, the fuel depot and the command post. You knocked out ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length} air-defence sites and shot down ${S.kills} of 2 fighters.`,4);
   } else if (MP.coop){ if (S.bombs===0 && S.agm===0) S.msg={text:`OUT OF BOMBS · ${left} TO GO · LEAVE IT TO YOUR FLIGHT`, col:AMB, t:3}; }
   else if (S.bombs===0 && bombs.length===0 && S.agm===0 && !missiles.some(x=>x.agm))
@@ -3050,6 +3113,7 @@ function killEnemy(e,how){
   const base = how==='gun' ? 200 : how==='crash' ? 50 : 100, pts=base+25*Math.max(0,S.wave-1);
   S.score+=pts; if (e.type.asm) S.asmDown++; else S.kills++;   // fleet defence counts missiles stopped apart from jets downed
   const nm=e.type.name;
+  if (isTouch && how!=='mate') S.banner={text: how==='wing' ? 'WINGMAN · PLANE DESTROYED' : 'PLANE DESTROYED', col:HUD, t:2.2};   // phone: the big banner says it
   S.msg={text: how==='mate' ? `${nm} DOWN` : how==='gun' ? `GUN KILL · ${nm} +${pts}` : how==='crash' ? `${nm} CRASHED +${pts}` : how==='wing' ? `WINGMAN SPLASH · ${nm} +${pts}` : `SPLASH ONE · ${nm} +${pts}`, col:HUD, t:2};
   if (S.lockTgt===e){ S.lockTgt=null; S.lockT=0; S.locked=false; }
   if (mode==='training'){ TR.kill=how; return; }
@@ -3688,7 +3752,7 @@ function updateMissiles(dt){
 function detonate(m,how){
   m.dead=true; scene.remove(m.mesh); m.trail.fade=2;
   spawnExplosion(m.p,false);
-  if (m.agm){ if (how!=='timeout') bombImpact({p:m.p.clone(), v:m.v.clone(), agm:true}); return; }   // scored like a bomb hit
+  if (m.agm){ if (how!=='timeout') bombImpact({p:m.p.clone(), v:m.v.clone(), agm:true, pipMine:isTouch}); else if (isTouch) S.banner={text:'MISSED', col:AMB, t:2.2}; return; }   // scored like a bomb hit
   let label='MISSED', col=AMB;
   if (m.mpFrom && MP.room){   // a missile another pilot fired at us: tell them how it ended
     if (how==='hit'){ MP.lastBy=m.mpFrom; MP.lastByT=S.time; }
@@ -3845,7 +3909,7 @@ function reset(){
   Object.assign(S,{maxB:LO.bombs,maxM:LO.msl,samTrack:false,locMsg:false,td:null,sol:null,agm:LO.agm,maxA:LO.agm,lastAgm:-9});
   Object.assign(S,{thr:0.78,bombs:LO.bombs,alive:true,alpha:0,beta:0,nz:1,aLim:0.41,dLoc:1e9,minLoc:1e9,bestMiss:Infinity,time:0,lastDrop:-9,targetHit:false,msg:null,
     hp:100,msl:LO.msl,gun:A.gun,flares:FLARES,score:0,kills:0,wave:0,waveT:0,lockTgt:null,lockT:0,locked:false,lastMsl:-9,lastFlare:-9,gunCd:0,hitFlash:0,gunEmptyMsg:false,autoArm:false,armT:0,brake:false,launch:null});
-  input.pitch=input.roll=input.yaw=0;
+  input.pitch=input.roll=input.yaw=0; S.banner=null;
   if (NAVAL && plane) navalStart();   // on the carrier's deck, ready for the ski-jump launch
   S.f16T = PRECISE ? 25+Math.random()*110 : -1;   // the precision strike's F-16 turns up at a random moment
   bombs.forEach(b=>scene.remove(b.m)); bombs.length=0;
@@ -3987,7 +4051,7 @@ function startSortie(){
 function backToHangar(){
   $('end').hidden=true;
   if (TR.advance){ TR.advance=false; prefs.lesson=Math.min(LESSONS.length-1, prefs.lesson+1); }
-  applyPrefs(); setState('brief'); $('brief').hidden=false; $('start').focus();
+  applyPrefs(); setState('brief'); $('brief').hidden=false; setStep('brief');   // back on the briefing; Back steps out to change the jet or mission
 }
 function pauseToggle(){
   if (state==='fly'){ setState('paused'); $('pauseNote').textContent = MP.on ? 'Press P or Esc to carry on. The others keep flying; you vanish from their radar until you resume.' : 'Press P or Esc to carry on.'; $('pause').hidden=false; $('resume').focus(); }
@@ -4393,7 +4457,7 @@ $('again').addEventListener('click',backToHangar);
 $('next').addEventListener('click',()=>{ $('end').hidden=true; prefs.mode=$('next').dataset.next||'dogfight'; applyPrefs(); startSortie(); });
 $('resume').addEventListener('click',pauseToggle);
 $('quit').addEventListener('click',()=>{ $('pause').hidden=true; $('radio').hidden=true; $('radio').classList.remove('train'); $('tBreak').classList.remove('show'); speechStop();
-  applyPrefs(); setState('brief'); $('brief').hidden=false; mpPresence(); $('start').focus(); });
+  applyPrefs(); setState('brief'); $('brief').hidden=false; mpPresence(); setStep('brief'); });
 $('mpJoin').addEventListener('click',mpJoin);
 $('mpCode').addEventListener('input',()=>{ if (!MP.joining) mpUI(); });   // the button says Join as soon as the code differs from the current room
 $('mpCode').addEventListener('keydown',e=>{ if (e.key==='Enter'){ e.preventDefault(); mpJoin(); } });
@@ -4407,14 +4471,79 @@ function buildHangar(){
   Object.keys(PLANES).forEach(id=>{
     const p=PLANES[id], b=document.createElement('button');
     b.type='button'; b.className='opt'; b.dataset.plane=id;
-    const am=AAM[p.aam];
-    b.innerHTML=`<b>${p.name}<em>${p.tag}</em></b><span>${p.role}</span><span class="aam">${am.name} · ${am.seeker==='RADAR'?'radar':'heat'} · lock ${(lockRange(p)/1000).toFixed(1).replace('.0','')} km</span><div class="stats">`+
+    const am=AAM[p.aam], sk=am.seeker==='RADAR' ? 'radar-guided' : am.seeker==='IIR' ? 'imaging heat-seeker' : 'heat-seeker';
+    b.innerHTML=`<img class="thumb" alt="${p.name}"><b>${p.name}<em>${p.tag}</em></b><span>${p.role}</span>`+
+      `<dl class="spec"><dt>Missile</dt><dd class="msl">${p.msl} × ${am.name} · ${sk} · locks at ${(lockRange(p)/1000).toFixed(1).replace('.0','')} km</dd>`+
+      `<dt>Bombs</dt><dd>${p.bombs} × 250 kg</dd><dt>Gun</dt><dd>${p.gun} rounds</dd>`+
+      `<dt>Engine</dt><dd>${Math.round(p.thrustAB/1000)} kN with afterburner</dd><dt>Limit</dt><dd>${p.gMax} G${p.stealth?' · stealth':''}</dd></dl><div class="stats">`+
       Object.keys(p.stats).map(k=>`<div class="stat">${k}<div class="bar"><i style="width:${Math.round(p.stats[k]*100)}%"></i></div></div>`).join('')+`</div>`;
     b.addEventListener('click',()=>{ prefs.plane=id; applyPrefs(); });
     box.appendChild(b);
   });
-  document.querySelectorAll('[data-mode-opt]').forEach(b=>b.addEventListener('click',()=>{ prefs.mode=b.dataset.modeOpt; applyPrefs(); }));
+  document.querySelectorAll('[data-mode-opt]').forEach(b=>b.addEventListener('click',()=>{ prefs.mode=b.dataset.modeOpt; if (playOf(prefs.mode)==='single') HSTEP.lastSingle=prefs.mode; applyPrefs(); }));
   document.querySelectorAll('[data-map-opt]').forEach(b=>b.addEventListener('click',()=>{ prefs.map=b.dataset.mapOpt; applyPrefs(); }));
+  document.querySelectorAll('[data-play]').forEach(b=>b.addEventListener('click',()=>{
+    const v=b.dataset.play;
+    if (playOf(prefs.mode)!==v) prefs.mode = v==='train' ? 'training' : v==='multi' ? (HSTEP.lastMulti||'versus') : (HSTEP.lastSingle||'strike');
+    applyPrefs(); setStep('mission'); }));
+  $('stepNext').addEventListener('click',()=>{ const s=HSTEP.step, one=planesShown().length<=1;
+    if (playOf(prefs.mode)==='multi') HSTEP.lastMulti=prefs.mode;
+    setStep(s==='play' ? 'mission' : s==='mission' ? (one ? 'brief' : 'plane') : 'brief'); });
+  $('stepBack').addEventListener('click',()=>{ const s=HSTEP.step, one=planesShown().length<=1;
+    setStep(s==='brief' ? (one ? 'mission' : 'plane') : s==='plane' ? 'mission' : 'play'); });
+}
+// ---------- hangar steps: 1 single player / multiplayer / training, 2 the mission (or game, or lesson), 3 the aircraft
+// (skipped when the mission has only one jet), 4 the briefing and Start
+const HSTEP={step:'play', lastSingle:null, lastMulti:null};
+const playOf=m=> m==='training' ? 'train' : (m==='versus' || m==='coop') ? 'multi' : 'single';
+const planesShown=()=>[...document.querySelectorAll('[data-plane]')].filter(b=>!b.hidden);
+function hangarSync(){   // called from applyPrefs: which missions belong to the chosen kind of play
+  const pl=playOf(prefs.mode);
+  document.querySelectorAll('[data-mode-opt]').forEach(b=>{ b.hidden = playOf(b.dataset.modeOpt)!==pl || pl==='train'; });
+  document.querySelectorAll('[data-play]').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.play===pl)));
+  $('modeLabel').textContent = pl==='multi' ? 'Game' : 'Mission'; $('modeLabel').hidden = pl==='train';
+  const pd=document.querySelector('#stepDots [data-s="plane"]'); if (pd) pd.hidden = planesShown().length<=1;
+}
+function setStep(s){
+  HSTEP.step=s; $('briefCard').dataset.step=s; hangarSync();
+  const order=['play','mission','plane','brief'], k=order.indexOf(s), pl=playOf(prefs.mode);
+  document.querySelectorAll('#stepDots span').forEach(sp=>{ const i=order.indexOf(sp.dataset.s); sp.classList.toggle('on',i===k); sp.classList.toggle('done',i<k); });
+  $('briefEyebrow').textContent = s==='play' ? 'Thin Air · Hangar' : s==='mission' ? (pl==='train' ? 'Training · pick a lesson' : pl==='multi' ? 'Multiplayer · pick a game and a room' : 'Single player · pick a mission') : s==='plane' ? 'Pick your aircraft' : 'Briefing';
+  if (s==='plane' || s==='brief') makeThumbs();
+  if (s==='brief') paintAcSum();
+  try { (s==='brief' ? $('start') : $('stepNext')).focus({preventScroll:true}); } catch (e) {}
+  $('brief').scrollTop=0;
+}
+function paintAcSum(){
+  const p=S.ac, am=AAM[p.aam], LO=loadout(), im=document.querySelector(`[data-plane="${prefs.plane}"] img.thumb`);
+  $('acSum').innerHTML=`<img alt="${p.name}"${im && im.src ? ` src="${im.src}"` : ''}><div><b>${p.name} · ${p.tag}</b><span>${LO.msl} × ${am.name} · ${LO.bombs} bombs · ${p.gun} gun rounds</span></div>`;
+}
+// a picture of each jet: its own 3D model, rendered once off screen in a three-quarter view from the front left
+let THUMBS=false;
+function makeThumbs(){
+  if (THUMBS) return; THUMBS=true;
+  const prevRT=renderer.getRenderTarget();
+  try {
+    const Wt=320, Ht=180, rt=new T.WebGLRenderTarget(Wt,Ht);
+    const sc=new T.Scene(); sc.background=new T.Color(0x1b2633); sc.environment=envTex;
+    sc.add(new T.HemisphereLight(0xe6eef6,0x39404a,0.85)); const dl=new T.DirectionalLight(0xfff4e6,1.5); dl.position.set(-30,45,-25); sc.add(dl);
+    const cam=new T.PerspectiveCamera(28,Wt/Ht,0.5,800);
+    const buf=new Uint8Array(Wt*Ht*4), cv=document.createElement('canvas'); cv.width=Wt; cv.height=Ht; const x=cv.getContext('2d'), img=x.createImageData(Wt,Ht);
+    document.querySelectorAll('[data-plane]').forEach(b=>{
+      const id=b.dataset.plane; if (!BUILD[id]) return;
+      const m=BUILD[id](); sc.add(m); m.updateMatrixWorld(true);
+      const box=new T.Box3(); m.traverse(o=>{ if (o.isMesh && o.material.userData && o.material.userData.base) box.expandByObject(o); });
+      if (box.isEmpty()) box.setFromObject(m);
+      const ctr=box.getCenter(new T.Vector3()), size=box.getSize(new T.Vector3()).length();
+      cam.position.set(ctr.x-size*0.78, ctr.y+size*0.36, ctr.z-size*0.66); cam.lookAt(ctr);
+      renderer.setRenderTarget(rt); renderer.clear(); renderer.render(sc,cam); renderer.readRenderTargetPixels(rt,0,0,Wt,Ht,buf);
+      for (let j=0;j<Ht;j++) img.data.set(buf.subarray((Ht-1-j)*Wt*4,(Ht-j)*Wt*4), j*Wt*4);   // WebGL rows run bottom-up
+      x.putImageData(img,0,0); const t=b.querySelector('img.thumb'); if (t) t.src=cv.toDataURL('image/jpeg',0.85);
+      sc.remove(m);
+    });
+    rt.dispose();
+  } catch (e) { console.error('aircraft pictures', e); }
+  renderer.setRenderTarget(prevRT);
 }
 function applyPrefs(){
   // multiplayer: versus flies the dogfight against people instead of AI; co-op flies the base raid with people as the flight
@@ -4498,6 +4627,7 @@ function applyPrefs(){
   $('briefCard').dataset.mode=mode; $('briefCard').dataset.mp = MP.on ? '1' : ''; $('briefCard').dataset.map = mode==='dogfight' && !DOGN && !LADAKH && !ESCORT && !DRONES && !FLEET && !AWACS ? '1' : '';
   $('touch').dataset.mode = mode!=='training' ? mode : (LESSONS[prefs.lesson].weapon==='air' ? 'dogfight' : 'strike');
   $('start').textContent = mode==='training' ? 'Start lesson' : 'Start sortie';
+  hangarSync();
   // lesson list, with a DONE tag on lessons already passed
   const lb=$('lessonOpts'); lb.innerHTML='';
   LESSONS.forEach((L,i)=>{
@@ -4538,7 +4668,7 @@ function applyPrefs(){
     const LO=loadout(), nT=TANK_ORDER.filter(k=>k==='T').length, km=((TANK_FAIL_Z-TANK_LEAD0)/1000).toFixed(1), mins=Math.round((TANK_FAIL_Z-TANK_LEAD0)/TANK_V/60);
     $('briefEyebrow').textContent='Thin Air · Close air support · Punjab plains · what-if scenario';
     $('briefTitle').textContent='Stop the column';
-    $('briefBody').textContent=`An armoured column has crossed the international border in Punjab and is driving south down the main road toward a town (yellow dot on the map). It is ${nT} tanks, two self-propelled AAA guns and a SAM launcher in the middle, nose to tail on the road at about ${Math.round(TANK_V*3.6)} km/h. The lead tank is ${km} km from the edge of the town: you have about ${mins} minutes before it gets there. The SAM reaches 9 km and the AAA guns 3.5 km, and a JF-17 and an F-16 are on patrol over the border. Press T to designate a vehicle and L to fire a laser-guided missile from 6 to 10 km: the pod keeps the laser on a tank as it drives. Bombs (Space) land where the tank was, so drop them only on a tank that has stopped or lead it well. The mission is won when every tank is destroyed. Your ${p.name} carries ${LO.agm} laser-guided missiles, ${LO.bombs} × 250 kg bombs, ${LO.msl} × ${AAM[p.aam].name} missiles, ${p.gun} gun rounds and ${FLARES} flares.`;
+    $('briefBody').textContent=`An armoured column has crossed the international border in Punjab and is driving south down the main road toward a town (yellow dot on the map). It is ${nT} tanks, two self-propelled AAA guns and a SAM launcher, moving in three groups about 2.4 km apart on the road at about ${Math.round(TANK_V*3.6)} km/h: the lead group and the rear group each have an AAA gun, the middle group has the SAM. The lead tank is ${km} km from the edge of the town: you have about ${mins} minutes before it gets there. The SAM reaches 9 km and the AAA guns 3.5 km, and a JF-17 and an F-16 are on patrol over the border. Press T to designate a vehicle and L to fire a laser-guided missile from 6 to 10 km: the pod keeps the laser on a tank as it drives. Bombs (Space) land where the tank was, so drop them only on a tank that has stopped or lead it well. The mission is won when every tank is destroyed. Your ${p.name} carries ${LO.agm} laser-guided missiles, ${LO.bombs} × 250 kg bombs, ${LO.msl} × ${AAM[p.aam].name} missiles, ${p.gun} gun rounds and ${FLARES} flares.`;
     setFacts('briefFacts',[[String(nT),'Tanks'],['2 + 1','AAA + SAM'],[`${mins} min`,'To the town'],[String(LO.agm),'Laser missiles']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. TGT picks a vehicle (pick the SAM first), LGM fires a laser missile from 6 to 10 km, BOMB drops on the pipper, FLR the moment MISSILE flashes.';
   } else if (RECON){
@@ -4579,14 +4709,14 @@ function applyPrefs(){
     const LO=loadout(), dk=((CARRIER.z-PORT.z)/1000).toFixed(0);
     $('briefEyebrow').textContent='Thin Air · Naval strike · from the carrier · what-if scenario';
     $('briefTitle').textContent='Destroy the port godowns';
-    $('briefBody').textContent=`You fly a single MiG-29K off the carrier INS Vikramaditya, ${dk} km south of an enemy port. The launch is automatic: the jet holds on the deck in full afterburner, runs up the ski-jump, and you take control as it leaves the bow. Fly north over the sea and destroy all four godowns (warehouses) behind the quay. Five AAA guns around the port open fire inside 3.5 km, so stay out of their reach until your run, keep the pass short, then turn back out to sea. A JF-17 and an F-16 patrol over the port and come for you once you are within 12 km. You are on your own: no wingmen. Your jet carries ${LO.bombs} × 250 kg bombs, ${LO.msl} × ${AAM[p.aam].name} missiles, ${p.gun} gun rounds and ${FLARES} flares, plus 2 laser-guided missiles (L key, up to 10 km; keep the target in the pod until impact). A bomb or missile on an AAA gun knocks it out too. Over the sea, the radar altitude is your height above the water.`;
+    $('briefBody').textContent=`You fly a single MiG-29K off the carrier INS Vikramaditya, ${dk} km south of an enemy port. The launch is automatic: the jet holds on the deck in full afterburner, runs up the ski-jump, and you take control as it leaves the bow. Fly north over the sea and destroy all four godowns (warehouses), spread 3.5 to 4 km apart along the coast: one behind the quay at the port, two to the west and one to the east (the refinery further east is not a target). Each godown has an AAA gun beside it and there is one more on the quay; they open fire inside 3.5 km, so keep each pass short, then turn back out to sea. A JF-17 and an F-16 patrol between the carrier and the coast and come for you once you are within 12 km. You are on your own: no wingmen. Your jet carries ${LO.bombs} × 250 kg bombs, ${LO.msl} × ${AAM[p.aam].name} missiles, ${p.gun} gun rounds and ${FLARES} flares, plus 2 laser-guided missiles (L key, up to 10 km; keep the target in the pod until impact). A bomb or missile on an AAA gun knocks it out too. Over the sea, the radar altitude is your height above the water.`;
     setFacts('briefFacts',[[`${dk} km`,'Carrier to port'],['4','Godowns'],['5','AAA guns'],['2','Bandits']]);
     $('touchNote').textContent='The launch is automatic. Then: left stick flies the jet (drag down to pull up), right slider is the throttle. BOMB when the pipper sits on a godown diamond, MSL once a fighter reads LOCK, hold GUN for close fights, and tap FLR the moment MISSILE flashes.';
   } else if (mode==='raid'){
     const LO=loadout(), dl=((locZ(BASE.x)-BASE.z)/1000).toFixed(1);
     $('briefEyebrow').textContent='Thin Air · Base raid · north of the LoC · what-if scenario';
     $('briefTitle').textContent='Destroy the forward air base';
-    $('briefBody').textContent=`An enemy forward air base sits in a green river valley ${dl} km north of the Line of Control, among fields, forest and snow-capped peaks. For this sortie you are cleared to cross it. Destroy all four key structures: two hardened aircraft shelters, the fuel depot and the command post with its radar. The raid has two checkpoints. Checkpoint 1: a JF-17 and an F-16 patrol 10 to 13 km south of the base, on your way in; shoot both down. Checkpoint 2: the base then shows on your HUD and radar. One SAM launcher covers it out to 9 km and two AAA guns open fire inside 3.5 km. You lead three Su-30MKIs: your wingmen, Flanker 2 and Flanker 3, hold formation, take on the fighters when they come up, then bomb the SAM and AAA sites. The four main targets are yours. Your jet carries ${LO.bombs} × 250 kg bombs, ${LO.msl} missiles, ${p.gun} gun rounds and ${FLARES} flares, plus 2 laser-guided missiles (L key, up to 10 km; keep the target in the pod until impact). A bomb or missile on a SAM or AAA site knocks it out too.`;
+    $('briefBody').textContent=`An enemy forward air base sits in a green river valley ${dl} km north of the Line of Control, among fields, forest and snow-capped peaks. For this sortie you are cleared to cross it. Destroy all four key structures, spread 4 to 5 km apart: shelter A on the airfield, shelter B at a dispersal site 4.5 km west, the fuel depot 4.5 km east and the command post with its radar 4.5 km north. The raid has two checkpoints. Checkpoint 1: a JF-17 and an F-16 patrol 10 to 13 km south of the base, on your way in; shoot both down. Checkpoint 2: the base then shows on your HUD and radar. One SAM launcher covers it out to 9 km and two AAA guns open fire inside 3.5 km. You lead three Su-30MKIs: your wingmen, Flanker 2 and Flanker 3, hold formation, take on the fighters when they come up, then bomb the SAM and AAA sites. The four main targets are yours. Your jet carries ${LO.bombs} × 250 kg bombs, ${LO.msl} missiles, ${p.gun} gun rounds and ${FLARES} flares, plus 2 laser-guided missiles (L key, up to 10 km; keep the target in the pod until impact). A bomb or missile on a SAM or AAA site knocks it out too.`;
     setFacts('briefFacts',[['3','Su-30MKIs'],['4','Targets'],['2 + 3','SAM + AAA'],['2','Bandits']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. BOMB when the pipper sits on a target diamond, MSL once a fighter reads LOCK, hold GUN for close fights, and tap FLR the moment MISSILE flashes.';
   } else if (MP.on){
@@ -4759,7 +4889,7 @@ function updateInputs(dt){
   const stick=$('stick'), knob=$('knob'), thr=$('thr'); let sid=null, tid=null;
   const R=50;
   function stickMove(e){
-    const b=stick.getBoundingClientRect(); let dx=e.clientX-(b.left+b.width/2), dy=e.clientY-(b.top+b.height/2);
+    let [dx,dy]=locXY(e,stick.getBoundingClientRect());   // works when the page is turned for landscape, too
     const l=Math.hypot(dx,dy); if (l>R){ dx*=R/l; dy*=R/l; }
     knob.style.transform=`translate(${dx}px,${dy}px)`;
     touch.roll=dx/R; touch.pitch=(invert?-1:1)*dy/R; touch.active=true;
@@ -4768,7 +4898,7 @@ function updateInputs(dt){
   stick.addEventListener('pointermove',e=>{ if (e.pointerId===sid) stickMove(e); });
   const stickUp=e=>{ if (e.pointerId!==sid) return; sid=null; knob.style.transform=''; touch.active=false; touch.pitch=touch.roll=0; };
   stick.addEventListener('pointerup',stickUp); stick.addEventListener('pointercancel',stickUp);
-  function thrMove(e){ const b=thr.getBoundingClientRect(); S.thr=clamp((b.bottom-e.clientY)/b.height,0,1)*1.15; }
+  function thrMove(e){ const b=thr.getBoundingClientRect(), ly=locXY(e,b)[1], len=ROT.a ? b.width : b.height; S.thr=clamp(0.5-ly/len,0,1)*1.15; }
   thr.addEventListener('pointerdown',e=>{ tid=e.pointerId; thr.setPointerCapture(tid); thrMove(e); e.preventDefault(); });
   thr.addEventListener('pointermove',e=>{ if (e.pointerId===tid) thrMove(e); });
   thr.addEventListener('pointerup',()=>{tid=null;}); thr.addEventListener('pointercancel',()=>{tid=null;});
@@ -4844,7 +4974,7 @@ function tiltRead(e){
   if (e.beta==null || e.gamma==null) return;
   const b=e.beta*D2R, g=e.gamma*D2R;
   const gx=Math.cos(b)*Math.sin(g), gy=-Math.sin(b), gz=-Math.cos(b)*Math.cos(g);   // gravity in the phone's frame
-  const so=(screen.orientation && typeof screen.orientation.angle==='number') ? screen.orientation.angle : (typeof window.orientation==='number' ? window.orientation : 0);
+  const so = ROT.a ? ROT.a : (screen.orientation && typeof screen.orientation.angle==='number') ? screen.orientation.angle : (typeof window.orientation==='number' ? window.orientation : 0);   // our own turned page counts as landscape
   const a=so*D2R, sx=gx*Math.cos(a)-gy*Math.sin(a), sy=gx*Math.sin(a)+gy*Math.cos(a);   // ... turned to the screen as it is held
   const rollA=Math.asin(clamp(sx,-1,1)), pitchA=Math.atan2(-sy,-gz);   // steering-wheel tilt; how upright the screen is
   tilt.last=performance.now(); tilt.ok=true;
@@ -4891,6 +5021,10 @@ function touchHelp(){
 let W=1,H=1,safeT=0,safeR=0,safeB=0,safeL=0,baseFov=60;
 const hud=$('hud'), c=hud.getContext('2d'); const HDPR=Math.min(window.devicePixelRatio||1,2);
 function resize(){
+  { const b=document.body.style, iw=window.innerWidth, ih=window.innerHeight;   // forced landscape: turn the page 90°
+    if (ROT.a===90){ b.position='fixed'; b.top=b.left='0'; b.width=ih+'px'; b.height=iw+'px'; b.transformOrigin='0 0'; b.transform=`translateX(${iw}px) rotate(90deg)`; }
+    else if (ROT.a===-90){ b.position='fixed'; b.top=b.left='0'; b.width=ih+'px'; b.height=iw+'px'; b.transformOrigin='0 0'; b.transform=`translateY(${ih}px) rotate(-90deg)`; }
+    else { b.position=b.top=b.left=b.width=b.height=b.transformOrigin=b.transform=''; } }
   W=W_(); H=H_();
   renderer.setSize(W,H,false);
   baseFov = W<H ? 78 : 60; camera.aspect=W/H; camera.fov=baseFov; camera.updateProjectionMatrix();
@@ -4898,7 +5032,27 @@ function resize(){
   const cs=getComputedStyle($('safe'));
   safeT=parseFloat(cs.paddingTop)||0; safeR=parseFloat(cs.paddingRight)||0; safeB=parseFloat(cs.paddingBottom)||0; safeL=parseFloat(cs.paddingLeft)||0;
 }
-window.addEventListener('resize',resize); resize();
+window.addEventListener('resize',()=>{ if (ROT.a && window.innerWidth>window.innerHeight){ ROT.a=0; ROT.want=0; tiltRecentre(); } resize(); });   // the browser turned the page itself after all
+resize();
+// watch how the phone is held (gravity from the motion sensor). Held sideways for half a second while the page is still
+// upright: turn the page ourselves. Held upright again: turn it back. Lying flat changes nothing.
+if (isTouch){
+  window.addEventListener('deviceorientation',e=>{
+    if (e.beta==null || e.gamma==null) return;
+    const b=e.beta*D2R, g=e.gamma*D2R, gx=Math.cos(b)*Math.sin(g), gy=-Math.sin(b);   // gx > 0: right edge down
+    const pageUpright = window.innerHeight > window.innerWidth;
+    let want=ROT.want;
+    if (!pageUpright) want=0;                                   // the browser already shows landscape
+    else if (gx<-0.7 && Math.abs(gy)<0.6) want=90;              // turned anticlockwise: right edge up
+    else if (gx>0.7 && Math.abs(gy)<0.6) want=-90;              // turned clockwise: left edge up
+    else if (Math.abs(gy)>0.75 && Math.abs(gx)<0.5) want=0;     // upright again
+    const now=performance.now();
+    if (want!==ROT.want){ ROT.want=want; ROT.since=now; }
+    if (ROT.want!==ROT.a && now-ROT.since>500){ ROT.a=ROT.want; resize(); tiltRecentre(); }
+  });
+}
+// a finger position as an offset from the middle of an element, in the page's own (possibly turned) directions
+function locXY(e,r){ const sx=e.clientX-(r.left+r.width/2), sy=e.clientY-(r.top+r.height/2); return ROT.a===90 ? [sy,-sx] : ROT.a===-90 ? [-sy,sx] : [sx,sy]; }
 
 // low graphics: no shadows and a lower render resolution, for smoother play on phones and older laptops
 function applyGfx(){
@@ -5385,6 +5539,8 @@ function drawHUD(now){
   let wy=isTouch ? Math.max(safeT+34, radioCeil+16) : hy+76;   // phone: warnings and messages along the top, under the instructor's box
   warns.slice(0,3).forEach(([t,col,fl])=>{ if (!fl||flash) txt(t,cx,wy,col,'center',16,true); wy+=24; });
   if (S.msg) txt(S.msg.text,cx,wy,S.msg.col,'center',14,true);
+  if (isTouch && S.banner){   // phone: the result of your bomb or missile, big, in the upper middle of the screen, fading out
+    c.globalAlpha=clamp(S.banner.t/0.5,0,1); txt(S.banner.text,cx,H*0.3,S.banner.col,'center',22,true); c.globalAlpha=1; }
 
   if (!isTouch && state==='fly' && S.time<15 && !radioUp){
     const hint = raid ? 'Space bomb   ·   G CCIP / CCRP   ·   T target   ·   L laser missile   ·   M / left click air missile (after LOCK)   ·   X gun   ·   Z / right click flares'
@@ -5497,7 +5653,7 @@ function drawHUD(now){
     if (TANKER && TKR){ const [kx,ky]=mp(TKR.p.x,TKR.p.z); c.beginPath(); c.arc(kx,ky,3.5,0,Math.PI*2); c.fillStyle=HUD; c.fill(); }
     if (BRIDGE){ c.fillStyle='#ffd27a'; CONVOY.trucks.forEach(t=>{ if (!t.alive) return; const [vx,vy]=mp(t.x,t.z); c.fillRect(vx-1.5,vy-1.5,3,3); }); }
     if (RECON) REC_SITES.forEach(s=>{ const [tx2,ty2]=mp(s.x,s.z); c.beginPath(); c.rect(tx2-3.5,ty2-3.5,7,7); c.fillStyle=s.done?'#6b7480':AMB; c.fill(); c.lineWidth=1; c.strokeStyle='#0b1320'; c.stroke(); });
-    else if (PRECISE || SEAD || TANKER || BRIDGE || TANKS) RAID.targets.forEach(t=>{ const [tx2,ty2]=mp(t.x,t.z); c.beginPath(); c.rect(tx2-3.5,ty2-3.5,7,7); c.fillStyle=t.alive?AMB:'#6b7480'; c.fill(); c.lineWidth=1; c.strokeStyle='#0b1320'; c.stroke(); });
+    else if (PRECISE || SEAD || TANKER || BRIDGE || TANKS || NAVAL || (plainRaid() && RCP!==1)) RAID.targets.forEach(t=>{ const [tx2,ty2]=mp(t.x,t.z); c.beginPath(); c.rect(tx2-3.5,ty2-3.5,7,7); c.fillStyle=t.alive?AMB:'#6b7480'; c.fill(); c.lineWidth=1; c.strokeStyle='#0b1320'; c.stroke(); });
     else if (RCP!==1){ const [bx2,by2]=mp(BASE.x,BASE.z); c.beginPath(); c.rect(bx2-4,by2-4,8,8); c.fillStyle=raidLeft()?AMB:'#6b7480'; c.fill(); c.lineWidth=1; c.strokeStyle='#0b1320'; c.stroke(); }
     if (NAVAL){ const [kx,ky]=mp(CARRIER.x,CARRIER.z); c.fillStyle='#e6ecf2'; c.fillRect(kx-1.5,ky-5,3,10); }   // the carrier
     c.fillStyle=HUD; wingmen.forEach(w=>{ if (!w.alive) return; const [wx,wy]=mp(w.p.x,w.p.z); c.fillRect(wx-2,wy-2,4,4); });
@@ -5933,8 +6089,15 @@ function seaHeight(x,z){
   const h=2+d*0.012+n*(40+560*smooth(1500,8000,d))*smooth(0,400,d);
   const w=(1-smooth(1300,1900,Math.abs(x-PORT.x)))*(1-smooth(1500,2200,d));   // the port: flat ground 4 m above the water
   const wr=1-smooth(900,1500,Math.hypot(x-REFY.x,z-REFY.z));                    // the refinery: a level site 8 m up
-  return lerp(lerp(h,4,w),8,wr);
+  let out=lerp(lerp(h,4,w),8,wr);
+  for (const gx of GODOWN_X){ if (gx===PORT.x) continue;   // the outlying godowns stand on level yards 4 m up
+    const wg=1-smooth(380,750,Math.hypot(x-gx,z-godownZ(gx))); if (wg>0) out=lerp(out,4,wg); }
+  return out;
 }
+// naval strike: four godowns spread 3.5 to 4 km apart along the coast, one at the port and three along the shore,
+// each about 420 m inland (the refinery at x 6500 is left alone)
+const GODOWN_X=[-8000,-4000,0,3500].map(d=>PORT.x+d);
+const godownZ=x=> x===PORT.x ? PORT.z : coastZ(x)-420;
 function buildSea(){
   const h=new Float32Array(N*N), geo=new T.PlaneGeometry(MAP,MAP,SEG,SEG); geo.rotateX(-Math.PI/2);
   const pos=geo.attributes.position;
@@ -6016,8 +6179,8 @@ function buildSea(){
   const lights=new T.Points(lg,new T.PointsMaterial({color:0xffd890, size:3, sizeAttenuation:false})); lights.visible=NIGHT; objs.push(lights);
   // the four godowns (warehouses), the targets
   const targets=[];
-  [-420,-140,140,420].forEach((dx,i)=>{
-    const x=PORT.x+dx, z=PORT.z, y=4, I=[], Wk=[], sec=[];
+  GODOWN_X.forEach((gx,i)=>{
+    const x=gx, z=godownZ(gx), y=4, I=[], Wk=[], sec=[];
     at(x,y,z);
     put(I,UBOX,0xb8b2a2,0,6,0,90,12,32);
     put(I,UBOX,0x7d8a8f,0,14.2,-8.4,92,0.6,18.2,-0.32,0,0); put(I,UBOX,0x7d8a8f,0,14.2,8.4,92,0.6,18.2,0.32,0,0);   // pitched roof
@@ -6031,7 +6194,7 @@ function buildSea(){
   });
   // AAA guns around the godowns and along the quay
   const ad=[];
-  [[-650,160],[650,160],[0,-260],[-300,330],[320,-300]].forEach(([dx,dz],i)=>{
+  [...GODOWN_X.map(gx=>[gx-PORT.x+180, godownZ(gx)-PORT.z+160]), [-300,330]].forEach(([dx,dz],i)=>{   // a gun beside each godown, and one on the quay
     const a=makeAA(dx,dz,PORT); scene.remove(a.g); objs.push(a.g);
     const L=[]; at(a.g.position.x,a.g.position.y,a.g.position.z);
     put(L,UBOX,BURNT,0,0.5,0,1.8,0.8,2.4,0.2,0.5,0.15); put(L,USPH,ASH,0,0.05,0,7,0.25,7);
@@ -6520,7 +6683,8 @@ function buildPunjab(){
       const hm=new T.Mesh(mergeParts(Hs),BLD_MAT); hm.castShadow=hm.receiveShadow=true; scene.add(hm); }
     const tank={targets:[], ad:[], veh:[]};
     TANK_ORDER.forEach((k,i)=>{   // the column, nose to tail along the road; tankReset moves it to the start each sortie
-      const z=TANK_LEAD0-i*TANK_GAP, x=pbRoadX(z), o={x,z};
+      // three groups of three (tank, tank, then an AAA gun or the SAM), 2.4 km apart, 200 m between vehicles in a group
+      const z=TANK_LEAD0-Math.floor(i/3)*2400-(i%3)*200, x=pbRoadX(z), o={x,z};
       if (k==='T'){
         const n=tank.targets.length+1, g=tankMesh(false), w=tankMesh(true); g.visible=false; w.visible=false; scene.add(g); scene.add(w);
         const t={name:`TANK ${n}`, x, y:groundAt(x,z), z, r:TANK_R, alive:true, intact:g, wreck:w, extras:[], sec:[], conv:true};
@@ -6596,7 +6760,7 @@ function updateTanks(dt){
   }
   const L=tankLead();
   if (L && L.z>TANK_FAIL_Z && state==='fly')
-    endMission(false,'The column reached the town',`The tanks rolled into the town. Fly straight at the column, designate a tank with T and fire laser-guided missiles from 6 to 10 km; the pod follows it as it drives. Kill the SAM launcher in the middle of the column early, and stay outside 3.5 km of the two AAA guns. Tanks destroyed: ${PUN.tank.targets.filter(t=>!t.alive).length} of ${PUN.tank.targets.length}.`,1.5);
+    endMission(false,'The column reached the town',`The tanks rolled into the town. Fly straight at the column, designate a tank with T and fire laser-guided missiles from 6 to 10 km; the pod follows it as it drives. Kill the SAM launcher in the middle group early, and stay outside 3.5 km of the two AAA guns. Tanks destroyed: ${PUN.tank.targets.filter(t=>!t.alive).length} of ${PUN.tank.targets.length}.`,1.5);
 }
 let NAVAL=false, SEA=null;
 const RAID_K={targets:RAID.targets, ad:RAID.ad}, BASE_K={...BASE};   // the Kargil raid, restored when leaving the sea map
@@ -6656,13 +6820,13 @@ function buildDesert(){
       const t={name:s.name+' RADAR', x:s.x, z:s.z, y, r:RAID_HIT, alive:true, intact:raidMesh(I,true), wreck:raidMesh(Wk,false), extras:[], sec};
       const bc=new T.Mesh(USPH,BEACON_MAT); bc.scale.setScalar(1.4); bc.position.set(s.x,y+9.6,s.z+1); scene.add(bc); t.extras.push(bc);   // red warning light on the mast
       targets.push(t);
-      [[0.4+i,420],[2.9+i,650]].forEach(([ang,R],j)=>{
+      [[0.4+i,1600],[2.9+i,2400]].forEach(([ang,R],j)=>{   // the two launchers patrol loops 1.6 and 2.4 km out from their radar, on opposite sides
         const a=makeSAM(s.x+Math.cos(ang)*R, s.z+Math.sin(ang)*R);
         Object.assign(a,{mob:true, cx:s.x, cz:s.z, R, ang0:ang, x0:a.x, y0:a.y, z0:a.z, site:t, seen:false, cyc0:j*40+i*17, cyc:0, name:s.name});
         seadPlace(a,ang); ad.push(a);
       });
-      const g=makeAA(-40,-30,o);
-      Object.assign(g,{kind:'AAA', wreck:adWreck(s.x-40,s.z-30,1), x:g.g.position.x, y:g.g.position.y, z:g.g.position.z, alive:true, phase:i*1.7});
+      const g=makeAA(-700,900,o);   // the site's AAA gun guards the southern approach, about 1.1 km from the radar
+      Object.assign(g,{kind:'AAA', wreck:adWreck(s.x-700,s.z+900,1), x:g.g.position.x, y:g.g.position.y, z:g.g.position.z, alive:true, phase:i*1.7});
       ad.push(g);
     });
     // villages: clusters of flat-roofed houses, with a few lit windows
@@ -7286,6 +7450,7 @@ function frame(now){
     else { updateDogfight(dt); if (ESCORT) updateEscort(dt); if (AWACS) updateAwacs(dt); if (DRONES) updateDroneHunt(dt); if (FLEET && state==='fly') updateFleet(dt); }
     updatePip(dt);
     if (S.msg){ S.msg.t-=dt; if (S.msg.t<=0) S.msg=null; }
+    if (S.banner){ S.banner.t-=dt; if (S.banner.t<=0) S.banner=null; }
     if (state==='ending'){ endTimer-=dt; if (endTimer<=0) showEnd(); }
   }
   mpUpdate(dt);
@@ -7322,6 +7487,7 @@ addParkedJets();
 initWorlds();
 buildHangar();
 applyPrefs();
+setStep('play');   // the hangar opens on step 1: single player, multiplayer or training
 paintStars();
 mpInit();
 requestAnimationFrame(frame);
