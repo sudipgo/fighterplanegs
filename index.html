@@ -2655,18 +2655,95 @@ function boomSnd(p,big){
   } catch (e) {}
 }
 function updateEffects(dt){
+  updateFlares(dt);
   for (let i=effects.length-1;i>=0;i--){
     const e=effects[i]; e.t+=dt; const k=Math.min(1,e.t/e.life);
     e.m.scale.setScalar(lerp(e.s0,e.s1,1-Math.pow(1-k,3))); e.m.material.opacity=e.o0*(1-k); e.m.position.y+=e.rise*dt;
     if (k>=1){ scene.remove(e.m); e.m.material.dispose(); effects.splice(i,1); }
   }
 }
-function popFlares(p, fwd, right){
-  for (let i=0;i<3;i++){
-    _t.copy(p).addScaledVector(fwd,-10-i*5); _t.y-=2;
-    if (right) _t.addScaledVector(right,(i-1)*3); else _t.x+=(i-1)*3;
-    effects.push(makeFx(_t.clone(),0xffc46b,true,1.8,1.4,4,1,-30));
+// ---------- flares: white-hot pellets kicked out of the tail in a quick sequence, left and right. Each one slows hard in the
+// airstream, drops away burning for ~3 s and leaves a thick white smoke trail, so a salvo fans out into the "angel" shape.
+// Both the glowing cores and the smoke are point sprites from two fixed pools, so a long salvo stays cheap on a phone.
+const FX_TEX=(()=>{ const c=document.createElement('canvas'); c.width=c.height=64; const x=c.getContext('2d');
+  const g=x.createRadialGradient(32,32,0,32,32,32); g.addColorStop(0,'rgba(255,255,255,1)'); g.addColorStop(0.35,'rgba(255,255,255,.55)'); g.addColorStop(1,'rgba(255,255,255,0)');
+  x.fillStyle=g; x.fillRect(0,0,64,64); const t=new T.CanvasTexture(c); return t; })();
+function spritePool(n,additive){
+  const g=new T.BufferGeometry(), pos=new Float32Array(n*3), size=new Float32Array(n), alpha=new Float32Array(n), col=new Float32Array(n*3);
+  g.setAttribute('position',new T.BufferAttribute(pos,3)); g.setAttribute('size',new T.BufferAttribute(size,1));
+  g.setAttribute('alpha',new T.BufferAttribute(alpha,1)); g.setAttribute('color',new T.BufferAttribute(col,3));
+  const mat=new T.ShaderMaterial({ uniforms:{tex:{value:FX_TEX}, scale:{value:600}},
+    vertexShader:`attribute float size; attribute float alpha; attribute vec3 color; varying float vA; varying vec3 vC; uniform float scale;
+      void main(){ vA=alpha; vC=color; vec4 mv=modelViewMatrix*vec4(position,1.0); gl_PointSize=min(256.0,size*scale/max(1.0,-mv.z)); gl_Position=projectionMatrix*mv; }`,
+    fragmentShader:`uniform sampler2D tex; varying float vA; varying vec3 vC; void main(){ vec4 t=texture2D(tex,gl_PointCoord); gl_FragColor=vec4(vC,t.a*vA); }`,
+    transparent:true, depthWrite:false, blending: additive ? T.AdditiveBlending : T.NormalBlending });
+  const pts=new T.Points(g,mat); pts.frustumCulled=false; pts.renderOrder=additive?3:2; scene.add(pts);
+  const P=[]; for (let i=0;i<n;i++) P.push({live:false, p:new T.Vector3(), v:new T.Vector3(), age:0, life:1, s0:1, s1:1, a0:1, c:[1,1,1]});
+  return {pts, g, pos, size, alpha, col, P, n, next:0};
+}
+let FLR_SMOKE=null, FLR_CORE=null;
+const _fR=new T.Vector3(), _fV=new T.Vector3(), _fZ=new T.Vector3(), _fUP=new T.Vector3(0,1,0);
+const FLR={list:[], emit:[]};
+function poolAdd(pool,p,v,life,s0,s1,a0,c){
+  const q=pool.P[pool.next]; pool.next=(pool.next+1)%pool.n;
+  q.live=true; q.p.copy(p); q.v.copy(v); q.age=0; q.life=life; q.s0=s0; q.s1=s1; q.a0=a0; q.c=c; return q;
+}
+function popFlares(p, fwd, right, vel, mine){
+  if (!FLR_SMOKE){ FLR_SMOKE=spritePool(1600,false); FLR_CORE=spritePool(64,true); }
+  // 6 flares, one every 70 ms, alternating sides; the source is followed so the sequence streams off the moving jet
+  FLR.emit.push({p, fwd, right, vel, k:0, n:6, next:0, mine});
+}
+function updateFlares(dt){
+  if (!FLR_SMOKE) return;
+  for (let i=FLR.emit.length-1;i>=0;i--){
+    const e=FLR.emit[i]; e.next-=dt;
+    while (e.next<=0 && e.k<e.n){
+      e.next+=0.07;
+      const side=e.k%2 ? 1 : -1, fwd=e.fwd, R=e.right ? e.right : _fR.crossVectors(fwd,_fUP).normalize();
+      const v0 = e.vel ? e.vel : _fV.copy(fwd).multiplyScalar(220);
+      const p=new T.Vector3().copy(e.p).addScaledVector(fwd,-5).addScaledVector(R,side*1.2); p.y-=1;
+      const v=new T.Vector3().copy(v0).addScaledVector(R,side*(30+Math.random()*12)).addScaledVector(fwd,-15); v.y-=18+Math.random()*10;
+      FLR.list.push({p, v, age:0, life:2.8+Math.random()*0.8, puff:0, core:poolAdd(FLR_CORE,p,v,9,7,7,1,[1,0.93,0.75])});
+      poolAdd(FLR_SMOKE,p,_fZ.set(0,0,0),0.35,2,8,0.9,[1,0.85,0.55]);   // the pop
+      if (e.mine) flarePop();
+      e.k++;
+    }
+    if (e.k>=e.n) FLR.emit.splice(i,1);
   }
+  for (let i=FLR.list.length-1;i>=0;i--){
+    const f=FLR.list[i]; f.age+=dt;
+    f.v.multiplyScalar(Math.exp(-1.6*dt)); f.v.y-=G*dt;   // light pellet: the air stops it fast, then it falls
+    f.p.addScaledVector(f.v,dt);
+    const k=f.age/f.life, fl=0.8+0.4*Math.random();
+    f.core.p.copy(f.p); f.core.s0=f.core.s1=(k<0.1 ? 4+k*40 : 8*(1-0.5*k))*fl; f.core.a0=k>0.8 ? (1-k)/0.2 : 1; f.core.age=0;
+    f.puff-=dt;
+    if (f.puff<=0 && k<0.95){ f.puff=0.035; poolAdd(FLR_SMOKE,f.p,_fZ.set((Math.random()-0.5)*2,1.5,(Math.random()-0.5)*2),3.2+Math.random(),1.5,9,0.5*(1-0.6*k),[0.92,0.92,0.9]); }
+    if (k>=1){ f.core.live=false; FLR.list.splice(i,1); }
+  }
+  // write both pools to the GPU
+  const scale=renderer.getPixelRatio()*H*0.5/Math.tan(camera.fov*D2R/2);
+  for (const pool of [FLR_SMOKE,FLR_CORE]){
+    pool.pts.material.uniforms.scale.value=scale;
+    for (let i=0;i<pool.n;i++){
+      const q=pool.P[i], o=i*3;
+      if (q.live && pool===FLR_SMOKE){ q.age+=dt; if (q.age>=q.life) q.live=false; else q.p.addScaledVector(q.v,dt); }
+      if (!q.live){ pool.alpha[i]=0; pool.size[i]=0; continue; }
+      const k=pool===FLR_SMOKE ? q.age/q.life : 0;
+      pool.pos[o]=q.p.x; pool.pos[o+1]=q.p.y; pool.pos[o+2]=q.p.z;
+      pool.size[i]=lerp(q.s0,q.s1,1-Math.pow(1-k,2)); pool.alpha[i]=q.a0*(1-k);
+      pool.col[o]=q.c[0]; pool.col[o+1]=q.c[1]; pool.col[o+2]=q.c[2];
+    }
+    for (const a of ['position','size','alpha','color']) pool.g.attributes[a].needsUpdate=true;
+  }
+}
+// a flare cartridge firing: a short sharp pop
+function flarePop(){
+  try { if (!sndOK()) return; const t=actx.currentTime;
+    const s=actx.createBufferSource(), bp=actx.createBiquadFilter(), g=actx.createGain();
+    s.buffer=noiseB(); bp.type='bandpass'; bp.frequency.value=1300; bp.Q.value=1.5;
+    g.gain.setValueAtTime(0.16,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.09);
+    s.connect(bp); bp.connect(g); g.connect(actx.destination); s.start(t); s.stop(t+0.1);
+  } catch (e) {}
 }
 
 // missile smoke trails
@@ -3888,13 +3965,13 @@ function updateMissiles(dt){
     if (tg && isP && !m.flareChk && m.p.distanceTo(tg.p)<1800){
       m.flareChk=true; const e=m.target;
       if (e.flares>0 && Math.random()<(0.2+0.04*S.wave)*(mt?mt.flare:1)){
-        e.flares--; popFlares(e.p,e.fwd,null); m.target=null; tg=null;
+        e.flares--; popFlares(e.p,e.fwd,null,e.vel||null); m.target=null; tg=null;
         S.msg={text:'BANDIT FLARED', col:AMB, t:1.6};
       }
     }
     if (tg && !isP && m.target && m.target.friendly && !m.flareChk && m.p.distanceTo(tg.p)<2000){
       m.flareChk=true; const w=m.target;
-      if (w.flares>0 && Math.random()<(mt?clamp(0.55*mt.flare,0.1,0.8):0.55)){ w.flares--; popFlares(w.p,w.fwd,null); m.target=null; tg=null; S.msg={text:`${w.name} · FLARES, MISSILE DEFEATED`, col:HUD, t:1.6}; }
+      if (w.flares>0 && Math.random()<(mt?clamp(0.55*mt.flare,0.1,0.8):0.55)){ w.flares--; popFlares(w.p,w.fwd,null,w.vel||null); m.target=null; tg=null; S.msg={text:`${w.name} · FLARES, MISSILE DEFEATED`, col:HUD, t:1.6}; }
     }
     // radar-guided missiles can be notched: a target flying across the missile's line of sight (beaming)
     // hides in the ground clutter, and the seeker may lose it
@@ -4005,6 +4082,7 @@ function fireMissile(){
 function fireGun(dt){
   S.gunCd-=dt;
   const firing=(keys.has('KeyX')||touchGun) && S.alive && state==='fly';
+  if (firing && S.gun>0) GUNSND.want=true;   // the cannon sound runs while this is set (see updateEngine)
   if (!firing){ if (S.gunCd<0) S.gunCd=0; return; }
   if (S.gun<=0){ if (!S.gunEmptyMsg){ S.gunEmptyMsg=true; S.msg={text:'GUN EMPTY', col:AMB, t:1.2}; } return; }
   axes();
@@ -4023,7 +4101,7 @@ function dropFlares(){
   if (S.flares<=0){ S.msg={text:'NO FLARES', col:AMB, t:1}; return; }
   if (S.time-S.lastFlare<0.45) return;
   S.flares--; S.lastFlare=S.time; axes();
-  popFlares(S.pos,vF,vR);
+  popFlares(S.pos,vF,vR,S.vel,true);
   // each press is a fresh chance against every missile coming for you within 6 km. The dispenser fires chaff with the
   // flares, so radar missiles can be beaten too. Best once the missile is inside 3 km, and better still in a hard break turn.
   let decoyed=0, tracking=0, far=0;
@@ -4287,6 +4365,23 @@ function updateEngine(){
   const thr=Math.min(1.15, intro ? IN.thr : S.thr), V=intro ? IN.v : S.vel.length(), t=actx.currentTime;
   eng.g.gain.setTargetAtTime(on ? 0.04+0.07*thr : 0, t, 0.15);
   eng.lp.frequency.setTargetAtTime(220+700*thr+V*1.1, t, 0.2);
+  // cannon: a rattling "brrrt" while the trigger is held
+  const gunOn = GUNSND.want && state==='fly' && S.alive && $('soundOn').checked && !document.hidden; GUNSND.want=false;
+  if (gunOn && !GUNSND.g){
+    try {
+      const s=actx.createBufferSource(), lp=actx.createBiquadFilter(), am=actx.createGain(), g=actx.createGain(), o=actx.createOscillator(), od=actx.createGain();
+      s.buffer=noiseB(); s.loop=true; lp.type='lowpass'; lp.frequency.value=1600; lp.Q.value=1.2;
+      am.gain.value=0.5; o.type='square'; o.frequency.value=25; od.gain.value=0.5;   // 25 rounds a second: the noise pulses at 25 Hz
+      o.connect(od); od.connect(am.gain);
+      const th=actx.createOscillator(), tg=actx.createGain(); th.type='sawtooth'; th.frequency.value=50; tg.gain.value=0.35; th.connect(tg); tg.connect(lp);   // body under the rattle
+      s.connect(lp); lp.connect(am); am.connect(g); g.connect(actx.destination);
+      g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.22,t+0.03);
+      s.start(t); o.start(t); th.start(t); GUNSND.g={g,stop:[s,o,th]};
+    } catch (e) {}
+  } else if (!gunOn && GUNSND.g){
+    const n=GUNSND.g; GUNSND.g=null;
+    try { n.g.gain.cancelScheduledValues(t); n.g.gain.setTargetAtTime(0.0001,t,0.04); n.stop.forEach(x=>x.stop(t+0.25)); } catch (e) {}
+  }
   // missile warning: "ti-tit-ti" beeps that speed up as the missile closes
   const md = state==='fly' && S.alive && $('soundOn').checked && !document.hidden ? incomingD() : Infinity;
   if (md<Infinity && t>=ALARM.next){
@@ -4300,7 +4395,7 @@ function updateEngine(){
     ALARM.next = t + dur + (last ? iv*2.5 : iv*0.6); ALARM.n++;
   } else if (md===Infinity){ ALARM.n=0; }
 }
-const ALARM={next:0, n:0};
+const ALARM={next:0, n:0}, GUNSND={want:false, g:null};
 function updateStreaks(){
   const live=(state==='fly'||state==='ending'||state==='paused') && S.alive;
   const a=live ? clamp((S.vel.length()-150)/300,0,1)*0.45 : 0;
