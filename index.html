@@ -2477,7 +2477,11 @@ function setPlaneMesh(){
   { plane.updateMatrixWorld(true); const tip=new T.Vector3(), _p=new T.Vector3();
     plane.traverse(o=>{ if (!o.isMesh || !o.geometry.attributes.position) return; const a=o.geometry.attributes.position;
       for (let i=0;i<a.count;i++){ _p.fromBufferAttribute(a,i).applyMatrix4(o.matrixWorld); if (_p.x>tip.x) tip.copy(_p); } });
-    plane.userData.tip=tip; }
+    plane.userData.tip=tip;
+    // how big this jet is (skin only, no flame or stores): the phone chase camera backs off for big ones like the Su-30
+    const bx=new T.Box3(); plane.traverse(o=>{ if (o.isMesh && o.material.userData && o.material.userData.base) bx.expandByObject(o); });
+    const sz=bx.isEmpty() ? 14.5 : Math.max(bx.max.x-bx.min.x, bx.max.z-bx.min.z);
+    plane.userData.camK=clamp(sz/14.5,1,1.6); }
   const gr=makeGear(); gr.visible=false; plane.add(gr); plane.userData.gear=gr;
   castAll(plane);
   const hp=plane.userData.hp, LO=loadout();
@@ -5711,7 +5715,7 @@ function updateCamera(dt){
     } else {
       camQ.slerp(S.q,1-Math.exp(-dt*5));
       // chase camera drops back as speed builds
-      if (isTouch){ const k = W>H ? 0.56 : 1;   // phone held sideways: come in ~1.8x closer so the jet isn't tiny on the short screen
+      if (isTouch){ const k = (W>H ? 0.67 : 1) * (plane.userData.camK || 1);   // phone held sideways: come in 1.5x closer; big jets get more room so the jet isn't tiny on the short screen
         camOff.set(0,(7.4+sp)*k,(25+sp*5)*k).applyQuaternion(camQ); }   // phone: close and a bit higher, so the jet sits low and large in the frame
       else camOff.set(0,8.5+sp*1.5,40+sp*10).applyQuaternion(camQ); camera.position.copy(S.pos).add(camOff); camera.quaternion.copy(camQ).multiply(camTilt);
     }
