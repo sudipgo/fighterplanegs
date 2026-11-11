@@ -437,7 +437,7 @@ const riverZ = x => BASE.z + 1500 + 420*Math.sin(x/2300+0.7) + 160*Math.sin(x/83
 const tribX = z => BASE.x + 1950 + 380*Math.sin(z/1500);
 function riverDist(x,z){ const rz=riverZ(x); let d=Math.abs(z-rz); if (z<rz) d=Math.min(d,Math.abs(x-tribX(z))); return d; }
 const LOC_WARN=3000, HIT_RADIUS=60, BOMB_K=1.1e-4, BOMB_MASS=250, MSL_MASS=90;
-const BOMB_TS=2.5;   // bombs fall 2.5x faster than real time so the run stays snappy; the trajectory and impact point are unchanged
+const BOMB_TS=2.5, BOMB_KICK=6;   // BOMB_KICK: the ejector rack pushes each bomb down at 6 m/s   // bombs fall 2.5x faster than real time so the run stays snappy; the trajectory and impact point are unchanged
 const WAVES=1, LOCK_TIME=1.0, FLARES=30;
 const locZ = x => -7600 + 500*Math.sin(x/2600) + 250*Math.sin(x/1100+1.3);
 
@@ -1561,6 +1561,16 @@ const BUILD = {m2k:detailed('m2k',buildMirage), rafale:detailed('rafale',buildRa
 
 const bombGeo = new T.CylinderGeometry(0.18,0.18,2.2,8); bombGeo.rotateX(Math.PI/2);
 const bombMat = new T.MeshLambertMaterial({color:0x3d4a3a});
+// a falling bomb: body, nose, tail cone and cross fins, a bit oversized so it reads on a small screen (lookAt points +z along the flight path)
+const BOMB_PROTO=(()=>{
+  const g=new T.Group(), band=new T.MeshLambertMaterial({color:0xc9a43a}), fin=new T.MeshLambertMaterial({color:0x2f3a2e, side:T.DoubleSide});
+  const body=new T.Mesh(new T.CylinderGeometry(0.2,0.2,1.6,10),bombMat); body.rotation.x=Math.PI/2; g.add(body);
+  const nose=new T.Mesh(new T.SphereGeometry(0.2,10,8),bombMat); nose.scale.z=2.2; nose.position.z=0.8; g.add(nose);
+  const ring=new T.Mesh(new T.CylinderGeometry(0.205,0.205,0.12,10),band); ring.rotation.x=Math.PI/2; ring.position.z=0.55; g.add(ring);
+  const tail=new T.Mesh(new T.CylinderGeometry(0.2,0.08,0.6,10),bombMat); tail.rotation.x=Math.PI/2; tail.position.z=-1.1; g.add(tail);
+  for (let i=0;i<4;i++){ const f=new T.Mesh(new T.PlaneGeometry(0.5,0.55),fin); f.position.set(0,0,-1.2); f.rotation.z=i*Math.PI/2;
+    const piv=new T.Group(); f.rotation.set(0,Math.PI/2,0); f.position.set(0,0.28,-1.2); piv.add(f); piv.rotation.z=i*Math.PI/2+Math.PI/4; g.add(piv); }
+  g.scale.setScalar(1.5); return g; })();
 const pylonGeo = new T.BoxGeometry(0.1,0.2,1.0);
 const sphereGeo = new T.SphereGeometry(1,14,10);
 const mslProtoP = buildMissile(0xdedbd2), mslProtoE = buildMissile(0x9c8c78);
@@ -2593,6 +2603,37 @@ function spawnExplosion(p,big){
   effects.push(makeFx(p,0x4a4744,false,big?6:4,5,big?140:60,0.7,big?18:10));
   boomSnd(p,big);
 }
+// weapon release sounds. clunkSnd: the ejector rack letting go (a metal clack and a low thud).
+// motorSnd: a rocket motor lighting, a roaring hiss that swells and fades as the missile pulls away.
+let noiseBuf=null;
+function noiseB(){ if (!noiseBuf){ const n=Math.floor(actx.sampleRate*2); noiseBuf=actx.createBuffer(1,n,actx.sampleRate); const d=noiseBuf.getChannelData(0); for (let i=0;i<n;i++) d[i]=Math.random()*2-1; } return noiseBuf; }
+function sndOK(){ return actx && $('soundOn').checked && !document.hidden; }
+function clunkSnd(){
+  try { if (!sndOK()) return; const t=actx.currentTime;
+    const s=actx.createBufferSource(), bp=actx.createBiquadFilter(), g=actx.createGain();   // the clack
+    s.buffer=noiseB(); bp.type='bandpass'; bp.frequency.value=2400; bp.Q.value=3;
+    g.gain.setValueAtTime(0.22,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.08);
+    s.connect(bp); bp.connect(g); g.connect(actx.destination); s.start(t); s.stop(t+0.1);
+    const o=actx.createOscillator(), og=actx.createGain();   // the thud
+    o.type='triangle'; o.frequency.setValueAtTime(140,t); o.frequency.exponentialRampToValueAtTime(55,t+0.18);
+    og.gain.setValueAtTime(0.25,t); og.gain.exponentialRampToValueAtTime(0.001,t+0.22);
+    o.connect(og); og.connect(actx.destination); o.start(t); o.stop(t+0.25);
+  } catch (e) {}
+}
+function motorSnd(){
+  try { if (!sndOK()) return; const t=actx.currentTime, D=1.8;
+    const s=actx.createBufferSource(), lp=actx.createBiquadFilter(), g=actx.createGain();
+    s.buffer=noiseB(); s.loop=true; lp.type='lowpass'; lp.Q.value=0.7;
+    lp.frequency.setValueAtTime(3500,t); lp.frequency.exponentialRampToValueAtTime(500,t+D);   // bright at ignition, duller as it goes
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.32,t+0.06); g.gain.exponentialRampToValueAtTime(0.001,t+D);
+    s.connect(lp); lp.connect(g); g.connect(actx.destination); s.start(t); s.stop(t+D+0.05);
+    const o=actx.createOscillator(), og=actx.createGain();   // low rumble under the hiss
+    o.type='sawtooth'; o.frequency.setValueAtTime(75,t); o.frequency.exponentialRampToValueAtTime(45,t+1);
+    const ol=actx.createBiquadFilter(); ol.type='lowpass'; ol.frequency.value=200;
+    og.gain.setValueAtTime(0.0001,t); og.gain.exponentialRampToValueAtTime(0.12,t+0.05); og.gain.exponentialRampToValueAtTime(0.001,t+1.1);
+    o.connect(ol); ol.connect(og); og.connect(actx.destination); o.start(t); o.stop(t+1.2);
+  } catch (e) {}
+}
 // explosion sound: a burst of noise with a low thump; far-off blasts are quieter and duller, but never silent, so a hit is always heard
 let boomBuf=null, boomLast=0;
 function boomSnd(p,big){
@@ -2729,7 +2770,7 @@ function simBomb(p,v,dt){ const sp=Math.hypot(v.x,v.y,v.z);
 const cp={x:0,y:0,z:0}, cv={x:0,y:0,z:0};
 function ccip(){
   axes();
-  cp.x=S.pos.x-vU.x*1.3; cp.y=S.pos.y-vU.y*1.3; cp.z=S.pos.z-vU.z*1.3; cv.x=S.vel.x; cv.y=S.vel.y; cv.z=S.vel.z;
+  cp.x=S.pos.x-vU.x*1.3; cp.y=S.pos.y-vU.y*1.3; cp.z=S.pos.z-vU.z*1.3; cv.x=S.vel.x-vU.x*BOMB_KICK; cv.y=S.vel.y-vU.y*BOMB_KICK; cv.z=S.vel.z-vU.z*BOMB_KICK;   // includes the ejector kick, so the pipper matches the real drop
   for (let i=0;i<900;i++){ simBomb(cp,cv,0.08); if (cp.y<=groundAt(cp.x,cp.z)){ cp.tof=(i+1)*0.08; return cp; } }
   return null;
 }
@@ -2765,7 +2806,8 @@ function toggleDeliv(){
   S.msg={text: deliv==='CCRP' ? 'CCRP · FLY THE STEERING LINE, HOLD SPACE' : 'CCIP · DIVE, PIPPER ON TARGET', col:HUD, t:2};
 }
 // ---------- laser-guided air-to-ground missile: the pod lases the designated target, the missile homes on the laser spot
-const AGM_MAX=10000, AGM_MIN=1500;
+const AGM_MAX=10000, AGM_MIN=1500, AGM_DROP=0.45;   // AGM_DROP: seconds it falls clear of the jet before the motor lights
+const AGM_FLAME=new T.MeshBasicMaterial({color:0xffb25a, transparent:true, opacity:0.95, depthWrite:false, blending:T.AdditiveBlending});
 function lasing(aim){
   axes(); _t.copy(aim).sub(S.pos); const r=_t.length();
   return S.alive && tgp.on && r<22000 && _t.dot(vF)/r>-0.5;
@@ -2783,7 +2825,10 @@ function fireAGM(){
   S.agm--; S.lastAgm=S.time;
   const aim=new T.Vector3(d.x, d.y+1, d.z);
   const m=spawnMissile(S.pos.clone().addScaledVector(vU,-1.8), S.vel.clone().addScaledVector(vU,-8), {agm:true, alive:true, p:aim, vel:new T.Vector3()}, 'p');
-  m.agm=true; m.aim=aim; m.aimR=d.r; m.maxLife=20; m.mesh.scale.setScalar(1.4); m.ref=d.ref;
+  m.agm=true; m.aim=aim; m.aimR=d.r; m.maxLife=21; m.mesh.scale.setScalar(1.6); m.ref=d.ref;
+  m.flame=new T.Mesh(sphereGeo,AGM_FLAME); m.flame.position.z=-1.9; m.flame.visible=false; m.mesh.add(m.flame);   // motor plume, lit after the drop
+  effects.push(makeFx(m.p.clone(),0xd9d5cc,false,0.6,0.4,2.5,0.5,0));   // release puff
+  clunkSnd();   // the motor roar comes when it lights, after the drop
   S.msg={text:`RIFLE · AGM AWAY ON ${d.name} · KEEP IT IN THE POD`, col:HUD, t:2.4};
 }
 function updateLaser(){
@@ -2805,9 +2850,12 @@ function solveCCRP(){
 function dropBomb(){
   if (!S.alive || S.bombs<=0 || S.time-S.lastDrop<0.35) return;
   axes(); S.bombs--; S.lastDrop=S.time; updateStores();
-  const m=new T.Mesh(bombGeo,bombMat);
-  const b={p:S.pos.clone().addScaledVector(vU,-1.3), v:S.vel.clone().addScaledVector(vU,-2), m, deliv};
+  const m=BOMB_PROTO.clone();
+  // the ejector rack kicks it down and clear, so you see it separate from the jet before it falls away
+  const b={p:S.pos.clone().addScaledVector(vU,-1.3), v:S.vel.clone().addScaledVector(vU,-BOMB_KICK), m, deliv, age:0, puffT:0};
   m.position.copy(b.p); scene.add(m); bombs.push(b);
+  effects.push(makeFx(b.p.clone(),0xd9d5cc,false,0.7,0.5,3.5,0.55,0));   // ejector puff
+  clunkSnd();
   const ip=ccip(); if (ip) b.impact=new T.Vector3(ip.x,ip.y,ip.z);   // the camera looks at where it will land
   pipFollow(b,'BOMB CAM');
   S.msg={text:'BOMB AWAY', col:HUD, t:1.2};
@@ -2893,14 +2941,17 @@ function guideBomb(b,bt){
 function drawTouchLock(now){
   if (!isTouch || !TL.d || state!=='fly') return;
   const d=TL.d, s=proj(d.x,d.y+3,d.z); if (!onScreen(s)) return;
-  const f=TL.locked ? 1 : clamp(TL.t/TL_LOCK,0,1), col=TL.locked ? RED : TL.inR ? '#ff8a7a' : AMB;
-  const R=(TL.locked ? 22+2*Math.sin(now/90) : lerp(46,24,f));
-  c.beginPath(); c.arc(s.x,s.y,R,0,Math.PI*2); strokeP(col,TL.locked?2.4:1.6);
-  const spin=TL.locked ? 0 : now/400;   // four brackets close in and stop turning when locked
-  for (let i=0;i<4;i++){ const a0=spin+i*Math.PI/2+0.35; c.beginPath(); c.arc(s.x,s.y,R+9,a0,a0+0.8); strokeP(col,2); }
-  if (TL.locked){ c.beginPath(); c.arc(s.x,s.y,4,0,Math.PI*2); c.fillStyle=RED; c.fill(); }
   const km=((TL.w==='LGM'?TL.r:TL.h)/1000).toFixed(1);
-  txt(TL.locked ? `LOCKED · ${TL.w==='LGM'?'MISSILE':'BOMB'} · ${km} KM` : TL.inR ? 'LOCKING' : `${TL.hint} · ${km} KM`, s.x, s.y+R+24, col, 'center', 11, true);
+  if (!TL.inR){ txt(`${TL.hint} · ${km} KM`, s.x, s.y+24, AMB, 'center', 10, true); return; }   // not in reach yet: just a small hint under the target diamond
+  // a red reticle, like a gunsight: an inner ring and an outer ring broken in four, it settles from wide to tight while locking, then holds still
+  const f=TL.locked ? 1 : clamp(TL.t/TL_LOCK,0,1), R=lerp(40,20,f*f*(3-2*f)), a=TL.locked ? 1 : 0.55+0.45*f;
+  c.save(); c.globalAlpha=a; c.shadowColor='rgba(255,60,50,.8)'; c.shadowBlur=TL.locked ? 10 : 4;
+  if (TL.locked){ c.beginPath(); c.arc(s.x,s.y,R,0,Math.PI*2); c.fillStyle='rgba(255,70,60,.18)'; c.fill(); }
+  c.beginPath(); c.arc(s.x,s.y,R,0,Math.PI*2); strokeP(RED,2.2);
+  for (let i=0;i<4;i++){ const a0=i*Math.PI/2+0.3; c.beginPath(); c.arc(s.x,s.y,R+8,a0,a0+Math.PI/2-0.6); strokeP(RED,2.6); }
+  if (TL.locked){ c.beginPath(); c.arc(s.x,s.y,3,0,Math.PI*2); c.fillStyle=RED; c.fill(); }
+  c.restore();
+  if (TL.locked) txt(`${TL.w==='LGM'?'MISSILE':'BOMB'} · ${km} KM`, s.x, s.y+R+24, RED, 'center', 11, true);
 }
 function updateBombs(dt){
   touchLock(dt);
@@ -2915,9 +2966,13 @@ function updateBombs(dt){
     S.autoArm=false; dropBomb(); S.msg={text:'AUTO RELEASE · BOMB AWAY', col:HUD, t:1.4};
   }
   for (let i=bombs.length-1;i>=0;i--){
-    const b=bombs[i], bt=dt*BOMB_TS, bn=Math.max(1,Math.ceil(bt/0.02));
+    const b=bombs[i]; b.age=(b.age||0)+dt;
+    // real time for the first second and a half so the release is visible, then the usual fast-forward (the path is the same either way)
+    const ts=b.age<1.5 ? lerp(1,BOMB_TS,b.age/1.5) : BOMB_TS;
+    const bt=dt*ts, bn=Math.max(1,Math.ceil(bt/0.02));
     for (let k=0;k<bn;k++){ simBomb(b.p,b.v,bt/bn); if (b.gd) guideBomb(b,bt/bn); }
     b.m.position.copy(b.p); tmp.copy(b.p).add(b.v); b.m.lookAt(tmp);
+    if (b.gd && (b.puffT=(b.puffT||0)-dt)<=0){ b.puffT=0.09; effects.push(makeFx(b.p.clone(),0xcfcac2,false,1.0,0.35,2.2,0.32,0)); }   // guided bomb: a thin trail so you can follow it down
     if (b.p.y<=groundAt(b.p.x,b.p.z)){ scene.remove(b.m); bombs.splice(i,1); bombImpact(b); }
   }
 }
@@ -3814,10 +3869,20 @@ function spawnMissile(p,v,target,own){
 function updateMissiles(dt){
   for (let i=missiles.length-1;i>=0;i--){
     const m=missiles[i]; m.life+=dt;
+    // laser-guided missile: drops off the rail first, then the motor lights with a flash and it climbs away
+    if (m.agm && m.life<AGM_DROP){
+      m.v.y-=G*dt; m.p.addScaledVector(m.v,dt); m.mesh.position.copy(m.p); _a.copy(m.p).add(m.v); m.mesh.lookAt(_a); continue;
+    }
+    if (m.agm && !m.lit){
+      m.lit=true; if (m.flame) m.flame.visible=true; if (m.own==='p') motorSnd();
+      effects.push(makeFx(m.p.clone(),0xffc070,true,0.25,0.4,4,0.9,0));     // ignition flash
+      effects.push(makeFx(m.p.clone(),0xd9d6d0,false,1.6,1,7,0.5,1));      // launch smoke
+    }
+    if (m.flame && m.flame.visible){ const fl=0.85+0.3*Math.random(); m.flame.scale.set(0.16*fl,0.16*fl,0.9*fl); }
     const isP=m.own!=='e', mt=m.mt;
     const vmax=mt ? mt.v : isP?820:(m.sam?780:650), rate=mt ? mt.turn*(m.turnK||1) : isP?(m.own==='w'?0.9:1.3):(m.sam?0.75:0.6);
     let sp=m.v.length();
-    sp = m.life<(mt?mt.burn:2.5) ? Math.min(vmax, sp+300*dt) : Math.max(250, sp-(mt?mt.decel:30)*dt);
+    sp = m.life<(mt?mt.burn:2.5) ? Math.min(vmax, sp+(m.agm?170:300)*dt) : Math.max(250, sp-(mt?mt.decel:30)*dt);
     _d.copy(m.v).divideScalar(Math.max(1,m.v.length()));
     let tg=tgtPV(m.target);
     if (tg && isP && !m.flareChk && m.p.distanceTo(tg.p)<1800){
@@ -3932,7 +3997,7 @@ function fireMissile(){
   if (!S.locked){ S.msg={text:'NO LOCK · KEEP THE BANDIT AHEAD', col:AMB, t:1.4}; return; }
   axes(); S.msl--; S.lastMsl=S.time; updateStores();
   const m=spawnMissile(S.pos.clone().addScaledVector(vU,-1.6), S.vel.clone().addScaledVector(vU,-6), S.lockTgt, 'p');
-  m.mt=AAM[S.ac.aam]; m.maxLife=m.mt.life;
+  m.mt=AAM[S.ac.aam]; m.maxLife=m.mt.life; motorSnd();
   if (S.lockTgt.remote) mpFireMsl(m,S.lockTgt);
   pipFollow(m,'MISSILE CAM');
   S.msg={text:`${m.mt.call} · ${m.mt.name}`, col:HUD, t:1};
@@ -4488,7 +4553,7 @@ const LESSONS=[
   ]},
   { name:'Precision attack', desc:'Targeting pod, target designation, CCIP and CCRP bombing, and the laser-guided missile.', weapon:'precision', steps: isTouch ? [
     // phone: one A/G weapon, auto-lock, guided bombs and missile
-    { say:'Ground attack on a phone. Tap the weapon button until A/G shows. A/G is your bombs and your laser-guided missile together: the game picks the right one for each shot. The targeting pod opens under the radar.',
+    { say:'Ground attack on a phone. Tap the weapon button until A/G shows. A/G is your bombs and your laser-guided missile together: the game picks the right one for each shot.',
       check:()=>TW.sel==='AG' },
     { say:'There are three targets: RANGE, TANK and TRUCK. Turn toward the TANK. When it is ahead and in range, a ring closes on it and turns red with a double beep: LOCKED. Then press FIRE. If another target locks, hold the weapon button to switch.',
       setup:()=>{ TR.hit=false; },
@@ -5376,6 +5441,7 @@ function drawAGMCue(){
 }
 // targeting pod: a stabilised, zoomed camera on the designated target, shown in the inset when no weapon camera is running
 function tgpOn(){
+  if (isTouch) return false;   // phone: no pod inset, the lock reticle is enough
   if (!tgp.on || !(state==='fly'||state==='ending'||state==='paused') || !S.alive || !carriesBombs() || pipOn() || !lgmCue()) return false;
   const d=designated(); if (!d) return false;
   axes(); _t.set(d.x-S.pos.x,d.y-S.pos.y,d.z-S.pos.z); const dist=_t.length();
