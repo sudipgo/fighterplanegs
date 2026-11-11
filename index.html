@@ -194,8 +194,21 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
 #touch #tWpn small{margin-top:0;font-size:10px;color:#e6ecf2;}
 #touch #tWpn svg{display:block;}
 #touch #tFuel{right:calc(env(safe-area-inset-right,0px) + 18px);bottom:calc(env(safe-area-inset-bottom,0px) + 200px);width:92px;height:32px;border-radius:16px;}
-#touch .throttle{left:calc(env(safe-area-inset-left,0px) + 8px);right:auto;width:30px;height:170px;border-radius:15px;}
-#touch .thr-label{font-size:9px;top:8px;}
+/* phone throttle: a slim lit track with a grip you slide, "POWER" written under it */
+#touch .throttle{left:calc(env(safe-area-inset-left,0px) + 6px);right:auto;bottom:calc(env(safe-area-inset-bottom,0px) + 34px);width:44px;height:150px;
+  border:0;border-radius:0;background:none;overflow:visible;}
+#touch .throttle::before{content:"";position:absolute;left:50%;top:0;bottom:0;width:12px;margin-left:-6px;border-radius:6px;
+  background:rgba(9,16,28,.55);border:1px solid rgba(127,227,255,.55);box-sizing:border-box;}
+#touch .thr-fill{left:50%;right:auto;width:12px;margin-left:-6px;border-radius:6px;background:linear-gradient(180deg,#9df0ff,#38b4dc);opacity:.85;}
+#touch .thr-ab{left:50%;right:auto;width:22px;margin-left:-11px;}
+.thr-knob{display:none;}
+#touch .thr-knob{display:block;position:absolute;left:50%;width:40px;height:22px;margin-left:-20px;transform:translateY(50%);border-radius:7px;pointer-events:none;
+  background:linear-gradient(180deg,#77818b,#3a424a 55%,#2a3036);border:1px solid rgba(255,255,255,.4);box-shadow:0 2px 5px rgba(0,0,0,.55);}
+#touch .thr-knob::after{content:"";position:absolute;left:7px;right:7px;top:50%;height:2px;margin-top:-1px;background:rgba(0,0,0,.45);border-radius:1px;}
+#touch .thr-label{top:-16px;font-size:10px;text-shadow:0 1px 2px #000;}
+.thr-name{display:none;}
+#touch .thr-name{display:block;position:absolute;left:50%;top:calc(100% + 8px);transform:translateX(-50%);white-space:nowrap;
+  font:700 11px var(--f-num);letter-spacing:.08em;color:#e6ecf2;text-shadow:0 1px 3px #000;pointer-events:none;}
 #touch .stick{left:calc(env(safe-area-inset-left,0px) + 50px);}
 #touch .tbtn.pause{left:auto;right:calc(env(safe-area-inset-right,0px) + 12px);top:calc(env(safe-area-inset-top,0px) + 12px);}
 #touch[data-tilt="1"] .tbtn.top{bottom:calc(env(safe-area-inset-bottom,0px) + 18px);}
@@ -249,7 +262,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
     <button class="tbtn old" id="tMsl" type="button">MSL</button>
     <button class="tbtn old" id="tBrk" type="button">AIRBRK</button>
   </div>
-  <div class="throttle" id="thr"><div class="thr-fill" id="thrFill"></div><div class="thr-ab"></div><div class="thr-label" id="thrLabel">78%</div></div>
+  <div class="throttle" id="thr"><div class="thr-fill" id="thrFill"></div><div class="thr-ab"></div><div class="thr-knob" id="thrKnob"></div><div class="thr-label" id="thrLabel">78%</div><div class="thr-name">POWER</div></div>
   <button class="tbtn pause" id="tPause" type="button" aria-label="Pause">II</button>
   <button class="tbtn top" id="tView" type="button">VIEW</button>
   <button class="tbtn top" id="tTilt" type="button" aria-pressed="false">TILT</button>
@@ -2578,6 +2591,27 @@ function makeFx(p,color,additive,life,s0,s1,o0,rise){
 function spawnExplosion(p,big){
   effects.push(makeFx(p,0xffb050,true,0.7,3,big?70:28,1,0));
   effects.push(makeFx(p,0x4a4744,false,big?6:4,5,big?140:60,0.7,big?18:10));
+  boomSnd(p,big);
+}
+// explosion sound: a burst of noise with a low thump; far-off blasts are quieter and duller, but never silent, so a hit is always heard
+let boomBuf=null, boomLast=0;
+function boomSnd(p,big){
+  try {
+    if (!actx || !$('soundOn').checked) return;
+    const t=actx.currentTime; if (t-boomLast<0.06) return; boomLast=t;   // several at once: play one
+    if (!boomBuf){ const n=Math.floor(actx.sampleRate*1.6); boomBuf=actx.createBuffer(1,n,actx.sampleRate); const d=boomBuf.getChannelData(0);
+      for (let i=0;i<n;i++){ const k=i/n; d[i]=(Math.random()*2-1)*Math.pow(1-k,2.2); } }
+    const dist=p ? p.distanceTo(camera.position) : 0, near=clamp(1.15-dist/8000,0.3,1), vol=(big?0.55:0.4)*near;
+    const src=actx.createBufferSource(), lp=actx.createBiquadFilter(), g=actx.createGain();
+    src.buffer=boomBuf; src.playbackRate.value=big?0.8:1.05;
+    lp.type='lowpass'; lp.frequency.setValueAtTime(400+1800*near,t); lp.frequency.exponentialRampToValueAtTime(160,t+1.2);
+    g.gain.setValueAtTime(vol,t); g.gain.exponentialRampToValueAtTime(0.001,t+(big?1.6:1.1));
+    src.connect(lp); lp.connect(g); g.connect(actx.destination); src.start(t);
+    const o=actx.createOscillator(), og=actx.createGain();   // the thump
+    o.type='sine'; o.frequency.setValueAtTime(big?90:120,t); o.frequency.exponentialRampToValueAtTime(35,t+0.4);
+    og.gain.setValueAtTime(vol*0.9,t); og.gain.exponentialRampToValueAtTime(0.001,t+0.5);
+    o.connect(og); og.connect(actx.destination); o.start(t); o.stop(t+0.55);
+  } catch (e) {}
 }
 function updateEffects(dt){
   for (let i=effects.length-1;i>=0;i--){
@@ -2796,7 +2830,80 @@ function bombRelease(){
   if (deliv==='CCRP'){ if (S.sol && S.sol.tau>0.3) S.msg={text:'CCRP · KEEP HOLDING SPACE UNTIL RELEASE', col:AMB, t:1.6}; return; }
   if (S.time-S.armT<0.25) dropBomb();     // a quick tap still drops straight away
 }
+function trRearmAG(){   // phone training: out of bombs and missiles with nothing in the air, rearm both
+  if (S.bombs<=0 && S.agm<=0 && !bombs.length && !missiles.some(m=>m.agm)){ S.bombs=S.ac.bombs; S.agm=S.maxA; updateStores(); S.msg={text:'REARMED · TRY AGAIN', col:AMB, t:2}; }
+}
+// ---------- phone ground attack: the game picks the ground target ahead, locks it once the nose stays on it, and FIRE sends a guided weapon
+const TL={ref:null, d:null, t:0, locked:false, inR:false, hint:'', r:0, h:0};
+const TL_LOCK=0.6;
+function touchLock(dt){
+  // A/G on a phone: bombs and the laser-guided missile as one weapon; each shot uses whichever suits the target
+  const armed = TW.sel==='AG' && (S.bombs>0 || S.agm>0);
+  if (!isTouch || !S.alive || state!=='fly' || !armed){ TL.ref=null; TL.d=null; TL.t=0; TL.locked=false; TL.w=null; return; }
+  axes();
+  const hx=vF.x, hz=vF.z, hl=Math.hypot(hx,hz)||1;
+  let best=null, bc=-2, cur=null;
+  for (const o of tdList()){
+    const dx=o.x-S.pos.x, dy=o.y-S.pos.y, dz=o.z-S.pos.z, r=Math.hypot(dx,dy,dz), h=Math.hypot(dx,dz)||1;
+    if (r>16000) continue;
+    const cs=(dx*hx+dz*hz)/(h*hl);   // angle off the ground track: on a bomb run the target sits below the nose
+    o._r=r; o._h=h; o._n=(dx*vF.x+dy*vF.y+dz*vF.z)/r;   // _n: angle off the nose, for the missile seeker
+    if (o.ref===S.td && cs>0.82) cur=o;
+    if (cs>bc){ bc=cs; best=o; }
+  }
+  const d = cur || (bc>0.82 ? best : null);   // within ~35 degrees
+  if (!d){ TL.ref=null; TL.d=null; TL.t=0; TL.locked=false; TL.w=null; return; }
+  if (d.ref!==TL.ref){ TL.ref=d.ref; TL.t=0; TL.locked=false; }
+  S.td=d.ref; TL.d=d; TL.r=d._r; TL.h=d._h;
+  const mx=clamp(S.agl*3+800,1500,7000), mn=Math.min(500,S.agl*0.4);
+  const bombOK = S.bombs>0 && carriesBombs() && d._h<=mx && d._h>=mn;
+  const lgmOK = S.agm>0 && tgp.on && d._r>=AGM_MIN && d._r<=AGM_MAX && d._n>0.5;
+  const isAD = mode==='raid' && RAID.ad.includes(d.ref);   // guns and SAMs: the missile, from outside their reach
+  TL.w = (isAD && lgmOK) ? 'LGM' : bombOK ? 'BOMB' : lgmOK ? 'LGM' : null;
+  TL.inR = !!TL.w;
+  const far = Math.max(S.bombs>0 ? mx : 0, S.agm>0 ? AGM_MAX : 0);
+  TL.hint = d._h>far || d._r>far ? 'TOO FAR · GET CLOSER' : (S.agm>0 && d._r>=AGM_MIN && d._n<=0.5) ? 'POINT THE NOSE AT IT' : 'TOO CLOSE · GO AROUND';
+  if (TL.inR) TL.t+=dt; else TL.t=0;
+  const was=TL.locked; TL.locked=TL.t>=TL_LOCK;
+  if (TL.locked && !was) lockBeep();
+}
+function lockBeep(){
+  try { if (!actx || !$('soundOn').checked) return; const t=actx.currentTime;
+    [0,0.09].forEach(k=>{ const o=actx.createOscillator(), g=actx.createGain(); o.type='sine'; o.frequency.value=1900;
+      g.gain.setValueAtTime(0.0001,t+k); g.gain.linearRampToValueAtTime(0.06,t+k+0.005); g.gain.linearRampToValueAtTime(0.0001,t+k+0.06);
+      o.connect(g); g.connect(actx.destination); o.start(t+k); o.stop(t+k+0.08); }); } catch (e) {}
+}
+function touchStrike(w){
+  if (state!=='fly' || !S.alive) return;
+  if (S.bombs<=0 && S.agm<=0){ S.msg={text:'NO A/G WEAPONS LEFT', col:AMB, t:1.4}; return; }
+  if (!TL.d){ S.msg={text:'NO TARGET AHEAD · TURN TOWARDS A TARGET', col:AMB, t:1.6}; return; }
+  if (!TL.locked){ S.msg={text: TL.inR ? 'LOCKING · KEEP THE NOSE ON IT' : TL.hint, col:AMB, t:1.4}; return; }
+  if (TL.w==='LGM'){ S.td=TL.ref; fireAGM(); return; }
+  const n=S.bombs; dropBomb(); if (S.bombs===n) return;
+  const b=bombs[bombs.length-1]; b.gref=TL.ref; b.gd={x:TL.d.x, y:TL.d.y, z:TL.d.z};
+  S.msg={text:`GUIDED BOMB AWAY · ${TL.d.name}`, col:HUD, t:1.8};
+}
+// steer a guided bomb: aim the horizontal velocity at the target for the time it has left to fall
+function guideBomb(b,bt){
+  const g=b.gd, ref=b.gref; if (ref && (ref.mob||ref.conv) && ref.alive){ g.x=ref.x; g.z=ref.z; }
+  const a=0.5*G, dy=Math.max(0,b.p.y-g.y), tg=(b.v.y+Math.sqrt(b.v.y*b.v.y+4*a*dy))/(2*a), T=Math.max(tg,0.25);
+  const wx=(g.x-b.p.x)/T-b.v.x, wz=(g.z-b.p.z)/T-b.v.z, m=Math.hypot(wx,wz), lim=60*bt, k=m>lim ? lim/m : 1;
+  b.v.x+=wx*k; b.v.z+=wz*k;
+}
+function drawTouchLock(now){
+  if (!isTouch || !TL.d || state!=='fly') return;
+  const d=TL.d, s=proj(d.x,d.y+3,d.z); if (!onScreen(s)) return;
+  const f=TL.locked ? 1 : clamp(TL.t/TL_LOCK,0,1), col=TL.locked ? RED : TL.inR ? '#ff8a7a' : AMB;
+  const R=(TL.locked ? 22+2*Math.sin(now/90) : lerp(46,24,f));
+  c.beginPath(); c.arc(s.x,s.y,R,0,Math.PI*2); strokeP(col,TL.locked?2.4:1.6);
+  const spin=TL.locked ? 0 : now/400;   // four brackets close in and stop turning when locked
+  for (let i=0;i<4;i++){ const a0=spin+i*Math.PI/2+0.35; c.beginPath(); c.arc(s.x,s.y,R+9,a0,a0+0.8); strokeP(col,2); }
+  if (TL.locked){ c.beginPath(); c.arc(s.x,s.y,4,0,Math.PI*2); c.fillStyle=RED; c.fill(); }
+  const km=((TL.w==='LGM'?TL.r:TL.h)/1000).toFixed(1);
+  txt(TL.locked ? `LOCKED · ${TL.w==='LGM'?'MISSILE':'BOMB'} · ${km} KM` : TL.inR ? 'LOCKING' : `${TL.hint} · ${km} KM`, s.x, s.y+R+24, col, 'center', 11, true);
+}
 function updateBombs(dt){
+  touchLock(dt);
   S.sol = (deliv==='CCRP' && carriesBombs() && S.alive && S.bombs>0) ? solveCCRP() : null;
   if (deliv==='CCRP'){
     const s=S.sol;
@@ -2809,7 +2916,7 @@ function updateBombs(dt){
   }
   for (let i=bombs.length-1;i>=0;i--){
     const b=bombs[i], bt=dt*BOMB_TS, bn=Math.max(1,Math.ceil(bt/0.02));
-    for (let k=0;k<bn;k++) simBomb(b.p,b.v,bt/bn);
+    for (let k=0;k<bn;k++){ simBomb(b.p,b.v,bt/bn); if (b.gd) guideBomb(b,bt/bn); }
     b.m.position.copy(b.p); tmp.copy(b.p).add(b.v); b.m.lookAt(tmp);
     if (b.p.y<=groundAt(b.p.x,b.p.z)){ scene.remove(b.m); bombs.splice(i,1); bombImpact(b); }
   }
@@ -3937,7 +4044,7 @@ function reset(){
   if (RECON) S.gun=0;   // no gun either: the nose is full of cameras
   $('tFuel').hidden=!TANKER;
   pip.o=null; pip.hold=0; pip.label=null; brk.on=false; touchGun=false; clearRings();
-  TW.sel=null; TW.down=null; tilt.cal=true;   // phone: first weapon in the list, and re-centre the tilt
+  TW.sel=null; TW.down=null; tilt.cal=true; TL.ref=null; TL.d=null; TL.t=0; TL.locked=false;   // phone: first weapon in the list, and re-centre the tilt
   updateStores();
   plane.visible=true; camQ.copy(S.q); endInfo=null; endTimer=0; fpsSum=0; fpsN=0;
   if (!S.launch && plane.userData.gear) plane.userData.gear.visible=false;
@@ -4115,7 +4222,20 @@ function updateEngine(){
   const thr=Math.min(1.15, intro ? IN.thr : S.thr), V=intro ? IN.v : S.vel.length(), t=actx.currentTime;
   eng.g.gain.setTargetAtTime(on ? 0.04+0.07*thr : 0, t, 0.15);
   eng.lp.frequency.setTargetAtTime(220+700*thr+V*1.1, t, 0.2);
+  // missile warning: "ti-tit-ti" beeps that speed up as the missile closes
+  const md = state==='fly' && S.alive && $('soundOn').checked && !document.hidden ? incomingD() : Infinity;
+  if (md<Infinity && t>=ALARM.next){
+    const iv = md<2000 ? 0.07 : md<5000 ? 0.12 : 0.2, last = ALARM.n%3===2, dur = last ? 0.11 : 0.05;
+    try {
+      const o=actx.createOscillator(), g=actx.createGain();
+      o.type='square'; o.frequency.value = last ? 1150 : 1450;
+      g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.07,t+0.005); g.gain.setValueAtTime(0.07,t+dur-0.01); g.gain.linearRampToValueAtTime(0.0001,t+dur);
+      o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t+dur+0.02);
+    } catch (e) {}
+    ALARM.next = t + dur + (last ? iv*2.5 : iv*0.6); ALARM.n++;
+  } else if (md===Infinity){ ALARM.n=0; }
 }
+const ALARM={next:0, n:0};
 function updateStreaks(){
   const live=(state==='fly'||state==='ending'||state==='paused') && S.alive;
   const a=live ? clamp((S.vel.length()-150)/300,0,1)*0.45 : 0;
@@ -4328,12 +4448,13 @@ const LESSONS=[
   ]},
   { name:'Bombing range', desc:'CCIP bombing on the practice range in the Dras valley.', weapon:'bomb', steps:[
     { say:'This is the bombing range, marked RANGE on the HUD. The small circle with a dot is the CCIP pipper: it shows where a bomb would land if you released now. Fly toward the range.',
-      touch:'This is the bombing range, marked RANGE. Keep BOMB loaded on the weapon button. The small circle with a dot is the pipper: it shows where a bomb would land if you released now. Fly toward the range.',
+      touch:'This is the bombing range, marked RANGE. Keep A/G loaded on the weapon button. Fly toward the range.',
       check:()=>Math.hypot(S.pos.x-RANGE_P.x,S.pos.z-RANGE_P.z)<6500 },
     { say:'Roll in to a gentle dive, 15 to 25 degrees nose down, and keep the wings level.',
-      check:(dt,d)=>hold(d, pitchDeg()<-12 && pitchDeg()>-32 && Math.abs(bankDeg())<15, dt, 1) },
+      touch:'Keep the range ahead of you. A ring closes on it. When it turns red with a double beep and reads LOCKED, you are ready.',
+      check:(dt,d)=> isTouch ? TL.locked : hold(d, pitchDeg()<-12 && pitchDeg()>-32 && Math.abs(bankDeg())<15, dt, 1) },
     { say:'The pipper creeps up toward the target as you close. When it sits on the range and turns red, press Space. Hit within 60 metres.',
-      touch:'The pipper creeps up toward the target as you close. When it sits on the range and turns red, press FIRE. Hit within 60 metres.',
+      touch:'Press FIRE. The guided bomb steers itself onto the range. Hit within 60 metres.',
       setup:()=>{ TR.hit=false; }, check:()=>TR.hit },
     { say:'Direct hit. Pull out and climb back above 5,500 metres.', check:()=>S.pos.y>=5500 },
   ]},
@@ -4365,7 +4486,17 @@ const LESSONS=[
         return false;
       } },
   ]},
-  { name:'Precision attack', desc:'Targeting pod, target designation, CCIP and CCRP bombing, and the laser-guided missile.', weapon:'precision', steps:[
+  { name:'Precision attack', desc:'Targeting pod, target designation, CCIP and CCRP bombing, and the laser-guided missile.', weapon:'precision', steps: isTouch ? [
+    // phone: one A/G weapon, auto-lock, guided bombs and missile
+    { say:'Ground attack on a phone. Tap the weapon button until A/G shows. A/G is your bombs and your laser-guided missile together: the game picks the right one for each shot. The targeting pod opens under the radar.',
+      check:()=>TW.sel==='AG' },
+    { say:'There are three targets: RANGE, TANK and TRUCK. Turn toward the TANK. When it is ahead and in range, a ring closes on it and turns red with a double beep: LOCKED. Then press FIRE. If another target locks, hold the weapon button to switch.',
+      setup:()=>{ TR.hit=false; },
+      check:()=>{ if (TR.hit && TR.hitName!=='TANK') TR.hit=false; trRearmAG(); return TR.hit; } },
+    { say:'Good hit. Now the TRUCK. Lock it from far out, 7 to 10 km, and FIRE sends the missile. Lock it close and A/G drops a guided bomb instead.',
+      setup:()=>{ TR.hit=false; },
+      check:()=>{ if (TR.hit && TR.hitName!=='TRUCK') TR.hit=false; trRearmAG(); return TR.hit; } },
+  ] : [
     { say:'Precision attack. Top left is the targeting pod: a zoomed camera locked on the designated target. Press K to switch the pod off, then K again to bring it back.',
       touch:'Precision attack. Tap the weapon button until LGM shows. The targeting pod opens under the radar: a zoomed camera locked on the designated target.',
       check:(dt,d)=>{ if (isTouch) return TW.sel==='LGM' && tgp.on; if (!tgp.on) d.off=true; return !!d.off && tgp.on; } },
@@ -4927,7 +5058,7 @@ function updateInputs(dt){
   // FIRE shoots whichever weapon WPN has selected; holding WPN picks the next ground target
   const fire=$('tFire');
   fire.addEventListener('pointerdown',e=>{ e.preventDefault(); fire.setPointerCapture(e.pointerId); wpnFix(); const w=TW.sel; TW.down=w;
-    if (w==='GUN') touchGun=true; else if (w==='MSL') fireMissile(); else if (w==='LGM') fireAGM(); else if (w==='BOMB') bombPress();
+    if (w==='GUN') touchGun=true; else if (w==='MSL') fireMissile(); else if (w==='AG') touchStrike(w);   // phone: lock-on and guided weapons
     else S.msg={text: RECON ? 'NO WEAPONS · CAMERAS ONLY' : 'NO WEAPONS', col:AMB, t:1.2}; });
   ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>fire.addEventListener(ev,()=>{ if (TW.down==='GUN') touchGun=false; if (TW.down==='BOMB') bombRelease(); TW.down=null; }));
   const wb=$('tWpn'); let wT=null, wLong=false;
@@ -4944,12 +5075,12 @@ const WPN_ICON={
   MSL: WPN_SVG('<path d="M12 9h24M12 15h24M12 9v6"/><path d="M36 9l6 3-6 3"/><path d="M14 9l-5-5h-3l3 5M14 15l-5 5h-3l3-5"/><path d="M26 9l2-3M26 15l2 3"/>'),
   LGM: WPN_SVG('<path d="M10 9h20l5 3-5 3H10z"/><path d="M12 9l-4-4H5l2 4M12 15l-4 4H5l2-4"/><path d="M38 12h2M43 12h2" stroke-dasharray="2 2"/><circle cx="35" cy="12" r="1.2" fill="currentColor"/>'),
   BOMB: WPN_SVG('<path d="M14 12c0-4 4-6 12-6s12 3 13 6c-1 3-5 6-13 6s-12-2-12-6z"/><path d="M14 12H6M8 7l-2 5 2 5M10 8v8"/>'),
+  AG: WPN_SVG('<path d="M10 12c0-3 3-5 9-5s9 2 10 5c-1 3-4 5-10 5s-9-2-9-5z"/><path d="M10 12H5M6 8l-1 4 1 4"/><path d="M34 12h4M42 12h2" stroke-dasharray="2 2"/><path d="M36 6v12M30 12h12" stroke-width="1.2"/>'),   // bomb with a target cross
   GUN: WPN_SVG('<path d="M4 9h26l4 3-4 3H4z"/><path d="M34 12h10"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="18" cy="12" r="1.3" fill="currentColor"/><circle cx="24" cy="12" r="1.3" fill="currentColor"/>'),
 };
 function wpnList(){
   const L=[], bombsFirst=mode==='raid'||mode==='strike'||(mode==='training' && carriesBombs());
-  if (carriesBombs() && S.maxB>0) L.push('BOMB');
-  if (S.maxA>0) L.push('LGM');
+  if ((carriesBombs() && S.maxB>0) || S.maxA>0) L.push('AG');   // phone: bombs and the laser-guided missile are one A/G weapon
   if (S.maxM>0) L.push('MSL');
   if (S.ac.gun>0 && !RECON) L.push('GUN');
   if (!bombsFirst){ const i=L.indexOf('MSL'); if (i>0){ L.splice(i,1); L.unshift('MSL'); } }
@@ -4960,14 +5091,15 @@ function wpnCycle(){
   if (state!=='fly') return;
   const L=wpnList(); if (!L.length){ S.msg={text:'NO WEAPONS', col:AMB, t:1}; return; }
   TW.sel=L[(L.indexOf(TW.sel)+1)%L.length];
-  S.msg={text:`WEAPON · ${{MSL:AAM[S.ac.aam].name+' MISSILE', LGM:'LASER-GUIDED MISSILE', BOMB:'BOMBS', GUN:'GUN'}[TW.sel]}${TW.sel==='LGM'||TW.sel==='BOMB' ? ' · HOLD WPN FOR NEXT TARGET' : ''}`, col:HUD, t:1.6};
+  S.msg={text:`WEAPON · ${{MSL:AAM[S.ac.aam].name+' MISSILE', AG:'A/G · BOMBS + LASER MISSILE', GUN:'GUN'}[TW.sel]}${TW.sel==='AG' ? ' · HOLD WPN FOR NEXT TARGET' : ''}`, col:HUD, t:1.6};
 }
 function wpnLabel(){
   wpnFix();
-  const w=TW.sel, n = w==='MSL' ? S.msl : w==='LGM' ? S.agm : w==='BOMB' ? S.bombs : w==='GUN' ? S.gun : 0;
-  const lb = w ? `${w} ${n}` : '—';
+  const w=TW.sel, n = w==='MSL' ? S.msl : w==='GUN' ? S.gun : 0;
+  const ag=[(carriesBombs() && S.maxB>0) ? `B${S.bombs}` : '', S.maxA>0 ? `M${S.agm}` : ''].filter(Boolean).join(' ');   // A/G: bombs and missiles left
+  const lb = !w ? '—' : w==='AG' ? `A/G ${ag}` : `${w} ${n}`;
   if (lb!==TW.lb){ TW.lb=lb; $('tFireW').textContent=lb; }
-  if (w!==TW.ic){ TW.ic=w; $('tWpn').innerHTML=(WPN_ICON[w]||'')+`<small>${w||'—'}</small>`; $('tWpn').setAttribute('aria-label',`Weapon: ${w||'none'}. Tap for the next weapon`); }
+  if (w!==TW.ic){ TW.ic=w; $('tWpn').innerHTML=(WPN_ICON[w]||'')+`<small>${w==='AG' ? 'A/G' : w||'—'}</small>`; $('tWpn').setAttribute('aria-label',`Weapon: ${w||'none'}. Tap for the next weapon`); }
   const fl=`FLR ${S.flares}`;   // the flare count lives on its button now that the weapons panel is hidden on phones
   if (fl!==TW.fl){ TW.fl=fl; $('tFlr').textContent=fl; }
   const md=incomingD(), fw = md<3000 ? 2 : md<6000 ? 1 : 0;   // the FLR button lights up for an incoming missile
@@ -5233,10 +5365,10 @@ function agmReady(){
   return r<=AGM_MAX && r>=AGM_MIN && (dx*vF.x+dy*vF.y+dz*vF.z)/r>0.5 && tgp.on;
 }
 // phone: only the cues for the weapon picked on the WPN button (the desktop keeps all of them)
-const bombCue=()=>!isTouch || TW.sel==='BOMB';
-const lgmCue=()=>!isTouch || TW.sel==='LGM';
+const bombCue=()=>!isTouch;   // phone: no CCIP pipper, the lock ring does the aiming
+const lgmCue=()=>!isTouch || TW.sel==='AG';   // phone: the targeting pod shows with A/G loaded
 function drawAGMCue(){
-  if (!S.alive || S.agm<=0 || !lgmCue()) return;
+  if (isTouch || !S.alive || S.agm<=0 || !lgmCue()) return;
   const d=designated(); if (!d) return;
   const s=proj(d.x,d.y+2,d.z); if (!onScreen(s)) return;
   const r=Math.hypot(d.x-S.pos.x,d.y-S.pos.y,d.z-S.pos.z), ok=agmReady();
@@ -5456,6 +5588,7 @@ function drawHUD(now){
     const gc=proj(S.pos.x+vF.x*800,S.pos.y+vF.y*800,S.pos.z+vF.z*800); if (gc.ok) gunPointer(gc,false,null);
   }
   if (S.maxA) drawAGMCue();
+  drawTouchLock(now);
   drawThreats(mode==='dogfight');
 
   // heading tape (phone: just the number)
@@ -7467,7 +7600,7 @@ function frame(now){
 
   plane.position.copy(S.pos); plane.quaternion.copy(S.q); updateSwing(dt,S.vel.length());
   plane.userData.flames.forEach((fl,i)=>{ fl.visible=S.thr>1.0; if (fl.visible) fl.scale.set(1,0.93+0.07*Math.sin(now*0.031+i*1.7)+0.05*Math.random(),1); });   // the plume breathes a little
-  if (isTouch && !$('touch').hidden){ $('thrFill').style.height=(S.thr/1.15*100)+'%'; $('thrLabel').textContent=S.thr>1?'AB':Math.round(S.thr*100)+'%'; wpnLabel(); }
+  if (isTouch && !$('touch').hidden){ $('thrFill').style.height=$('thrKnob').style.bottom=(S.thr/1.15*100)+'%'; $('thrLabel').textContent=S.thr>1?'AB':Math.round(S.thr*100)+'%'; wpnLabel(); }
 
   updateCamera(dt);
   updateStreaks(); updateEngine();
