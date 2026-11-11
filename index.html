@@ -5711,7 +5711,8 @@ function updateCamera(dt){
     } else {
       camQ.slerp(S.q,1-Math.exp(-dt*5));
       // chase camera drops back as speed builds
-      if (isTouch) camOff.set(0,7.4+sp,25+sp*5).applyQuaternion(camQ);   // phone: close and a bit higher, so the jet sits low and large in the frame
+      if (isTouch){ const k = W>H ? 0.56 : 1;   // phone held sideways: come in ~1.8x closer so the jet isn't tiny on the short screen
+        camOff.set(0,(7.4+sp)*k,(25+sp*5)*k).applyQuaternion(camQ); }   // phone: close and a bit higher, so the jet sits low and large in the frame
       else camOff.set(0,8.5+sp*1.5,40+sp*10).applyQuaternion(camQ); camera.position.copy(S.pos).add(camOff); camera.quaternion.copy(camQ).multiply(camTilt);
     }
     // buffet: a slight shake that grows with speed and afterburner
