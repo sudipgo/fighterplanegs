@@ -40,6 +40,21 @@ h1{font-size:27px;}
 h2{font-size:25px;}
 p{margin:0;line-height:1.55;max-width:62ch;font-size:15px;}
 .note{font-size:13px;color:var(--muted);}
+/* briefing text: a lead line, short paragraphs, and the loadout in its own box */
+#briefBody{display:grid;gap:11px;}
+#briefBody p{margin:0;font-size:14px;line-height:1.55;}
+#briefBody .blead{font-size:15.5px;line-height:1.45;font-weight:600;color:#fff;}
+#briefBody .bload{border:1px solid var(--line);border-left:3px solid var(--hud);border-radius:4px;padding:9px 12px;font-size:13px;}
+#briefBody .bload b{display:block;font:700 10.5px var(--f-num);letter-spacing:.12em;text-transform:uppercase;color:var(--hud);margin-bottom:4px;}
+/* pause screen: the objectives log */
+.pobj{list-style:none;margin:0;padding:0;display:grid;gap:6px;font-size:13.5px;}
+.pobj[hidden]{display:none;}
+.pobj li{padding-left:22px;position:relative;line-height:1.4;}
+.pobj li::before{position:absolute;left:0;top:0;font-family:var(--f-num);}
+.pobj li.main{color:var(--amber,#ffb547);} .pobj li.main::before{content:"□";}
+.pobj li.done{color:var(--hud);} .pobj li.done::before{content:"✓";}
+.pobj li.opt{color:var(--muted);} .pobj li.opt::before{content:"○";}
+.pobj li.rule{color:var(--muted);font-size:12.5px;} .pobj li.rule::before{content:"·";}
 .facts{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
 .fact{border-top:1px solid var(--line);padding-top:8px;display:grid;gap:3px;align-content:start;}
 .fact b{font-family:var(--f-num);font-size:17px;color:var(--hud);font-variant-numeric:tabular-nums;}
@@ -130,6 +145,9 @@ button.go:disabled{opacity:.45;cursor:not-allowed;filter:none;}
 .row{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center;justify-content:space-between;}
 label.check{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted);cursor:pointer;}
 label.check input{accent-color:var(--hud);width:16px;height:16px;}
+label.diffsel select{font:700 12px var(--f-num);letter-spacing:.06em;background:rgba(141,255,176,.06);color:var(--hud);border:1px solid var(--line);border-radius:4px;padding:5px 8px;}
+label.diffsel select option{background:#0b1320;color:var(--paper);}
+#diffNote b{color:var(--hud);}
 button.go{font:700 14px var(--f-ui);letter-spacing:.08em;text-transform:uppercase;background:var(--hud);color:#052112;border:0;border-radius:4px;padding:13px 24px;cursor:pointer;}
 button.go:hover{filter:brightness(1.08);}
 button.go.alt{background:transparent;color:var(--hud);border:1px solid var(--hud);}
@@ -215,19 +233,52 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
 #openMusic.off svg{opacity:.5;}
 @keyframes menuIn{from{opacity:0;transform:translateX(-22px);}to{opacity:1;transform:none;}}
 @media (prefers-reduced-motion:reduce){ #briefCard[data-step="play"] *{animation:none !important;} }
-/* phone held sideways: logo on the left, the menu on the right, everything on one screen */
-@media (orientation:landscape) and (max-height:540px){
-  #briefCard[data-step="play"]{width:min(880px,100%);grid-template-columns:1fr 1.2fr;column-gap:30px;row-gap:12px;align-items:center;}
-  #briefCard[data-step="play"] .logo{grid-column:1;grid-row:1;}
-  #briefCard[data-step="play"] .rankline{grid-column:1;grid-row:2;}
-  #briefCard[data-step="play"] .quick{grid-column:1;grid-row:3;}
-  #briefCard[data-step="play"] .playseg{grid-column:2;grid-row:1 / span 3;}
-  .logo .lg{font-size:clamp(36px,7vh,52px);}
-  #briefCard[data-step="play"] .playseg .opt{min-height:62px;padding:8px 40px 8px 108px;}
-  #briefCard[data-step="play"] .playseg .opt .art{width:100px;}
-  #briefCard[data-step="play"] .playseg .opt b{font-size:16px;}
-  #briefCard[data-step="play"] .playseg .opt span{font-size:11.5px;}
-}
+/* phone held sideways: logo on the left, the menu on the right, everything on one screen
+   (html.short.land is set from the real on-screen size, so it also works when the game turns the page itself) */
+html.short.land #briefCard[data-step="play"]{width:min(880px,100%);grid-template-columns:1fr 1.2fr;column-gap:30px;row-gap:10px;align-items:center;}
+html.short.land #briefCard[data-step="play"] .logo{grid-column:1;grid-row:1;}
+html.short.land #briefCard[data-step="play"] .rankline{grid-column:1;grid-row:2;}
+html.short.land #briefCard[data-step="play"] .quick{grid-column:1;grid-row:3;}
+html.short.land #briefCard[data-step="play"] .playseg{grid-column:2;grid-row:1 / span 3;}
+html.short.land .logo .lg{font-size:clamp(34px,calc(var(--appH) * .1),52px);}
+html.short.land #briefCard[data-step="play"] .playseg .opt{min-height:58px;padding:7px 40px 7px 104px;}
+html.short.land #briefCard[data-step="play"] .playseg .opt .art{width:96px;}
+html.short.land #briefCard[data-step="play"] .playseg .opt b{font-size:15px;}
+html.short.land #briefCard[data-step="play"] .playseg .opt span{font-size:11px;}
+html.short.land #briefCard[data-step="play"] .qbtn{padding:7px 12px;font-size:11px;}
+/* Back / Next (and Start) stay pinned to the bottom of the screen, so they are always reachable */
+#briefCard{--cp:24px;}
+@media (max-width:520px){ #briefCard{--cp:18px;} }
+#briefCard .stepnav{position:sticky;bottom:0;z-index:3;margin:0 calc(-1 * var(--cp)) calc(-1 * var(--cp));
+  padding:12px var(--cp) var(--cp);background:linear-gradient(to top,rgba(7,13,22,.97) 65%,rgba(7,13,22,0));border-radius:0 0 6px 6px;}
+/* short screens (a phone on its side): a compact hangar so a mission card and Back / Next fit on one screen */
+html.short .overlay{padding-block:calc(env(safe-area-inset-top,0px) + 6px) calc(env(safe-area-inset-bottom,0px) + 6px);}
+html.short #briefCard{--cp:12px;padding:10px 14px 12px;gap:8px;}
+html.short #briefCard .eyebrow{font-size:9.5px;}
+html.short #briefCard h1{font-size:17px;}
+html.short #briefCard .steps{margin:-2px 0 -2px;}
+html.short #briefCard .steps span{font-size:8.5px;padding:2px 5px;}
+html.short #briefCard:not([data-step="play"]) .rankline{display:none;}
+html.short #briefCard .lbl{font-size:9.5px;margin-bottom:-4px;}
+html.short .carousel{--cw:min(250px,calc(var(--appW,100vw) * .4));padding:2px 0 4px;margin:0 -14px;}
+html.short .planes.carousel{--cw:min(300px,calc(var(--appW,100vw) * .46));}
+html.short .carousel>.opt{padding:8px 10px;gap:3px;}
+html.short .carousel>.opt .art{height:62px;margin:-8px -10px 4px;}
+html.short .carousel>.opt b{font-size:13px;}
+html.short .carousel>.opt span{font-size:10.5px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+html.short .planes .opt img.thumb{aspect-ratio:21/9;}
+html.short .planes .opt .stats{display:none;}
+html.short .spec{font-size:10px;gap:1px 8px;}
+html.short .spec dt{font-size:8.5px;}
+html.short .cnav{margin:-4px 0 -4px;gap:10px;}
+html.short .cnav button{width:30px;height:30px;font-size:16px;}
+html.short .cdots{display:none;}
+html.short .ccount{font-size:10px;}
+html.short #briefCard button.go{padding:9px 18px;font-size:12.5px;}
+html.short #briefCard .stepnav{padding-top:8px;}
+html.short .bpage{max-height:calc(var(--appH) - 190px);}
+html.short .bart{height:72px;}
+html.short .mpbox input{padding:6px 8px;}
 /* first page: Settings and Controls open a panel on top */
 .quick{justify-content:center;gap:10px;margin-top:-4px;}
 .qbtn{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;}
@@ -276,6 +327,45 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
   h1{font-size:23px;}
   h2{font-size:21px;}
 }
+/* ---------- hangar polish: deeper panels, a step bar, mission filter and progress, tiles for the facts */
+.card{border-radius:12px;position:relative;background:linear-gradient(180deg,rgba(13,22,36,.94),rgba(8,14,24,.95));box-shadow:0 24px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.05);}
+#briefCard:not([data-step="play"])::before,#pause .card::before,#end .card::before,#sheet .card::before{content:"";position:absolute;left:18px;right:18px;top:0;height:2px;border-radius:2px;
+  background:linear-gradient(90deg,transparent,var(--hud),transparent);opacity:.7;pointer-events:none;}
+#briefCard .stepnav{border-radius:0 0 12px 12px;}
+button.go{border-radius:8px;transition:transform .15s,filter .15s,box-shadow .2s;box-shadow:0 6px 18px rgba(141,255,176,.16);}
+button.go:hover{transform:translateY(-1px);}
+button.go:active{transform:scale(.98);}
+button.go.alt{box-shadow:none;}
+button.go:disabled{transform:none;box-shadow:none;}
+#start{background:linear-gradient(180deg,#b9ffd0,#6fe89a);box-shadow:0 8px 26px rgba(141,255,176,.34);}
+.steps{gap:0;flex-wrap:nowrap;}
+.steps span{flex:1;min-width:0;text-align:center;border:0;border-bottom:2px solid rgba(141,255,176,.16);border-radius:0;padding:4px 4px 7px;opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.steps span.done{border-bottom-color:rgba(141,255,176,.55);color:var(--paper);opacity:.95;cursor:pointer;}
+.steps span.done:hover{color:var(--hud);}
+.steps span.on{border-bottom-color:var(--hud);color:var(--hud);opacity:1;}
+.opt{border-radius:9px;transition:background .2s,border-color .2s;}
+.opt .art{border-radius:8px 8px 0 0;}
+.opt[aria-pressed="true"] .art::after{top:auto;bottom:7px;}   /* SELECTED sits bottom right, clear of the difficulty badge */
+.opt.won .art .num::after{content:" ✓";color:var(--hud);}
+.fact{border:1px solid var(--line);border-radius:8px;padding:9px 10px;background:rgba(141,255,176,.035);}
+#endFacts{grid-template-columns:repeat(auto-fit,minmax(118px,1fr));}
+.acsum{border-radius:8px;background:rgba(141,255,176,.03);}
+.mprog{display:grid;gap:6px;}
+.mptxt{font:11px var(--f-num);letter-spacing:.06em;color:var(--muted);}
+.mptxt b{color:#ffc94a;font-weight:700;}
+.mpbar{height:5px;border-radius:3px;background:rgba(141,255,176,.12);overflow:hidden;}
+.mpbar i{display:block;height:100%;width:0;border-radius:3px;background:linear-gradient(90deg,var(--hud),#ffc94a);transition:width .4s;}
+.mfilter{display:flex;gap:6px;flex-wrap:wrap;}
+.mfilter button{font:700 10.5px var(--f-num);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:rgba(141,255,176,.04);border:1px solid var(--line);
+  border-radius:999px;padding:6px 11px;cursor:pointer;transition:color .15s,background .15s,border-color .15s;}
+.mfilter button em{font-style:normal;opacity:.65;margin-left:5px;}
+.mfilter button:hover{color:var(--paper);}
+.mfilter button[aria-pressed="true"]{color:#052112;background:var(--hud);border-color:var(--hud);}
+.mfilter button:disabled{opacity:.35;cursor:default;}
+#diffNote .best{color:#ffc94a;letter-spacing:.06em;}
+html.short .mprog{display:none;}
+html.short .mfilter{gap:4px;}
+html.short .mfilter button{padding:3px 8px;font-size:9px;}
 
 /* touch controls */
 #touch{position:fixed;inset:0;pointer-events:none;z-index:10;}
@@ -361,7 +451,12 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
 .vox label{display:flex;align-items:center;gap:8px;}
 .vox input[type=range]{width:130px;accent-color:var(--hud);}
 .vnote{font-size:12px;opacity:.75;margin:6px 0 0;}
-#tRadio{left:calc(env(safe-area-inset-left,0px) + 182px);}
+#tRadio,#tWing{left:calc(env(safe-area-inset-left,0px) + 182px);}
+#tWing[aria-expanded="true"]{background:rgba(141,255,176,.3);color:#fff;}
+#wingPanel{position:absolute;left:calc(env(safe-area-inset-left,0px) + 182px);bottom:calc(env(safe-area-inset-bottom,0px) + 206px);display:grid;grid-template-columns:repeat(2,128px);gap:6px;pointer-events:auto;z-index:12;}
+#touch[data-tilt="1"] #wingPanel{bottom:calc(env(safe-area-inset-bottom,0px) + 60px);}
+#wingPanel[hidden]{display:none;}
+#wingPanel button{height:38px;font:700 11px var(--f-num);letter-spacing:.04em;color:var(--hud);background:rgba(9,16,28,.82);border:1px solid var(--hud);border-radius:6px;touch-action:manipulation;}
 #tTalk{left:calc(env(safe-area-inset-left,0px) + 248px);width:66px!important;}
 #tTalk.on{background:rgba(255,90,79,.55);border-color:#ff5a4f;color:#fff;}
 #tRadio[aria-expanded="true"]{background:rgba(141,255,176,.3);color:#fff;}
@@ -409,8 +504,10 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
   <button class="tbtn top" id="tView" type="button">VIEW</button>
   <button class="tbtn top" id="tTilt" type="button" aria-pressed="false">TILT</button>
   <button class="tbtn top" id="tRadio" type="button" hidden aria-expanded="false">RADIO</button>
+  <button class="tbtn top" id="tWing" type="button" hidden aria-expanded="false">WING</button>
   <button class="tbtn top" id="tTalk" type="button" hidden>TALK</button>
   <div id="rcPanel" hidden></div>
+  <div id="wingPanel" hidden></div>
 </div>
 
 <div id="bars" hidden><i></i><i></i></div>
@@ -433,7 +530,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
     <div class="rankline st-play" id="rankLine"></div>
     <div class="lbl st-play">How do you want to fly?</div>
     <div class="seg playseg st-play">
-      <button class="opt" type="button" data-play="single"><b>Single player</b><span>All 17 missions, from the Kargil strike to AWACS defence</span></button>
+      <button class="opt" type="button" data-play="single"><b>Single player</b><span>All 18 missions, from the Kargil strike to Operation Iron Rail</span></button>
       <button class="opt" type="button" data-play="multi"><b>Multiplayer</b><span>Live dogfight or co-op raid with friends who open this page</span></button>
       <button class="opt" type="button" data-play="train"><b>Training</b><span>Learn to fly and fight, step by step</span></button>
     </div>
@@ -443,7 +540,9 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
       <button class="go alt qbtn" id="openMusic" type="button" aria-pressed="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg><span>Music on</span></button>
       <button class="go alt qbtn" id="openFull" type="button" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>Full screen</span></button>
     </div>
+    <div class="mprog st-mission" id="mProg" hidden><div class="mptxt" id="mProgTxt"></div><div class="mpbar"><i id="mProgBar"></i></div></div>
     <div class="lbl st-mission" id="modeLabel">Mission</div>
+    <div class="mfilter st-mission" id="mFilter" hidden role="group" aria-label="Filter the missions"></div>
     <div class="seg st-mission" id="modeOpts">
       <button class="opt" type="button" data-mode-opt="strike"><b>Strike</b><span>Bomb Point 4875 without crossing the LoC</span></button>
       <button class="opt" type="button" data-mode-opt="naval"><b>Naval strike</b><span>Launch a MiG-29K off the carrier and bomb the port godowns</span></button>
@@ -460,8 +559,9 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
       <button class="opt" type="button" data-mode-opt="escort"><b>Escort transport</b><span>Protect a C-130J flying into a high-altitude airstrip in Ladakh from J-10Cs and a J-20</span></button>
       <button class="opt" type="button" data-mode-opt="sead"><b>SEAD radar hunt</b><span>Night, Rajasthan desert: Su-30MKI or Rafale against SAM radars and mobile launchers; stay low to hide</span></button>
       <button class="opt" type="button" data-mode-opt="awacs"><b>AWACS defence</b><span>Punjab: guard a Netra radar jet on its orbit from three waves of fighters; stay close to keep its datalink</span></button>
-      <button class="opt" type="button" data-mode-opt="raid"><b>Base raid</b><span>Lead three Su-30MKIs: checkpoint 1, shoot down two fighters; checkpoint 2, strike their air base and its SAM and AAA</span></button>
+      <button class="opt" type="button" data-mode-opt="raid"><b>Base raid</b><span>Alone, against the clock: checkpoint 1, shoot down two fighters; checkpoint 2, destroy their air base and its SAM and AAA in 8 minutes</span></button>
       <button class="opt" type="button" data-mode-opt="ladakh"><b>Ladakh intercept</b><span>Four J-20 stealth fighters have crossed the LAC near Pangong Tso</span></button>
+      <button class="opt" type="button" data-mode-opt="ironrail"><b>Operation Iron Rail</b><span>Cross the border with a wingman and kill a missile launcher on a moving train before it fires</span></button>
       <button class="opt" type="button" data-mode-opt="training"><b>Training</b><span>Learn to fly and fight, step by step</span></button>
       <button class="opt" type="button" data-mode-opt="versus"><b>Multiplayer</b><span>Live dogfight against friends who open this page and use the same room code</span></button>
       <button class="opt" type="button" data-mode-opt="coop"><b>Co-op raid</b><span>Fly the base raid together, one Su-30MKI each</span></button>
@@ -496,8 +596,9 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
     <div class="bart" id="bArt"></div>
     <div class="acsum" id="acSum"></div>
     <div class="facts" id="briefFacts"></div>
+    <p class="note" id="diffNote"></p>
     </section>
-    <section class="bpage"><p id="briefBody"></p></section>
+    <section class="bpage"><div id="briefBody"></div></section>
     <section class="bpage">
     <dl class="keys desk-only">
       <dt>S / ↓ &nbsp; W / ↑</dt><dd>Pull up / push down</dd>
@@ -529,11 +630,13 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
     <section class="bpage">
       <div class="checks setlist">
         <label class="check k-intro"><input type="checkbox" id="introOn" checked> Take-off from Srinagar</label>
+        <label class="check diffsel">Difficulty <select id="diffSel" aria-label="Difficulty"><option value="easy">Easy</option><option value="normal">Normal</option><option value="hard">Hard</option></select></label>
         <label class="check k-voice"><input type="checkbox" id="voiceOn" checked> Radio voices</label>
         <label class="check"><input type="checkbox" id="soundOn" checked> Engine sound</label>
         <label class="check"><input type="checkbox" id="musicOn" checked> Menu music</label>
         <label class="check"><input type="checkbox" id="stallProt" checked> Stall protection</label>
         <label class="check"><input type="checkbox" id="lowGfx"> Low graphics</label>
+        <label class="check"><input type="checkbox" id="newModels"> New aircraft models (Mirage 2000 so far)</label>
         <label class="check"><input type="checkbox" id="invert"> Invert pitch</label>
       </div>
     </section>
@@ -560,6 +663,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
   <div class="card">
     <div class="eyebrow">Paused</div>
     <h2>Sortie on hold</h2>
+    <ul class="pobj" id="pauseObj" hidden aria-label="Objectives"></ul>
     <p class="note" id="pauseNote">Press P or Esc to carry on.</p>
     <div class="row"><button class="go alt" id="quit" type="button">Back to hangar</button><button class="go" id="resume" type="button">Resume</button></div>
   </div>
@@ -586,16 +690,114 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<!-- ==========================================================================================================
+     GAME CONFIG: every tunable for the game-wide difficulty presets and for OPERATION IRON RAIL lives here.
+     Edit a value, save, reload. If this block is not valid JSON the game logs a warning in the browser console and
+     falls back to its built-in defaults (the same values as below). See README.md, "Tweaking the config".
+     ========================================================================================================== -->
+<script type="application/json" id="gameConfig">
+{
+  "difficulty": {
+    "easy":   { "enemyTurn": 0.85, "enemyFireDelay": 1.4,  "enemyFlareSkill": 0.7, "playerDecoy": 1.25, "samReload": 1.4,  "samRange": 0.85, "aaaError": 1.4 },
+    "normal": { "enemyTurn": 1.0,  "enemyFireDelay": 1.0,  "enemyFlareSkill": 1.0, "playerDecoy": 1.0,  "samReload": 1.0,  "samRange": 1.0,  "aaaError": 1.0 },
+    "hard":   { "enemyTurn": 1.12, "enemyFireDelay": 0.75, "enemyFlareSkill": 1.3, "playerDecoy": 0.8,  "samReload": 0.75, "samRange": 1.1,  "aaaError": 0.75 }
+  },
+  "ironRail": {
+    "normal": {
+      "train": {
+        "speedKmh": 80, "startDistanceKm": 16, "launchCountdown": 60, "stoppedCountdown": 90, "stopDecel": 2.5, "detectRangeKm": 12,
+        "scale": 4,
+        "wagons": [
+          { "kind": "loco",  "len": 21, "hp": 160 },
+          { "kind": "cargo", "len": 15, "hp": 80 },
+          { "kind": "sam",   "len": 16, "hp": 90 },
+          { "kind": "cargo", "len": 15, "hp": 80 },
+          { "kind": "nuke",  "len": 24, "hp": 180 },
+          { "kind": "cargo", "len": 15, "hp": 80 },
+          { "kind": "sam",   "len": 16, "hp": 90 },
+          { "kind": "cargo", "len": 15, "hp": 80 }
+        ]
+      },
+      "sam": { "rangeKm": 10, "lockTime": 3, "missiles": 4, "reload": 9, "minAlt": 60, "maxAlt": 9000, "missileSpeed": 90 },
+      "waves": [
+        { "types": ["f16", "f16"],   "delay": 30 },
+        { "types": ["jf17", "jf17"], "afterDead": 60, "maxWait": 90 },
+        { "types": ["j10", "j10"],   "afterDead": 60, "maxWait": 90 }
+      ],
+      "enemyAI": {
+        "f16":  { "mslRange": 1.0,  "aggr": 1.0, "turn": 1.0,  "flare": 1.0 },
+        "jf17": { "mslRange": 0.8,  "aggr": 0.9, "turn": 1.12, "flare": 0.85 },
+        "j10":  { "mslRange": 1.25, "aggr": 1.3, "turn": 1.05, "flare": 1.2 }
+      },
+      "loadouts": {
+        "rafale": { "msl": 4, "bombs": 4, "agm": 4, "gun": 125, "flares": 30 },
+        "su30":   { "msl": 6, "bombs": 6, "agm": 3, "gun": 150, "flares": 36 }
+      },
+      "wingman": { "name": "SHADOW 2", "msl": 4, "bombs": 4 },
+      "damage": { "bombDirect": 110, "bombSplashR": 30, "agmDirect": 95, "agmSplashR": 16 },
+      "score": { "base": 1000, "halfwayBonus": 600, "perKill": 150, "perSam": 200, "wingmanAlive": 300, "damagePenalty": 6,
+                 "parSeconds": 600, "timePenaltyPerSec": 1, "rankS": 2900, "rankA": 2300, "rankB": 1700 }
+    },
+    "easy": {
+      "train": { "speedKmh": 65, "launchCountdown": 90, "stoppedCountdown": 120 },
+      "sam": { "lockTime": 4.5, "missiles": 3, "reload": 12 },
+      "waves": [ { "delay": 45 }, { "afterDead": 80, "maxWait": 120 }, { "afterDead": 80, "maxWait": 120 } ]
+    },
+    "hard": {
+      "train": { "speedKmh": 95, "launchCountdown": 45, "stoppedCountdown": 70 },
+      "sam": { "rangeKm": 12, "lockTime": 2, "missiles": 6, "reload": 7 },
+      "waves": [ { "delay": 20 }, { "afterDead": 40, "maxWait": 70 }, { "afterDead": 40, "maxWait": 70 } ]
+    }
+  }
+}
+</script>
 <script>
 (function(){
 'use strict';
 const $ = id => document.getElementById(id);
-let prefs = {mode:'strike', plane:'m2k', lesson:0, map:'pune'};
+let prefs = {mode:'strike', plane:'m2k', lesson:0, map:'pune', diff:'normal'};
 try {
   const s = JSON.parse(localStorage.getItem('thinair.hangar') || 'null');
-  if (s && ['strike','precision','dogfight','raid','naval','ladakh','sead','escort','tanker','bridge','drones','fleet','csar','recon','tanks','swarm','awacs','training','versus','coop'].includes(s.mode) && typeof s.plane==='string')
-    prefs = {mode:s.mode, plane:s.plane, lesson:Number.isInteger(s.lesson) ? Math.max(0,Math.min(4,s.lesson)) : 0, map:s.map==='kargil' ? 'kargil' : 'pune'};
+  if (s && ['strike','precision','dogfight','raid','naval','ladakh','sead','escort','tanker','bridge','drones','fleet','csar','recon','tanks','swarm','awacs','ironrail','training','versus','coop'].includes(s.mode) && typeof s.plane==='string')
+    prefs = {mode:s.mode, plane:s.plane, lesson:Number.isInteger(s.lesson) ? Math.max(0,Math.min(4,s.lesson)) : 0, map:s.map==='kargil' ? 'kargil' : 'pune',
+             diff:['easy','normal','hard'].includes(s.diff) ? s.diff : 'normal'};
 } catch (e) {}
+
+// ---------- game config: the JSON block above, merged over these built-in defaults (a broken block falls back to them)
+const CFG_DEFAULT = {
+  difficulty: {
+    easy:   {enemyTurn:0.85, enemyFireDelay:1.4,  enemyFlareSkill:0.7, playerDecoy:1.25, samReload:1.4,  samRange:0.85, aaaError:1.4},
+    normal: {enemyTurn:1,    enemyFireDelay:1,    enemyFlareSkill:1,   playerDecoy:1,    samReload:1,    samRange:1,    aaaError:1},
+    hard:   {enemyTurn:1.12, enemyFireDelay:0.75, enemyFlareSkill:1.3, playerDecoy:0.8,  samReload:0.75, samRange:1.1,  aaaError:0.75} },
+  ironRail: {
+    normal: {
+      train:{speedKmh:80, startDistanceKm:16, launchCountdown:60, stoppedCountdown:90, stopDecel:2.5, detectRangeKm:12, scale:4,
+        wagons:[{kind:'loco',len:21,hp:160},{kind:'cargo',len:15,hp:80},{kind:'sam',len:16,hp:90},{kind:'cargo',len:15,hp:80},
+                {kind:'nuke',len:24,hp:180},{kind:'cargo',len:15,hp:80},{kind:'sam',len:16,hp:90},{kind:'cargo',len:15,hp:80}]},
+      sam:{rangeKm:10, lockTime:3, missiles:4, reload:9, minAlt:60, maxAlt:9000, missileSpeed:90},
+      waves:[{types:['f16','f16'], delay:30}, {types:['jf17','jf17'], afterDead:60, maxWait:90}, {types:['j10','j10'], afterDead:60, maxWait:90}],
+      enemyAI:{f16:{mslRange:1, aggr:1, turn:1, flare:1}, jf17:{mslRange:0.8, aggr:0.9, turn:1.12, flare:0.85}, j10:{mslRange:1.25, aggr:1.3, turn:1.05, flare:1.2}},
+      loadouts:{rafale:{msl:4, bombs:4, agm:4, gun:125, flares:30}, su30:{msl:6, bombs:6, agm:3, gun:150, flares:36}},
+      wingman:{name:'SHADOW 2', msl:4, bombs:4},
+      damage:{bombDirect:110, bombSplashR:30, agmDirect:95, agmSplashR:16},
+      score:{base:1000, halfwayBonus:600, perKill:150, perSam:200, wingmanAlive:300, damagePenalty:6, parSeconds:600, timePenaltyPerSec:1, rankS:2900, rankA:2300, rankB:1700} },
+    easy:{train:{speedKmh:65, launchCountdown:90, stoppedCountdown:120}, sam:{lockTime:4.5, missiles:3, reload:12}, waves:[{delay:45},{afterDead:80, maxWait:120},{afterDead:80, maxWait:120}]},
+    hard:{train:{speedKmh:95, launchCountdown:45, stoppedCountdown:70}, sam:{rangeKm:12, lockTime:2, missiles:6, reload:7}, waves:[{delay:20},{afterDead:40, maxWait:70},{afterDead:40, maxWait:70}]} } };
+// deep merge: objects key by key, arrays item by item (so a preset can override just one wave's timing); b wins
+function mergeDeep(a,b){
+  if (Array.isArray(a) && Array.isArray(b)){ const n=Math.max(a.length,b.length), r=[]; for (let i=0;i<n;i++) r.push(i<b.length ? (i<a.length ? mergeDeep(a[i],b[i]) : b[i]) : a[i]); return r; }
+  if (a && b && typeof a==='object' && typeof b==='object' && !Array.isArray(a) && !Array.isArray(b)){
+    const r={...a}; for (const k of Object.keys(b)) r[k] = k in a ? mergeDeep(a[k],b[k]) : b[k]; return r; }
+  return b===undefined ? a : b;
+}
+function loadConfig(text){
+  try { const j=JSON.parse(text); if (!j || typeof j!=='object') throw new Error('not an object'); return mergeDeep(CFG_DEFAULT,j); }
+  catch (e) { console.warn('Thin Air: the gameConfig block is not valid JSON, using built-in defaults.', e); return CFG_DEFAULT; }
+}
+const CFG = loadConfig((document.getElementById('gameConfig')||{}).textContent || '{}');
+let DIFF = CFG.difficulty[prefs.diff] || CFG.difficulty.normal;   // the game-wide difficulty preset in force
+// a mission's settings for the chosen difficulty: the normal block with the preset's overrides merged on top
+const missionCfg = key => { const m=CFG[key]||{}; return prefs.diff==='normal' ? m.normal : mergeDeep(m.normal, m[prefs.diff]||{}); };
 
 function boot(){
 if (!window.THREE) { $('brief').hidden = true; $('loadError').hidden = false; return; }
@@ -1123,6 +1325,7 @@ const tgtMeshWreck=new T.Mesh(mergeParts(tgtWreck), new T.MeshLambertMaterial({v
 tgtMeshWreck.visible=false; scene.add(tgtMeshIntact); scene.add(tgtMeshWreck);
 tgtMeshIntact.castShadow=tgtMeshIntact.receiveShadow=tgtMeshWreck.castShadow=tgtMeshWreck.receiveShadow=true;
 
+const AD_SCALE=2.5;   // AAA guns and SAM launchers are drawn this many times life size, so you can pick them out from the air
 // twin-barrel AA guns with a gunner; they track the jet and fire tracer bursts
 function makeAA(x,z,o){
   o=o||TARGET;
@@ -1137,7 +1340,7 @@ function makeAA(x,z,o){
   const pitch=new T.Group(); pitch.position.set(0,0.75,-0.1); yaw.add(pitch);
   [-0.18,0.18].forEach(s=>{ const br=new T.Mesh(UCYL,mS); br.scale.set(0.1,2.6,0.1); br.rotation.x=-Math.PI/2; br.position.set(s,0,-1.3); pitch.add(br); });
   const box=new T.Mesh(UBOX,mG); box.scale.set(0.7,0.4,0.6); pitch.add(box);
-  pitch.rotation.x=0.6; g.traverse(o=>{ if (o.isMesh) o.castShadow=o.receiveShadow=true; }); scene.add(g);
+  pitch.rotation.x=0.6; g.traverse(o=>{ if (o.isMesh) o.castShadow=o.receiveShadow=true; }); g.scale.setScalar(AD_SCALE); scene.add(g);
   if (o===TARGET){
     base(x,z,0); put(tgtWreck,UBOX,BURNT,0,0.4,0,1.6,0.5,2.0,0.2,0.5,0.15); put(tgtWreck,USPH,ASH,0,0.05,0,6,0.25,6);
     SEC_POINTS.push(new T.Vector3(g.position.x, g.position.y+1.5, g.position.z));
@@ -1280,6 +1483,7 @@ function newPlane(){ const g=new T.Group(); g.userData.flames=[]; g.userData.sto
 // into one vertex-coloured mesh, so a jet costs only a few extra draw calls.
 glassMat.transparent=true; glassMat.opacity=0.55;   // tinted, but you can see the pilot through it
 const DETAIL_MAT=new T.MeshStandardMaterial({vertexColors:true, metalness:0.45, roughness:0.5, side:T.DoubleSide});
+const CANOPY_K=[0.86,0.86,0.92];   // canopy size on every jet, as a fraction of the original: width, height, length
 const COCKPIT_MAT=new T.MeshLambertMaterial({color:0x1c2024, side:T.BackSide});   // inside of the cockpit, seen through the glass
 const NAV_GLOW=(()=>{ const cv=document.createElement('canvas'); cv.width=cv.height=64; const c=cv.getContext('2d'), gr=c.createRadialGradient(32,32,0,32,32,32);
   gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(0.16,'rgba(255,255,255,.9)'); gr.addColorStop(0.45,'rgba(255,255,255,.22)'); gr.addColorStop(1,'rgba(255,255,255,0)');
@@ -1296,7 +1500,7 @@ function serialTex(txt, ink){
 function detailPlane(g, o){
   o=o||{}; g.updateMatrixWorld(true);
   const parts=[], add=(geo,m,c)=>parts.push({geo,m,c});
-  const M=(x,y,z,rx,ry,rz,sy)=>new T.Matrix4().compose(new T.Vector3(x,y,z), new T.Quaternion().setFromEuler(new T.Euler(rx||0,ry||0,rz||0)), new T.Vector3(1,sy||1,1));
+  const M=(x,y,z,rx,ry,rz,sy,sx)=>new T.Matrix4().compose(new T.Vector3(x,y,z), new T.Quaternion().setFromEuler(new T.Euler(rx||0,ry||0,rz||0)), new T.Vector3(sx||1,sy||1,1));
   const meshes=[]; g.traverse(m=>{ if (m.isMesh) meshes.push(m); });
   const painted=meshes.filter(m=>m.material.map && m.material.userData.base);
   const solid=meshes.filter(m=>m.material!==glassMat && m.material!==flameMat && !m.userData.fx);
@@ -1306,11 +1510,12 @@ function detailPlane(g, o){
   const shells=[];
   // cockpit: canopy frame arches, a dark tub, seat(s) and pilot(s)
   meshes.filter(m=>m.material===glassMat).forEach(cm=>{
-    const r=cm.geometry.parameters.radius, sy=cm.scale.y, L=r*cm.scale.z, cy=cm.position.y, cz=cm.position.z;
-    [-0.5,0.14].forEach(f=>add(new T.TorusGeometry(r*Math.sqrt(1-f*f)*1.01,0.035,5,18,Math.PI), M(0,cy,cz+f*L,0,0,0,sy), 0x2a2e33));
+    if (!cm.userData.cs){ cm.userData.cs=true; cm.scale.x*=CANOPY_K[0]; cm.scale.y*=CANOPY_K[1]; cm.scale.z*=CANOPY_K[2]; }   // a slimmer, lower canopy (once per model)
+    const r=cm.geometry.parameters.radius, sy=cm.scale.y, sx=cm.scale.x, L=r*cm.scale.z, cy=cm.position.y, cz=cm.position.z;
+    [-0.5,0.14].forEach(f=>add(new T.TorusGeometry(r*Math.sqrt(1-f*f)*1.01,0.035,5,18,Math.PI), M(0,cy,cz+f*L,0,0,0,sy,sx), 0x2a2e33));
     add(new T.BoxGeometry(0.05,0.03,L*1.3), M(0,cy+r*sy*0.99,cz+L*0.35), 0x2a2e33);   // centre frame behind the windscreen arch
     const floor=surf(0,cz,true);
-    add(new T.BoxGeometry(r*1.3,0.04,L*1.3), M(0,Math.max(floor==null?cy:floor,cy-0.3)+0.015,cz), 0x1c2024);   // cockpit floor and sills
+    add(new T.BoxGeometry(r*1.3*sx,0.04,L*1.3), M(0,Math.max(floor==null?cy:floor,cy-0.3)+0.015,cz), 0x1c2024);   // cockpit floor and sills
     const seatZ=o.seats===2 ? [-0.24,0.3] : [o.seatF!=null ? o.seatF : -0.06];
     seatZ.forEach((f,i)=>{
       const zs=cz+f*L, topf=cy+r*sy*Math.sqrt(Math.max(0,1-f*f)), hy=Math.min(topf-0.17, Math.max(floor==null?cy:floor, cy)+0.2);
@@ -1401,6 +1606,79 @@ function buildMirage(){
   nozzle(g,0,0,7.3,0.62);
   roundels(g,[[-3.0,-0.19,3.6],[3.0,-0.19,3.6]]);
   finFlash(g,0,3.0,4.6,0.17);
+  g.userData.hp=[[-2.0,-0.62,2.2],[2.0,-0.62,2.2],[-3.2,-0.55,3.4],[3.2,-0.55,3.4],[-1.15,-0.95,0.6],[1.15,-0.95,0.6]];
+  return g;
+}
+// ---------- new-style models (Settings: "New aircraft models"): a fuselage lofted through cross-sections instead of
+// joined cylinders, and wings with a real aerofoil section. The old builders stay as they are; the switch picks one.
+// loftGeo: sections from nose to tail, each a superellipse {z, x, y (centre), w (half-width), h (height above the
+// centre), hb (depth below it, default h), n (2 = ellipse, higher = boxier)}
+function loftGeo(secs, seg, capA, capB){
+  seg=seg||22; const pos=[], uv=[], idx=[], N=secs.length, R=seg+1;
+  secs.forEach((s,i)=>{ const n=s.n||2, hb=s.hb==null ? s.h : s.hb;
+    for (let k=0;k<=seg;k++){ const a=k/seg*Math.PI*2, c=Math.cos(a), si=Math.sin(a);
+      const ex=Math.sign(c)*Math.pow(Math.abs(c),2/n), ey=Math.sign(si)*Math.pow(Math.abs(si),2/n);
+      pos.push((s.x||0)+ex*s.w, (s.y||0)+ey*(ey>=0 ? s.h : hb), s.z); uv.push(k/seg, i/(N-1)); } });
+  for (let i=0;i<N-1;i++) for (let k=0;k<seg;k++){ const a=i*R+k, b=a+1, c=a+R, d=c+1; idx.push(a,b,c, b,d,c); }
+  const cap=(i,flip)=>{ const s=secs[i], o=pos.length/3; pos.push(s.x||0, s.y||0, s.z); uv.push(0.5, i ? 1 : 0);
+    for (let k=0;k<seg;k++){ const a=i*R+k, b=a+1; flip ? idx.push(o,b,a) : idx.push(o,a,b); } };
+  if (capA) cap(0,true); if (capB) cap(N-1,false);
+  const g=new T.BufferGeometry(); g.setAttribute('position',new T.Float32BufferAttribute(pos,3)); g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));
+  g.setIndex(idx); g.computeVertexNormals();
+  const nm=g.attributes.normal;   // the seam: the first and last point of each ring are the same place, so share one normal
+  for (let i=0;i<N;i++){ const a=i*R, b=a+seg, x=nm.getX(a)+nm.getX(b), y=nm.getY(a)+nm.getY(b), z=nm.getZ(a)+nm.getZ(b), l=Math.hypot(x,y,z)||1;
+    nm.setXYZ(a,x/l,y/l,z/l); nm.setXYZ(b,x/l,y/l,z/l); }
+  return g;
+}
+// wingGeo: stations from root to tip {x, y, le, te (z of the leading and trailing edge), t (thickness / chord)}; s = +1 right, -1 left
+function wingGeo(st, s){
+  const C=[0,0.012,0.04,0.1,0.2,0.33,0.5,0.7,0.88,1], nC=C.length, ring=2*nC-2, pos=[], uv=[], idx=[];
+  const yt=c=>5*(0.2969*Math.sqrt(c)-0.126*c-0.3516*c*c+0.2843*c*c*c-0.1036*c*c*c*c);   // NACA four-digit half thickness
+  st.forEach(q=>{ const ch=q.te-q.le;
+    for (let k=0;k<ring;k++){ const up=k<nC, c=C[up ? k : ring-k], x=s*q.x, z=q.le+c*ch; pos.push(x, q.y+(up ? 1 : -1)*yt(c)*q.t*ch, z); uv.push(x,z); } });
+  for (let i=0;i<st.length-1;i++) for (let k=0;k<ring;k++){ const k2=(k+1)%ring, a=i*ring+k, b=i*ring+k2, c=(i+1)*ring+k, d=(i+1)*ring+k2; idx.push(a,c,b, b,c,d); }
+  { const q=st[st.length-1], o=pos.length/3, i=st.length-1; pos.push(s*q.x, q.y, (q.le+q.te)/2); uv.push(s*q.x,(q.le+q.te)/2);   // close the tip
+    for (let k=0;k<ring;k++) idx.push(o, i*ring+k, i*ring+(k+1)%ring); }
+  const g=new T.BufferGeometry(); g.setAttribute('position',new T.Float32BufferAttribute(pos,3)); g.setAttribute('uv',new T.Float32BufferAttribute(uv,2));
+  g.setIndex(idx); g.computeVertexNormals(); return g;
+}
+const RADOME_MAT=new T.MeshStandardMaterial({color:0x4b5158, metalness:0.15, roughness:0.6, side:T.DoubleSide});
+const SKIN2={};   // the wing paint, two-sided, for the hand-built wing meshes
+function skin2(skin){ const k=skin.uuid; if (!SKIN2[k]){ const m=skin.clone(); m.side=T.DoubleSide; m.userData.base=skin.userData.base; SKIN2[k]=m; } return SKIN2[k]; }
+// Mirage 2000H, new style: same size, nozzle, hardpoints and markings as the old model, so everything else lines up
+function buildMirage2(){
+  const g=newPlane(), {body,skin}=skins('#8f9ba7',['#6d7b8a','#a9b3bd'],11), wsk=skin2(skin);
+  // radome: a slim ogive drooped a little, in darker grey
+  g.add(new T.Mesh(loftGeo([{z:-7.7,y:-0.1,w:0.02,h:0.02},{z:-7.45,y:-0.1,w:0.1,h:0.1},{z:-7.0,y:-0.09,w:0.2,h:0.2},{z:-6.4,y:-0.08,w:0.31,h:0.31},{z:-5.9,y:-0.07,w:0.385,h:0.39}],22), RADOME_MAT));
+  // fuselage: round behind the radome, deepening into the cockpit hump and spine, waisted over the wing, round again at the nozzle
+  g.add(new T.Mesh(loftGeo([
+    {z:-5.9,y:-0.07,w:0.385,h:0.39},{z:-5.4,y:-0.05,w:0.47,h:0.62,hb:0.46},{z:-4.8,y:-0.02,w:0.56,h:0.74,hb:0.52},{z:-4.0,w:0.67,h:0.82,hb:0.6},
+    {z:-3.0,w:0.79,h:0.85,hb:0.68},{z:-2.0,w:0.88,h:0.87,hb:0.74,n:2.3},{z:-0.5,w:0.93,h:0.84,hb:0.78,n:2.4},{z:1.5,w:0.9,h:0.8,hb:0.8,n:2.4},
+    {z:3.5,w:0.84,h:0.77,hb:0.78,n:2.2},{z:5.4,w:0.74,h:0.72,hb:0.72},{z:6.6,w:0.66,h:0.66},{z:7.25,w:0.62,h:0.62}],24,false,false), body));
+  const pt=new T.Mesh(new T.CylinderGeometry(0.03,0.03,1.3,5), darkMat); pt.rotation.x=Math.PI/2; pt.position.set(0,-0.1,-8.3); g.add(pt);   // pitot
+  [-1,1].forEach(s=>{
+    // side intake: a half-round pod that fades back into the fuselage, with the half-cone centre body in its mouth
+    g.add(new T.Mesh(loftGeo([{z:-3.3,x:s*0.9,y:-0.14,w:0.4,h:0.5},{z:-2.6,x:s*0.92,y:-0.14,w:0.45,h:0.55},{z:-1.0,x:s*0.92,y:-0.13,w:0.45,h:0.56},
+      {z:0.8,x:s*0.86,y:-0.12,w:0.36,h:0.5},{z:2.4,x:s*0.78,y:-0.1,w:0.22,h:0.38},{z:3.7,x:s*0.72,y:-0.08,w:0.06,h:0.16}],16,false,true), body));
+    const mouth=new T.Mesh(new T.CircleGeometry(1,18), darkMat); mouth.scale.set(0.37,0.47,1); mouth.rotation.y=Math.PI; mouth.position.set(s*0.9,-0.14,-3.27); g.add(mouth);
+    const cone=new T.Mesh(new T.ConeGeometry(0.26,1.0,12), body); cone.rotation.x=-Math.PI/2; cone.position.set(s*0.72,-0.14,-3.45); g.add(cone);
+    g.add(slab([[s*1.28,-2.95],[s*1.66,-2.25],[s*1.28,-1.95]],0.035,skin,0.14));   // the small strake on the intake
+    // delta wing: 58 degree leading edge, thin symmetric section, tapering to a clipped tip
+    g.add(new T.Mesh(wingGeo([{x:0.7,y:-0.27,le:-1.9,te:5.05,t:0.046},{x:1.4,y:-0.27,le:-0.78,te:5.05,t:0.044},{x:2.9,y:-0.265,le:1.62,te:5.03,t:0.04},
+      {x:4.3,y:-0.26,le:3.86,te:5.0,t:0.036},{x:4.56,y:-0.26,le:4.42,te:4.97,t:0.034}],s), wsk));
+    // elevon actuator fairings under the wing
+    [[2.05,4.05],[3.35,4.45]].forEach(([x,z])=>{ const f=new T.Mesh(new T.SphereGeometry(1,10,8), body); f.scale.set(0.085,0.085,0.85); f.position.set(s*x,-0.37,z); g.add(f); });
+  });
+  // fin: swept, with a square-cut top, and the brake-parachute fairing at its foot
+  g.add(fin([[1.25,0.7],[2.2,0.98],[4.9,3.78],[5.2,3.95],[6.05,3.95],[6.1,3.55],[5.8,0.7]],0.14,skin));
+  g.add(new T.Mesh(loftGeo([{z:5.3,y:0.74,w:0.03,h:0.03},{z:5.7,y:0.78,w:0.15,h:0.15},{z:6.6,y:0.78,w:0.17,h:0.17},{z:7.05,y:0.78,w:0.12,h:0.12}],12,false,true), body));
+  // fixed refuelling probe, right of the windscreen
+  { const p=new T.Mesh(new T.CylinderGeometry(0.035,0.035,1.5,6), darkMat); p.rotation.x=Math.PI/2-0.13; p.rotation.z=-0.1; p.position.set(0.46,0.5,-5.45); g.add(p);
+    const tip=new T.Mesh(new T.SphereGeometry(0.06,8,6), darkMat); tip.position.set(0.54,0.6,-6.19); g.add(tip); }
+  canopy(g,0.62,3.6,0.72,-3.7);
+  nozzle(g,0,0,7.3,0.62);
+  roundels(g,[[-3.0,-0.185,3.6],[3.0,-0.185,3.6]]);
+  finFlash(g,0,3.0,4.75,0.17);
   g.userData.hp=[[-2.0,-0.62,2.2],[2.0,-0.62,2.2],[-3.2,-0.55,3.4],[3.2,-0.55,3.4],[-1.15,-0.95,0.6],[1.15,-0.95,0.6]];
   return g;
 }
@@ -1760,7 +2038,10 @@ const DETAIL = {
   amca:{serial:'AX 004', ink:'#2c3238'}, jf17:{serial:'14-127', pitot:1}, f16:{serial:'AF 412'}, j10:{serial:'31-058', pitot:1},
   j20:{serial:'78-271', ink:'#9aa2aa'}, f35:{serial:'AF 6093', ink:'#3a4148'} };
 const detailed=(k,fn)=>()=>detailPlane(fn(),DETAIL[k]);
-const BUILD = {m2k:detailed('m2k',buildMirage), rafale:detailed('rafale',buildRafale), su30:detailed('su30',buildSu30), tejas:detailed('tejas',buildTejas),
+// Settings, "New aircraft models": jets that have a new-style builder use it while the box is ticked (off by default)
+try { $('newModels').checked = localStorage.getItem('thinair.newac')==='1'; } catch (e) {}
+const newModelsOn=()=>{ const e=$('newModels'); return !!(e && e.checked); };
+const BUILD = {m2k:()=>detailPlane((newModelsOn() ? buildMirage2 : buildMirage)(), DETAIL.m2k), rafale:detailed('rafale',buildRafale), su30:detailed('su30',buildSu30), tejas:detailed('tejas',buildTejas),
   mig29:detailed('mig29',buildMig29), mig21:detailed('mig21',buildMig21), mig27:detailed('mig27',buildMig27), jaguar:detailed('jaguar',buildJaguar),
   amca:detailed('amca',buildAMCA), jf17:detailed('jf17',buildJF17), f16:detailed('f16',buildF16), j10:detailed('j10',buildJ10), j20:detailed('j20',buildJ20), f35:detailed('f35',buildF35)};
 
@@ -1872,6 +2153,7 @@ function addParkedJets(){
   const deco=new T.Mesh(mergeParts(P),RAID_MAT); deco.receiveShadow=deco.castShadow=true; scene.add(deco);
 }
 function adWreck(dx,dz,s){
+  s*=1.8;   // the wrecks grew with the launchers
   const L=[]; base(dx,dz,0,BASE);
   put(L,UBOX,BURNT,0,0.5,0,1.8*s,0.8,2.4*s,0.2,0.5,0.15); put(L,USPH,ASH,0,0.05,0,7*s,0.25,7*s);
   return raidMesh(L,false);
@@ -1889,7 +2171,7 @@ function makeSAM(dx,dz){
   const mast=new T.Mesh(UBOX,mS); mast.scale.set(0.3,5,0.3); mast.position.set(6,2.5,0); g.add(mast);
   const radar=new T.Group(); radar.position.set(6,5.2,0); g.add(radar);
   const dish=new T.Mesh(UBOX,mG); dish.scale.set(4.5,1.6,0.25); radar.add(dish);
-  g.traverse(o=>{ if (o.isMesh) o.castShadow=o.receiveShadow=true; }); scene.add(g);
+  g.traverse(o=>{ if (o.isMesh) o.castShadow=o.receiveShadow=true; }); g.scale.setScalar(AD_SCALE); scene.add(g);
   return {kind:'SAM', g, yaw, pitch, radar, wreck:adWreck(dx,dz,2.2), x:g.position.x, y:g.position.y, z:g.position.z, alive:true, cd:0, track:false, phase:0, burst:0};
 }
 [[-200,-40],[FDX+70,FDZ-60],[CPX-70,CPZ+60]].forEach(([dx,dz],i)=>{   // AAA: one on the airfield, one at the fuel depot, one (co-op) at the command post
@@ -1899,7 +2181,9 @@ function makeSAM(dx,dz){
 });
 RAID.ad.push(makeSAM(-560,330), makeSAM(SBX+220,SBZ-260));   // SAMs: the airfield's, and (co-op) one at the dispersal site
 RAID.ad[2].coopOnly=true; RAID.ad[4].coopOnly=true;   // flying solo the base keeps 1 SAM and 2 AAA guns; co-op gets all five
-const plainRaid=()=>mode==='raid' && !(NAVAL||PRECISE||SEAD||TANKER||BRIDGE||CSAR||RECON||TANKS);   // the Kargil base raid itself
+let RAIL=false;   // OPERATION IRON RAIL (set in applyPrefs): the train hunt over the Thar desert
+const IR_PLANES=['rafale','su30'];   // Iron Rail: you fly one, your wingman the other
+const plainRaid=()=>mode==='raid' && !(NAVAL||PRECISE||SEAD||TANKER||BRIDGE||CSAR||RECON||TANKS||RAIL);   // the Kargil base raid itself
 // base raid checkpoints: 1 = shoot down the two fighters (the base is not shown and its guns are quiet), 2 = strike the base
 let RCP=0;
 let TANKER=false, TKR=null;   // the tanker refuel strike (set in applyPrefs) and the IL-78
@@ -2444,9 +2728,19 @@ const wingmen=[];
 const _wf=new T.Vector3(), _wr=new T.Vector3(), _wt=new T.Vector3();
 function playerHeading(){ axes(); _wf.set(vF.x,0,vF.z); if (_wf.lengthSq()<1e-6) _wf.set(0,0,-1); _wf.normalize(); _wr.set(-_wf.z,0,_wf.x); }
 function slotPos(sl,out){ out.copy(S.pos).addScaledVector(_wr,sl[0]).addScaledVector(_wf,-sl[2]); out.y+=sl[1]; return out; }
+const WPROTO={su30:wingProto};   // wingman models by type, built on first use
+function wingProtoOf(k){ if (!WPROTO[k]){ WPROTO[k]=(BUILD[k]||BUILD.su30)(); castAll(WPROTO[k]); } return WPROTO[k]; }
 function spawnWingmen(){
   wingmen.forEach(w=>scene.remove(w.m)); wingmen.length=0;
-  if (mode!=='raid' || MP.coop || NAVAL || PRECISE || SEAD || TANKER || BRIDGE || CSAR || RECON || TANKS) return;   // in co-op the flight is made of real players; the naval strike is flown solo
+  if (RAIL && !MP.on){   // Iron Rail: one wingman, flying the other type (Rafale and Su-30MKI), with orders from keys 1-4
+    playerHeading();
+    const k=prefs.plane==='rafale' ? 'su30' : 'rafale', WC=irCfg().wingman, sl=WING_SLOTS[0];
+    const p=slotPos(sl,new T.Vector3()), m=wingProtoOf(k).clone(); m.position.copy(p); orient(m,_wf,0); scene.add(m);
+    wingmen.push({m, p, fwd:_wf.clone(), vel:_wf.clone().multiplyScalar(START.speed), speed:START.speed, hp:100, alive:true, friendly:true,
+      slot:sl, name:WC.name||'SHADOW 2', short:'2', bank:0, msl:WC.msl, bombs:0, agm:WC.bombs, fireCd:6, flares:8, job:'form', ad:null, eng:null, egress:0, relT:0, cmd:'free', type:k});
+    return;
+  }
+  if (mode!=='raid' || MP.coop || NAVAL || PRECISE || SEAD || TANKER || BRIDGE || CSAR || RECON || TANKS || plainRaid()) return;   // the base raid is now flown solo too   // in co-op the flight is made of real players; the naval strike is flown solo
   playerHeading();
   WING_SLOTS.forEach((sl,i)=>{
     const p=slotPos(sl,new T.Vector3()), m=wingProto.clone(); m.position.copy(p); orient(m,_wf,0); scene.add(m);
@@ -2457,12 +2751,13 @@ function spawnWingmen(){
 function damageWing(w,d){
   if (!w.alive) return;
   w.hp-=d;
-  if (w.hp>0){ S.msg={text:`${w.name} HIT · STILL FLYING`, col:AMB, t:1.8}; return; }
+  if (w.hp>0){ S.msg={text:`${w.name} HIT · STILL FLYING`, col:AMB, t:1.8}; if (RAIL) wingSay("I'm hit! Still flying."); return; }
+  if (RAIL){ wingSay("I'm hit, I'm going down!"); irBanner(`${w.name} IS DOWN`,RED); }
   w.alive=false; scene.remove(w.m); spawnExplosion(w.p,true);
   missiles.forEach(m=>{ if (m.target===w) m.target=null; });
   S.msg={text:`${w.name} IS DOWN`, col:RED, t:3};
   if (w===HELO) endMission(false,'VIPER is down',`The Mi-17 was brought down ${HELO.pilot ? 'with the rescued pilot aboard' : 'before it could reach the pilot'}. Silence the AAA guns around the pilot while VIPER holds, then stay close to the helicopter and kill each jet before it gets a missile off. Guns knocked out: ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length}. Jets shot down: ${S.kills}.`,2.6);
-  if (w===NETRA) endMission(false,'Netra is down',`The AEW&C was shot down in wave ${S.wave} of ${AW_WAVES.length-1}. The bandits go for the Netra, not you: stay between its orbit and the border, meet each wave well north of it, and watch the west for the low flanker. Bandits shot down: ${S.kills}.`,2.6);
+  if (w===NETRA) endMission(false,'Netra is down',`The AEW&C was shot down in wave ${S.wave} of ${AW_WAVES.length-1}. The bandits go for the Netra, not you: stay between its orbit and the border, meet each wave well north of it, and watch both flanks, west and east, for the low jets. Bandits shot down: ${S.kills}.`,2.6);
   if (w===HERC) endMission(false,'The Hercules is down',`The C-130J was shot down ${(Math.hypot(w.p.x-DBO.x,w.p.z-DBO.rw0)/1000).toFixed(1)} km from the airstrip. The bandits go for the transport, not you: stay between it and the LAC, take each fighter as it comes in, and shoot before it gets within missile range of the Hercules. Bandits shot down: ${S.kills}.`,2.6);
 }
 function impactFrom(p,v){
@@ -2484,6 +2779,7 @@ function enemyTarget(e){
     e.tgt='player'; return P;
   }
   if (mode!=='raid') return P;
+  if (e.prefW){ const w=wingmen.find(x=>x.alive); if (w){ e.tgt=w; return {ref:w, p:w.p, v:w.vel, alive:true, name:w.name}; } }   // Iron Rail: this one hunts your wingman
   let best=S.alive ? P : null, bd=S.alive ? S.pos.distanceTo(e.p)*(e.tgt==='player'?0.7:0.85) : Infinity;
   for (const w of wingmen){ if (!w.alive) continue; const d=w.p.distanceTo(e.p)*(e.tgt===w?0.7:1); if (d<bd){ bd=d; best={ref:w, p:w.p, v:w.vel, alive:true, name:w.name}; } }
   if (MP.coop) for (const g of MP.ghosts.values()){ if (!g.alive) continue; const d=g.p.distanceTo(e.p)*(e.tgt===g?0.7:1); if (d<bd){ bd=d; best={ref:g, p:g.p, v:g.vel, alive:true, name:g.type.name}; } }
@@ -2501,7 +2797,8 @@ function updateWingmen(dt){
     const threat=missiles.some(m=>m.target===w && m.p.distanceTo(w.p)<3500);
     if (w.egress>0) w.egress-=dt;
     if (w.eng && !w.eng.alive) w.eng=null;
-    if (!w.eng && awake.length){ let bd=1e9; for (const e of awake){ const d=e.p.distanceTo(w.p)+(wingmen.some(o=>o!==w && o.eng===e)?2500:0); if (d<bd){ bd=d; w.eng=e; } } }
+    if (RAIL) irWingOrders(w);
+    if (!w.eng && awake.length && (!RAIL || w.cmd==='free')){ let bd=1e9; for (const e of awake){ const d=e.p.distanceTo(w.p)+(wingmen.some(o=>o!==w && o.eng===e)?2500:0); if (d<bd){ bd=d; w.eng=e; } } }
     if (w.ad && !w.ad.alive) w.ad=null;
     if (threat){
       w.job='evade'; const t=S.time*1.1+w.slot[0]; _h.crossVectors(w.fwd,UP).normalize();
@@ -2512,9 +2809,10 @@ function updateWingmen(dt){
       w.fireCd-=dt;
       if (w.msl>0 && w.fireCd<=0 && dist<5500 && dist>800 && w.fwd.dot(_a)/dist>0.95){
         spawnMissile(w.p.clone().addScaledVector(w.fwd,12), w.vel.clone(), e, 'w'); w.msl--; w.fireCd=11+Math.random()*4;
-        S.msg={text:`${w.name} · FOX TWO ON ${e.type.name}`, col:HUD, t:1.8};
+        S.msg={text:`${w.name} · FOX TWO ON ${e.type.name}`, col:HUD, t:1.8}; if (RAIL) wingSay('Fox two!');
       }
-    } else if (w.bombs>0 && adLeft.length && w.egress<=0 && (!enemies.some(e=>e.alive) || Math.hypot(S.pos.x-BASE.x,S.pos.z-BASE.z)<13000)){
+    } else if (RAIL && w.cmd==='sams'){ const o=irWingStrike(w,dt); rate=o.rate; spd=o.spd; }
+    else if (!RAIL && w.bombs>0 && adLeft.length && w.egress<=0 && (!enemies.some(e=>e.alive) || Math.hypot(S.pos.x-BASE.x,S.pos.z-BASE.z)<13000)){
       if (!w.ad){
         const free=adLeft.filter(a=>!wingmen.some(o=>o!==w && o.ad===a));
         w.ad=free.find(a=>a.kind==='SAM') || free[0] || adLeft[0];
@@ -3185,7 +3483,7 @@ function updateLaser(){
   for (const m of missiles){
     if (!m.agm || !m.target) continue;
     if (m.ref && (m.ref.mob || m.ref.conv) && m.ref.alive) m.aim.set(m.ref.x, m.ref.y+1, m.ref.z);   // the pod follows a launcher on the move
-    if (!lasing(m.aim)){ m.target=null; S.msg={text:'LASER LOST · AGM UNGUIDED', col:AMB, t:2}; }
+    if (!m.wl && !lasing(m.aim)){ m.target=null; S.msg={text:'LASER LOST · AGM UNGUIDED', col:AMB, t:2}; }   // wl: the wingman's own pod guides his
   }
 }
 // level or shallow-dive release: where the bomb would land now, how far short of the target that is, and the lateral miss
@@ -3373,7 +3671,7 @@ function updateSecondaries(dt){
 function aaShot(a,d){
   a.muzzle.set(Math.random()<0.5?-0.18:0.18,0,-2.7); a.pitch.localToWorld(a.muzzle);
   // aim at where the jet will be; the error grows with range, so low and close passes get hit
-  const tof=d/950, err=10+d*0.012;
+  const tof=d/950, err=(10+d*0.012)*DIFF.aaaError;
   _a.copy(S.pos).addScaledVector(S.vel,tof); _a.y+=0.5*G*tof*tof;
   _a.x+=(Math.random()-0.5)*2*err; _a.y+=(Math.random()-0.5)*2*err; _a.z+=(Math.random()-0.5)*2*err;
   _a.sub(a.muzzle).normalize();
@@ -3410,6 +3708,7 @@ function updateManpads(dt){
 
 // ---------- mission 3: base raid
 function raidBombImpact(b){
+  if (RAIL){ railImpact(b); return; }   // Iron Rail: wagons with hit points, bombs and laser missiles alike
   if (b.own==='w'){   // wingmen bomb the air defences only; the four main targets are yours
     let hit=null;
     RAID.ad.forEach(a=>{ if (a.alive && Math.hypot(b.p.x-a.x,b.p.z-a.z)<=(a.kind==='SAM'?38:30)){ killAD(a); hit=a; } });
@@ -3443,13 +3742,14 @@ function raidBombImpact(b){
     else if (SEAD) endMission(true,'Air defences suppressed',`All three radars and all six SAM launchers in the desert are destroyed, so the strike packages can now fly through. AAA guns knocked out: ${RAID.ad.filter(a=>a.kind==='AAA' && !a.alive).length} of ${RAID.ad.filter(a=>a.kind==='AAA').length}. Fighters shot down: ${S.kills} of 2.`,4);
     else if (PRECISE) endMission(true,'All three camps destroyed',`Tiger Hill, Tololing and Muntho Dhalo are burning, and you stayed south of the Line of Control. AAA guns knocked out: ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length}. F-16s shot down: ${S.kills}. Time left: ${Math.floor(Math.max(0,S.precT)/60)}:${String(Math.floor(Math.max(0,S.precT)%60)).padStart(2,'0')}.`,4);
     else if (NAVAL) endMission(true,'Port godowns destroyed',`All four godowns along the coast are burning. You knocked out ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length} AAA guns and shot down ${S.kills} of 2 fighters, flying a single MiG-29K off the carrier.`,4);
-    else endMission(true,'Base destroyed',`All four structures are burning: both aircraft shelters, the fuel depot and the command post. You knocked out ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length} air-defence sites and shot down ${S.kills} of 2 fighters.`,4);
+    else endMission(true,'Base destroyed',`All four structures are burning: both aircraft shelters, the fuel depot and the command post. Flying alone, you knocked out ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length} air-defence sites and shot down ${S.kills} of 2 fighters, with ${clockTxt(S.raidT)} to spare.`,4);
   } else if (MP.coop){ if (S.bombs===0 && S.agm===0) S.msg={text:`OUT OF BOMBS · ${left} TO GO · LEAVE IT TO YOUR FLIGHT`, col:AMB, t:3}; }
   else if (S.bombs===0 && bombs.length===0 && S.agm===0 && !missiles.some(x=>x.agm))
     endMission(false,`${left} target${left>1?'s':''} still standing`,`You ran out of bombs${PRECISE||SEAD?' and laser missiles':''}. Each ${NAVAL?'godown':PRECISE?'camp':SEAD?'radar and launcher':TANKS?'tank':'structure'} needs a hit within ${TANKS?TANK_R:RAID_HIT} m${TANKS?'; laser missiles follow a moving tank, bombs do not':''}. Make one pass per target, put the pipper on the diamond, and hold Space to let it release itself.`,3.4);
 }
 function killRaidTarget(t){
   t.alive=false; t.intact.visible=false; t.wreck.visible=true; t.extras.forEach(o=>{ o.visible=false; });
+  if (SEAD && state==='fly') raidWake();   // SEAD: the first radar to die brings the fighters straight at you
   const c0=new T.Vector3(t.x,t.y+3,t.z);
   spawnExplosion(c0,true);
   effects.push(makeFx(c0.clone(),0x3b3836,false,40,8,180,0.75,12));
@@ -3468,7 +3768,7 @@ function updateRaidAD(dt){
   if (RCP===1) return;   // base raid, checkpoint 1: the base's guns and SAM wait until the fighters are down
   const live=S.alive && state==='fly';
   for (const a of RAID.ad){
-    if (!a.alive) continue;
+    if (!a.alive || a.unit) continue;   // unit: an Iron Rail SAM wagon, run by updateIronRail
     _t.copy(S.pos).sub(a.g.position); const d=_t.length();
     if (a.kind==='AAA'){
       if (!(live && d<3500)){ a.burst=a.phase; continue; }
@@ -3481,7 +3781,7 @@ function updateRaidAD(dt){
     }
     // SAM: the radar sweeps, then tracks and fires a radar-guided missile, one in the air per site
     const hd=Math.hypot(_t.x,_t.z);
-    a.track = live && hd<SAM_RANGE && _t.y>-300 && _t.y<9000 && !(a.mob && (S.agl<SEAD_MASK || !a.site.alive)) && !(RECON && S.agl<REC_MASK);   // recon: hidden in the ground clutter down low   // SEAD: blind below the radar horizon, or once its site radar is gone
+    a.track = live && hd<SAM_RANGE*DIFF.samRange && _t.y>-300 && _t.y<9000 && !(a.mob && (S.agl<SEAD_MASK || !a.site.alive)) && !(RECON && S.agl<REC_MASK);   // recon: hidden in the ground clutter down low   // SEAD: blind below the radar horizon, or once its site radar is gone
     a.radar.rotation.y+=dt*(a.track?4:1.4);
     if (!a.track) continue;
     S.samTrack=true;
@@ -3493,7 +3793,8 @@ function updateRaidAD(dt){
       _d.copy(_t).normalize(); _d.y=Math.max(_d.y,0.5); _d.normalize();
       const m=spawnMissile(p,_d.clone().multiplyScalar(90),'player','e'); m.sam=a; m.maxLife=16; m.mesh.scale.setScalar(1.8);
       effects.push(makeFx(p.clone(),0xd8d2c4,false,3,3,16,0.7,3));
-      a.cd=12+Math.random()*6;
+      a.cd=(12+Math.random()*6)*DIFF.samReload;
+      if (a.mob && SEAD) a.reloc=SEAD_RELOC;   // SEAD: once it loses you, a launcher that has fired drives off to a new spot
       S.msg={text:'SAM LAUNCH · FLARES, BREAK HARD', col:RED, t:2.2};
     }
   }
@@ -3539,6 +3840,15 @@ function updatePrecF16(dt){
   if (S.f16T>=0){ S.f16T-=dt; if (S.f16T<=0){ S.f16T=-1; precF16(false); S.f16T2=60+Math.random()*60; } }
   if (S.f16T2>=0){ S.f16T2-=dt; if (S.f16T2<=0){ S.f16T2=-1; precF16(true); } }
 }
+// solo base raid: enemy reinforcements arrive after RAID_TIME, so the base must be destroyed before then
+const RAID_TIME=480;
+function updateRaidClock(dt){
+  if (!S.alive || state!=='fly' || raidLeft()<=0) return;
+  const was=S.raidT; S.raidT-=dt;
+  if (was>60 && S.raidT<=60) S.msg={text:'ONE MINUTE · ENEMY REINFORCEMENTS INBOUND', col:RED, t:3};
+  if (S.raidT<=0) endMission(false,'Out of time',`Enemy reinforcements reached the base before it was destroyed. You have ${Math.round(RAID_TIME/60)} minutes and no wingmen: kill the two fighters quickly at checkpoint 1, take out the SAM from outside its reach with a laser missile, then work round the four structures without wasting passes. Targets destroyed: ${4-raidLeft()} of 4.`,2.4);
+}
+const clockTxt=t=>`${Math.floor(Math.max(0,t)/60)}:${String(Math.floor(Math.max(0,t)%60)).padStart(2,'0')}`;
 // solo dogfight: once the first JF-17 goes down, a J-10C joins from the other side
 function plainDog(){ return mode==='dogfight' && !MP.on && !LADAKH && !ESCORT && !AWACS && !FLEET && !DRONES && !SWARM; }
 function spawnLateJ10(){
@@ -3600,9 +3910,10 @@ function spawnWave(n){
     enemies.forEach(e=>scene.remove(e.m)); enemies.length=0; S.wave=n;
     const W=AW_WAVES[Math.min(n,AW_WAVES.length-1)];
     W.forEach((k,i)=>{
-      const type=FOES[k], flank = n>1 && i===W.length-1;
-      const x = flank ? -17000 : clamp(-7000+i*4500+Math.random()*2000,-15000,15000);
-      const z = flank ? pbBorderZ(-17000)-1500 : -18000-Math.random()*1000;
+      const type=FOES[k], fw = n>1 && i===W.length-1, fe = n>1 && i===W.length-2, flank = fw || fe;   // from wave 2: one low from the west, one low from the east
+      const fx = fw ? -17000 : 17000;
+      const x = flank ? fx : clamp(-7000+i*4500+Math.random()*2000,-15000,15000);
+      const z = flank ? pbBorderZ(fx)-1500 : -18000-Math.random()*1000;
       const y = flank ? groundAt(x,z)+500 : 6500+Math.random()*1500;
       const tx=NETRA ? NETRA.p.x : 0, tz=NETRA ? NETRA.p.z : AW.cz;
       const p=new T.Vector3(x,y,z), fwd=new T.Vector3(tx-x,0,tz-z).normalize();
@@ -3611,7 +3922,7 @@ function spawnWave(n){
         flares:type.flares, fireCd:8+i*3+Math.random()*4, burst:0, gunCd:0, bank:0, turn:type.turn, seed:Math.random()*100});
     });
     const names=W.map(k=>FOES[k].name).join(' + ');
-    S.msg={text:`NETRA: WAVE ${n} OF ${AW_WAVES.length-1} · ${names} FROM THE NORTH${n>1?' · ONE LOW FROM THE WEST':''}`, col:RED, t:4};
+    S.msg={text:`NETRA: WAVE ${n} OF ${AW_WAVES.length-1} · ${names} FROM THE NORTH${n>1?' · TWO LOW ON THE FLANKS, WEST AND EAST':''}`, col:RED, t:4};
     return;
   }
   if (ESCORT){   // two waves from across the LAC, added to whoever is still flying
@@ -3635,7 +3946,7 @@ function spawnWave(n){
       const p=new T.Vector3(x,Math.max(y,groundAt(x,z)+1200),z), fwd=new T.Vector3(S.pos.x-x,0,S.pos.z-z).normalize();
       const m=type.proto.clone(); m.position.copy(p); orient(m,fwd,0); scene.add(m);
       enemies.push({m, p, fwd, type, vel:fwd.clone().multiplyScalar(type.speed), speed:type.speed, hp:100, alive:true,
-        flares:type.flares, fireCd:7+i*3+Math.random()*4, burst:0, gunCd:0, bank:0, turn:type.turn, seed:Math.random()*100});
+        flares:type.flares+3, fireCd:7+i*3+Math.random()*4, burst:0, gunCd:0, bank:0, turn:type.turn+0.04, seed:Math.random()*100});   // more flares, a tighter turn
     });
     S.msg={text:'FOUR J-20s · TWO FROM THE NORTH · TWO BEHIND YOU TO THE SOUTH', col:RED, t:4};
     return;
@@ -3656,9 +3967,39 @@ function spawnWave(n){
   const parts=Object.keys(FOES).map(k=>[FOES[k].name, mix.filter(x=>x===k).length]).filter(([,c])=>c>0).map(([nm,c])=>`${c} ${nm}`);
   S.msg={text:`WAVE ${n} / ${WAVES} · ${parts.join(' · ')}`, col:AMB, t:3};
 }
+// ---------- battle damage: shot-down jets fall burning, and damaged jets (theirs, your wingman's, yours) trail smoke
+const wrecks=[];
+function updateWrecks(dt){
+  for (let i=wrecks.length-1;i>=0;i--){
+    const e=wrecks[i], w=e.wk;
+    if (!w || !e.m.parent){ wrecks.splice(i,1); continue; }   // cleared with the wave or the sortie
+    w.t+=dt;
+    e.vel.y-=G*1.6*dt; e.vel.multiplyScalar(1-0.05*dt); e.p.addScaledVector(e.vel,dt);   // falls, slowing a little in the air
+    _d.copy(e.vel).normalize(); turnToward(e.fwd,_d,1.2*dt);                            // the nose follows the fall
+    e.bank+=w.roll*dt; e.m.position.copy(e.p); orient(e.m,e.fwd,e.bank);                // and it rolls as it goes
+    w.fx-=dt;
+    if (w.fx<=0){ w.fx=isTouch ? 0.09 : 0.05; _a.copy(e.p).addScaledVector(e.fwd,-6);
+      effects.push(makeFx(_a.clone(),0xff7a22,true,0.4,2.2,5.5,0.95,0));                                   // fire at the tail
+      if ((++w.n)%2===0) effects.push(makeFx(_a.clone(),0x24211f,false,2.6,2.5,11,0.6,3)); }               // black smoke behind it
+    const gnd=Math.max(groundAt(e.p.x,e.p.z), WORLD==='sea' ? 0 : -1e9);
+    if (e.p.y<=gnd+4 || w.t>90){
+      scene.remove(e.m); e.wk=null; wrecks.splice(i,1);
+      if (e.p.y<=gnd+4){ e.p.y=gnd+2; spawnExplosion(e.p,true); effects.push(makeFx(e.p.clone(),0x3b3836,false,14,6,60,0.7,6)); }
+    }
+  }
+  // smoke from the damaged: a thin grey trail below 60% (bandits and wingmen), and from your own jet below 40%
+  const puff=(o,p,fwd,every,col)=>{ o.smk=(o.smk||0)-dt; if (o.smk>0) return; o.smk=every; _a.copy(p).addScaledVector(fwd,-7); effects.push(makeFx(_a.clone(),col,false,1.6,1.4,6,0.38,1)); };
+  for (const e of enemies) if (e.alive && !e.remote && !e.type.uav && !e.type.asm && !e.type.boat && e.hp<60) puff(e,e.p,e.fwd,isTouch ? 0.2 : 0.12,0x5a5550);
+  for (const wm of wingmen) if (wm.alive && wm.hp<60 && wm.fwd) puff(wm,wm.p,wm.fwd,isTouch ? 0.2 : 0.12,0x5a5550);
+  if (S.alive && state==='fly' && S.hp<40 && !MP.on){ axes(); puff(S,S.pos,vF,isTouch ? 0.22 : 0.14,0x4a4643); }
+}
 function killEnemy(e,how){
   if (!e.alive) return;
-  e.alive=false; scene.remove(e.m); spawnExplosion(e.p,true);
+  e.alive=false;
+  // a jet shot down in the air does not vanish: it falls away burning and blows up where it hits the ground (updateWrecks)
+  if (!e.remote && !e.type.uav && !e.type.asm && !e.type.boat && how!=='crash' && e.p.y>groundAt(e.p.x,e.p.z)+60){
+    e.wk={t:0, fx:0, n:0, roll:(Math.random()<0.5 ? -1 : 1)*(1.2+Math.random()*1.4)}; wrecks.push(e); spawnExplosion(e.p,false);
+  } else { scene.remove(e.m); spawnExplosion(e.p,true); }
   const base = how==='gun' ? 200 : how==='crash' ? 50 : 100, pts=base+25*Math.max(0,S.wave-1);
   S.score+=pts; if (e.type.asm) S.asmDown++; else S.kills++;   // fleet defence counts missiles stopped apart from jets downed
   const nm=e.type.name;
@@ -3667,6 +4008,7 @@ function killEnemy(e,how){
   if (S.lockTgt===e){ S.lockTgt=null; S.lockT=0; S.locked=false; }
   if (mode==='training'){ TR.kill=how; return; }
   if (mode==='raid'){
+    if (RAIL){ if (S.killsBy) S.killsBy[nm]=(S.killsBy[nm]||0)+1; if (how==='wing') wingSay('Splash one!'); return; }
     if (!enemies.some(x=>x.alive)){
       if (RCP===1){ RCP=2; S.msg={text:`CHECKPOINT 1 DONE · FIGHTERS DOWN · NEXT: STRIKE THE BASE ${(Math.hypot(S.pos.x-BASE.x,S.pos.z-BASE.z)/1000).toFixed(0)} KM`, col:HUD, t:4.5}; }
       else S.msg={text:`SKY CLEAR · ${raidLeft()} TARGET${raidLeft()===1?'':'S'} LEFT`, col:HUD, t:2.6};
@@ -3732,7 +4074,9 @@ function damagePlayer(d){
   if (S.hp<=0 && MP.on){ mpDown('SHOT DOWN'); return; }
   if (S.hp<=0){
     S.alive=false; plane.visible=false; spawnExplosion(S.pos,true);
-    if (TANKS)
+    if (RAIL){ S.score=irScore(false).total;
+      endMission(false,'Shot down on Operation Iron Rail',`Each SAM wagon reaches ${irCfg().sam.rangeKm} km, needs about ${irCfg().sam.lockTime} seconds to lock (listen for the fast RWR tone) and needs to see you: drop below ${irCfg().sam.minAlt} m, or put a dune or outcrop between you and the train, and it loses you. Pop flares the moment MISSILE flashes. Send your wingman at the SAM wagons (key 3), and when fighters scramble, order him to cover you (key 2). Launcher damage: ${IR.nuke ? Math.round(100-100*Math.max(0,IR.nuke.hp)/IR.nuke.hp0) : 0}%.`,2.4); }
+    else if (TANKS)
       endMission(false,'Shot down over the column',`The column carries its own air defence: a SAM launcher in the middle that reaches 9 km and two AAA guns that reach 3.5 km. Designate the SAM with T and kill it first with a laser missile from 6 to 10 km, then pick off the tanks from outside the guns' reach, and pop flares the moment MISSILE flashes. Tanks destroyed: ${raidN()-raidLeft()} of ${raidN()}.`,2.4);
     else if (RECON)
       endMission(false,'Shot down with the film',`A recon jet lives on speed and height above the ground. Fly below ${REC_MASK} m and the SAM radars cannot see you; the AAA at each site still reaches 3.5 km, so come in fast, pass straight over, and leave. Once the JF-17s scramble, stay low, keep the speed up and pop flares the moment MISSILE flashes. Sites photographed: ${S.photos} of ${REC_SITES.length}.`,2.4);
@@ -4386,10 +4730,16 @@ function updateEnemies(dt){
     else if (e.type.drone){ _d.copy(e.fwd).applyAxisAngle(UP,0.1); }      // drones fly a slow, steady left orbit
     else if (tg.alive){
       const behind = e.fwd.dot(_a) < -0.4*dist && dist<2200;
-      const threat = missiles.some(m=>m.target===e && m.p.distanceTo(e.p)<3500);
+      const smart = LADAKH && e.type===FOES.j20;   // Ladakh: the J-20 pilots see your missiles coming earlier and break harder
+      const thr = missiles.find(m=>m.target===e && m.p.distanceTo(e.p)<(smart ? 6500 : 3500));
+      const threat = !!thr;
+      if (smart && thr && !thr.brkSeen){ thr.brkSeen=true; S.msg={text:'J-20 BREAKING · DEFENDING AGAINST YOUR MISSILE', col:AMB, t:1.8}; }
       if (threat || behind){
         const t=S.time*0.9+e.seed; _h.crossVectors(e.fwd,UP).normalize();
-        _d.copy(e.fwd).addScaledVector(_h, Math.sin(t)>0 ? 1.6 : -1.6); _d.y+=Math.cos(t*1.3)*0.5;
+        if (smart && thr){   // a hard break across the missile's path (beam it), with a dive, instead of a lazy weave
+          const side=(_h.x*(thr.p.x-e.p.x)+_h.y*(thr.p.y-e.p.y)+_h.z*(thr.p.z-e.p.z))>0 ? -1 : 1;
+          _d.copy(e.fwd).addScaledVector(_h, side*2.8); _d.y-=0.45;
+        } else { _d.copy(e.fwd).addScaledVector(_h, Math.sin(t)>0 ? 1.6 : -1.6); _d.y+=Math.cos(t*1.3)*0.5; }
       } else {
         _d.copy(TP).addScaledVector(TV, clamp(dist/700,0,2.5)*0.6).sub(e.p);
       }
@@ -4404,8 +4754,9 @@ function updateEnemies(dt){
     else if (e.p.z<-16000) _d.z+=0.8;
     if (Math.abs(e.p.x)>15000) _d.x-=Math.sign(e.p.x)*0.8;
     if (e.p.z>15000) _d.z-=0.8;
+    if (e.toT>0){ e.toT-=dt; _d.copy(e.fwd); _d.y=0.32; }   // just off the runway: climb out straight ahead first
     _d.normalize(); _d.y=clamp(_d.y,-0.55,0.7); _d.normalize();
-    turnToward(e.fwd,_d,e.turn*dt);
+    turnToward(e.fwd,_d,e.turn*DIFF.enemyTurn*(e.ai ? e.ai.turn : 1)*dt);   // difficulty and per-type AI scale the turn
     const h0=Math.atan2(_p.x,-_p.z), h1=Math.atan2(e.fwd.x,-e.fwd.z);
     let dh=h1-h0; if (dh>Math.PI) dh-=2*Math.PI; if (dh<-Math.PI) dh+=2*Math.PI;
     e.bank=approach(e.bank, clamp(dh/Math.max(dt,1e-4)*3,-1.35,1.35), 2.5*dt);
@@ -4413,7 +4764,7 @@ function updateEnemies(dt){
     e.vel.copy(e.fwd).multiplyScalar(e.speed); e.p.addScaledVector(e.vel,dt);
     e.m.position.copy(e.p); orient(e.m,e.fwd,e.bank);
     if (e.p.y<groundAt(e.p.x,e.p.z)+15){ killEnemy(e,'crash'); continue; }
-    if (!tg.alive || state!=='fly' || e.type.drone || e.cap) continue;
+    if (!tg.alive || state!=='fly' || e.type.drone || e.cap || e.toT>0) continue;
     if (tg.ref===FLEET_SHIP || tg.ref===FLEET_EXIT) continue;   // strike jets carry anti-ship missiles, fired in updateFleet
     // weapons
     _a.copy(TP).sub(e.p);
@@ -4422,13 +4773,14 @@ function updateEnemies(dt){
     // close in: the heat seeker (needs the target nearer the nose); further out: the radar missile, up to the radar's range
     const irK=e.type.ir, rdK=e.type.rdr;
     const tsf = tg.ref==='player' && S.ac.stealth ? S.ac.stealth : 1;   // a stealthy target (AMCA) shrinks the bandit's radar range
-    const mk = (irK && dist<AAM[irK].lock*0.9 && dot>Math.cos(AAM[irK].cone*Math.PI/180*0.6)) ? irK
-             : (rdK && dist<Math.min(e.type.range, AAM[rdK].lock*0.85)*tsf && dot>0.93) ? rdK : null;
+    const rk = e.ai ? e.ai.mslRange : 1;   // per-type AI: how far out it is willing to shoot
+    const mk = (irK && dist<AAM[irK].lock*0.9*Math.min(1,rk) && dot>Math.cos(AAM[irK].cone*Math.PI/180*0.6)) ? irK
+             : (rdK && dist<Math.min(e.type.range*rk, AAM[rdK].lock*0.85)*tsf && dot>0.93) ? rdK : null;
     if (mk && dist>900 && e.fireCd<=0 && missiles.filter(m=>m.own==='e').length<2){
       const mt=AAM[mk];
       if (tg.ref && tg.ref.remote) mpFireMsl({p:e.p.clone().addScaledVector(e.fwd,12), v:e.vel.clone(), mtKey:mk}, tg.ref, true);   // flown on the teammate's screen
       else { const m=spawnMissile(e.p.clone().addScaledVector(e.fwd,12), e.vel.clone(), tg.ref, 'e'); m.mt=mt; m.maxLife=mt.life; m.turnK=AI_TURN; }
-      e.fireCd=e.type.cd-Math.min(4,S.wave)+Math.random()*4;
+      e.fireCd=(e.type.cd-Math.min(4,S.wave)+Math.random()*4)*DIFF.enemyFireDelay/(e.ai ? e.ai.aggr : 1);
       S.msg = tg.ref==='player' ? {text:`MISSILE LAUNCH · ${e.type.name} · ${mt.name}`, col:RED, t:1.8} : {text:`${tg.name} · ${mt.name} INBOUND, DEFENDING`, col:AMB, t:1.8};
     }
     if (tg.ref==='player' && dist<1100 && dot>0.975){
@@ -4464,7 +4816,8 @@ function updateMissiles(dt){
     let tg=tgtPV(m.target);
     if (tg && isP && !m.flareChk && m.p.distanceTo(tg.p)<1800){
       m.flareChk=true; const e=m.target;
-      if (e.flares>0 && Math.random()<(0.2+0.04*S.wave)*(mt?mt.flare:1)){
+      const smartF = LADAKH && e.type===FOES.j20 ? 0.25 : 0;   // Ladakh: the J-20s time their flares better
+      if (e.flares>0 && Math.random()<((0.2+0.04*S.wave)*(mt?mt.flare:1)+smartF)*DIFF.enemyFlareSkill*(e.ai ? e.ai.flare : 1)){
         e.flares--; popFlares(e.p,e.fwd,null,e.vel||null); m.target=null; tg=null;
         S.msg={text:'BANDIT FLARED', col:AMB, t:1.6};
       }
@@ -4510,7 +4863,7 @@ function detonate(m,how){
   }
   m.dead=true; scene.remove(m.mesh); m.trail.fade=2;
   spawnExplosion(m.p,false);
-  if (m.agm){ if (how!=='timeout') bombImpact({p:m.p.clone(), v:m.v.clone(), agm:true, pipMine:isTouch}); else if (isTouch) S.banner={text:'MISSED', col:AMB, t:2.2}; return; }   // scored like a bomb hit
+  if (m.agm){ const w=m.own==='w'; if (how!=='timeout') bombImpact({p:m.p.clone(), v:m.v.clone(), agm:true, pipMine:isTouch && !w, own:w ? 'w' : undefined, by:m.by}); else if (isTouch && !w) S.banner={text:'MISSED', col:AMB, t:2.2}; return; }   // scored like a bomb hit (a wingman's laser missile too)
   let label='MISSED', col=AMB;
   if (m.mpFrom && MP.room){   // a missile another pilot fired at us: tell them how it ended
     if (how==='hit'){ MP.lastBy=m.mpFrom; MP.lastByT=S.time; }
@@ -4615,7 +4968,7 @@ function dropFlares(){
     const D=m.p.distanceTo(S.pos);
     if (D>6000){ far++; return; }
     const base = m.sam ? 0.55 : m.mt ? (m.mt.seeker==='RADAR' ? 0.5 : clamp(0.7*m.mt.flare,0.4,0.9)) : 0.65;
-    const p = clamp(base*(D<3000 ? 1 : 0.65) + (S.nz>4 ? 0.15 : 0), 0.2, 0.95);
+    const p = clamp((base*(D<3000 ? 1 : 0.65) + (S.nz>4 ? 0.15 : 0))*DIFF.playerDecoy, 0.15, 0.97);
     if (Math.random()<p){ m.target=null; decoyed++; } else tracking++;
   });
   S.msg = decoyed && !tracking ? {text:decoyed>1?'MISSILES DECOYED':'MISSILE DECOYED', col:HUD, t:1.6}
@@ -4644,6 +4997,7 @@ function updateDogfight(dt){
   updateLock(dt);
   fireGun(dt);
   updateEnemies(dt);
+  updateWrecks(dt);
   updateMissiles(dt);
   updateBullets(dt);
   if (S.hitFlash>0) S.hitFlash=Math.max(0,S.hitFlash-dt);
@@ -4656,6 +5010,7 @@ const MP_MSL=12, MP_GUN=5000, MP_FLARES=40;
 const MP_GUN_LIFE=3.0, MP_GUN_RANGE=3500, MP_GUN_HIT=12;   // shells live 3 s (about 3.5 km), cue and assist out to 3.5 km, a slightly bigger hit zone on other pilots
 function loadout(){ const L=loadout0(); if (MP.on) L.msl=MP_MSL; return L; }
 function loadout0(){ const A=S.ac, agm=(mode==='raid'||(mode==='training' && LESSONS[prefs.lesson].weapon==='precision')) ? 2 : 0;   // the Kargil strike: plain bombs only
+  if (RAIL){ const L=irCfg().loadouts[prefs.plane]; if (L) return {bombs:L.bombs, msl:L.msl, agm:L.agm}; }   // Iron Rail: from the config
   if (LADAKH) return {bombs:A.bombs, msl:6, agm};   // the Ladakh intercept: the Tejas Mk1A gets six Astras for four J-20s
   if (TANKER) return {bombs:4, msl:2, agm:4};    // the deep strike
   if (BRIDGE) return {bombs:4, msl:2, agm:4};
@@ -4666,7 +5021,7 @@ function loadout0(){ const A=S.ac, agm=(mode==='raid'||(mode==='training' && LES
   if (PRECISE) return {bombs:2, msl:2, agm:4};   // the Mirage: four laser-guided missiles, two bombs, two air-to-air missiles
   return mode==='raid' ? {bombs:Math.max(6,A.bombs), msl:Math.max(2,Math.min(4,A.msl)), agm} : {bombs:A.bombs, msl:A.msl, agm}; }
 function reset(){
-  const st = AWACS ? AW_START : SWARM ? SWARM_START : TANKS ? TANK_START : RECON ? REC_START : CSAR ? CSAR_START : FLEET ? FLEET_START : TANKER ? TANKER_START : ESCORT ? ESCORT_START : SEAD ? SEAD_START : DOGN ? DOGN_START : plainRaid() ? BASE_RAID_START : mode==='raid' ? RAID_START : WORLD==='pune' ? PUNE_START : WORLD==='ladakh' ? LADAKH_START : WORLD==='jungle' ? JUN_START : START;
+  const st = RAIL ? IR_START : AWACS ? AW_START : SWARM ? SWARM_START : TANKS ? TANK_START : RECON ? REC_START : CSAR ? CSAR_START : FLEET ? FLEET_START : TANKER ? TANKER_START : ESCORT ? ESCORT_START : SEAD ? SEAD_START : DOGN ? DOGN_START : plainRaid() ? BASE_RAID_START : mode==='raid' ? RAID_START : WORLD==='pune' ? PUNE_START : WORLD==='ladakh' ? LADAKH_START : WORLD==='jungle' ? JUN_START : START;
   S.pos.set(st.x,st.y,st.z); S.q.setFromAxisAngle(XA,0.045); S.vel.set(0,0,-START.speed);
   const A=S.ac, LO=loadout();
   Object.assign(S,{maxB:LO.bombs,maxM:LO.msl,samTrack:false,locMsg:false,td:null,sol:null,agm:LO.agm,maxA:LO.agm,lastAgm:-9});
@@ -4676,10 +5031,10 @@ function reset(){
   LOC_OBJS.forEach(o=>{ o.visible=!MP.on; });   // multiplayer: no LoC, an open field
   if (NAVAL && plane) navalStart();   // on the carrier's deck, ready for the ski-jump launch
   S.f16T = PRECISE ? 25+Math.random()*110 : -1;   // the precision strike's F-16 turns up at a random moment
-  S.f16T2=-1; S.precT=PREC_TIME; S.j10In=false; S.nfIn=false; S.nfT=0;   // second F-16 and time limit (precision), late J-10C (dogfight), night fighter (bridge)
+  S.f16T2=-1; S.precT=PREC_TIME; S.raidT=RAID_TIME; S.j10In=false; S.nfIn=false; S.nfT=0;   // second F-16 and time limit (precision), late J-10C (dogfight), night fighter (bridge)
   bombs.forEach(b=>scene.remove(b.m)); bombs.length=0;
   effects.forEach(e=>{scene.remove(e.m); e.m.material.dispose();}); effects.length=0;
-  enemies.forEach(e=>scene.remove(e.m)); enemies.length=0;
+  enemies.forEach(e=>scene.remove(e.m)); enemies.length=0; wrecks.length=0; S.smk=0;
   missiles.forEach(m=>scene.remove(m.mesh)); missiles.length=0;
   trails.forEach(killTrail); trails.length=0; clearVapour();
   bullets.length=0; drawTracers();
@@ -4687,11 +5042,12 @@ function reset(){
   tgtMeshIntact.visible=true; tgtMeshWreck.visible=false; aaGuns.forEach(a=>{ a.g.visible=true; a.burst=a.phase; }); secondaries.length=0; S.aaFiring=false; S.samCd=6; S.samIdx=0;
   RAID.targets.forEach(t=>{ t.alive=true; t.intact.visible=true; t.wreck.visible=false; t.extras.forEach(o=>{ o.visible=true; }); });
   RAID.ad.forEach((a,i)=>{ a.alive=true; a.g.visible=true; a.wreck.visible=false; a.cd=3+i*1.5; a.burst=a.phase; a.track=false;
-    if (a.mob){ a.seen=false; a.cyc=a.cyc0; a.wreck.position.set(0,0,0); seadPlace(a,a.ang0); } });
+    if (a.mob){ a.seen=false; a.cyc=a.cyc0; a.reloc=0; a.moving=false; a.wreck.position.set(0,0,0); seadPlace(a,a.ang0); } });
   RCP = plainRaid() ? 1 : 0;   // the base raid starts at checkpoint 1: the fighters
   spawnWingmen(); escortReset(); tankerReset(); convoyReset(); illumReset(); heloReset(); if (TANKS) tankReset();
   if (SWARM && SEA) SEA.ad.forEach(a=>{ a.g.visible=false; a.wreck.visible=false; });   // the night swarm: a friendly coast, no port guns
   awacsReset();
+  S.rwrLvl=0; if (RAIL) irReset();   // Iron Rail: the train back at its start, nothing designated until it is found
   if (AWACS && PUN){ hideRaidSet(PUN); hideRaidSet(PUN.tank); PUN.chute.visible=false; }   // Punjab without the rescue's guns or the tank column
   Object.assign(S,{fuel: TANKER ? TANKER_FUEL0 : 0, contact:false, rtb:false, bingo:false, autoRef:false, leaks:0, obs:null, obsT:3, cvHits:0, asmDown:0, photos:0, photoFlash:0});
   REC_SITES.forEach(s=>{ s.done=false; }); REC_CAM=null;
@@ -4716,7 +5072,7 @@ function crash(){
   endMission(false,'Hit the terrain','Ridge tops here reach well above 5,000 m. Watch the radar altitude and pull up the moment you see the PULL UP cue.',2.2);
 }
 // ---------- stars and rank: each mission gives up to 3 stars, kept as your best; the total sets your rank
-const STAR_MODES=['strike','precision','dogfight','raid','naval','ladakh','sead','escort','tanker','bridge','drones','fleet','csar','recon','tanks','swarm','awacs'];
+const STAR_MODES=['strike','precision','dogfight','raid','naval','ladakh','sead','escort','tanker','bridge','drones','fleet','csar','recon','tanks','swarm','awacs','ironrail'];
 const RANKS=[[0,'Pilot Officer'],[3,'Flying Officer'],[8,'Flight Lieutenant'],[15,'Squadron Leader'],[24,'Wing Commander'],[34,'Group Captain'],[45,'Air Commodore']];
 const BEST={};   // best stars per mission
 try { const d=JSON.parse(localStorage.getItem('thinair.stars')||'null'); if (d && typeof d==='object') STAR_MODES.forEach(k=>{ const v=Math.floor(+d[k]); if (v>=1 && v<=3) BEST[k]=v; }); } catch (e) {}
@@ -4733,9 +5089,11 @@ function paintStars(){
     const k=b.dataset.modeOpt; if (!STAR_MODES.includes(k)) return;
     const head=b.querySelector('b'); let s=head.querySelector('.stars');
     if (!s){ s=document.createElement('span'); s.className='stars'; head.appendChild(s); }
-    s.textContent=starStr(BEST[k]||0); s.classList.toggle('none',!BEST[k]);
+    s.textContent=starStr(BEST[k]||0); s.classList.toggle('none',!BEST[k]); b.classList.toggle('won',!!BEST[k]);
   });
   const n=starTotal(), i=rankOf(n), nx=RANKS[i+1];
+  { const done=STAR_MODES.filter(k=>BEST[k]).length, N=STAR_MODES.length;   // mission step: how far through the campaign you are
+    $('mProgTxt').innerHTML=`<b>${done}</b> of ${N} missions complete · <b>${n}</b> of ${N*3} ★`; $('mProgBar').style.width=Math.round(100*done/N)+'%'; }
   $('rankLine').innerHTML=`<b>${RANKS[i][1]}</b> · ${n} of ${STAR_MODES.length*3} ★${nx ? ` · ${nx[0]-n} more for ${nx[1]}` : ' · the highest rank'}`;
 }
 function showStars(){
@@ -4751,6 +5109,19 @@ function showStars(){
   es.hidden=false; paintStars();
 }
 function fmtTime(t){ const s=Math.floor(t); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
+// lay the briefing out for reading: the first sentence as a lead line, the rest in short paragraphs, and the sentence
+// that lists what the jet carries in its own "Loadout" box at the end
+function briefFormat(){
+  const el=$('briefBody'), raw=String(el.textContent||'').trim(); if (!raw) return;
+  const S0=raw.replace(/([.!?])\s+(?=[A-Z])/g,'$1\u0001').split('\u0001').filter(Boolean);
+  if (S0.length<3) return;
+  let li=-1; S0.forEach((s,i)=>{ if (/\b(carries|carry)\b/.test(s)) li=i; });
+  const load=li>0 ? S0.splice(li,1)[0] : null, lead=S0.shift(), paras=[];
+  for (let i=0;i<S0.length;i+=3) paras.push(S0.slice(i,i+3).join(' '));
+  el.textContent='';
+  const add=(cls,text,label)=>{ const p=document.createElement('p'); if (cls) p.className=cls; if (label){ const b=document.createElement('b'); b.textContent=label; p.appendChild(b); } p.appendChild(document.createTextNode(text)); el.appendChild(p); };
+  add('blead',lead); paras.forEach(t=>add('',t)); if (load) add('bload',load,'Loadout');
+}
 function setFacts(id, rows){ $(id).innerHTML = rows.map(([v,l])=>`<div class="fact"><b>${v}</b><span>${l}</span></div>`).join(''); }
 function showEnd(){
   setState('ended');
@@ -4766,7 +5137,10 @@ function showEnd(){
     setFacts('endFacts',[[fmtTime(S.time),'Flight time'],[String(S.ac.bombs-S.bombs),'Bombs used'],
       [S.minLoc<0 ? 'Crossed' : (S.minLoc/1000).toFixed(1)+' km','Closest to LoC'],[avg,'Average FPS']]);
   } else if (mode==='raid'){
-    if (RECON) setFacts('endFacts',[[fmtTime(S.time),'Flight time'],[`${S.photos} / ${REC_SITES.length}`,'Sites photographed'],[String(FLARES-S.flares),'Flares used'],[Math.round(S.hp)+'%','Hull']]);
+    if (RAIL){ const sc=irScore(endInfo.win), w=wingmen[0];
+      setFacts('endFacts',[[fmtTime(S.time),'Time taken'],[irKillsTxt(),'Kills by type'],[`${IR.samsKilled} / ${IR.ad.length}`,'SAM wagons destroyed'],
+        [w ? (w.alive ? 'Yes' : 'No') : '–','Wingman survived'],[`${Math.round(100-S.hp)}%`,'Damage taken'],[endInfo.win ? `${sc.rank} · ${sc.total}` : String(sc.total),endInfo.win ? 'Rank · score' : 'Score']]); }
+    else if (RECON) setFacts('endFacts',[[fmtTime(S.time),'Flight time'],[`${S.photos} / ${REC_SITES.length}`,'Sites photographed'],[String(FLARES-S.flares),'Flares used'],[Math.round(S.hp)+'%','Hull']]);
     else setFacts('endFacts',[[fmtTime(S.time),'Flight time'],CSAR ? [HELO && HELO.pilot && HELO.alive ? 'Yes' : 'No','Pilot recovered'] : [`${raidN()-raidLeft()} / ${raidN()}`,NAVAL?'Godowns destroyed':PRECISE?'Camps destroyed':SEAD?'Radars + launchers':TANKER?'Depot targets hit':BRIDGE?'Spans dropped':TANKS?'Tanks destroyed':'Targets destroyed'],
       BRIDGE ? [`${CONVOY.trucks.filter(t=>!t.alive).length} / ${CONVOY.trucks.length}`,'Lorries destroyed'] : [`${S.kills} / ${PRECISE?2:(CSAR||TANKER)?3:BRIDGE?1:2}`,'Fighters downed'],[`${RAID.ad.filter(a=>!a.alive).length} / ${RAID.ad.length}`,NAVAL?'AAA guns hit':'Air defences hit']]);
   } else {
@@ -4779,7 +5153,7 @@ function showEnd(){
   }
   showStars();
   // after a successful strike, offer the next mission straight away
-  const NEXT={strike:'precision', precision:'dogfight', dogfight:'raid', raid:'naval', naval:'ladakh', ladakh:'sead', sead:'escort', escort:'tanker', tanker:'bridge', bridge:'drones', drones:'fleet', fleet:'csar', csar:'recon', recon:'tanks', tanks:'swarm', swarm:'awacs'}, NAMES={swarm:'Night drone swarm', awacs:'AWACS defence',fleet:'Fleet defence', csar:'Rescue cover', recon:'Recon photo run', tanks:'Tank column strike',escort:'Escort transport', tanker:'Tanker refuel strike', bridge:'Night bridge strike', drones:'Drone hunt',precision:'Precision strike', dogfight:'Dogfight', raid:'Base raid', naval:'Naval strike', ladakh:'Ladakh intercept', sead:'SEAD radar hunt'};
+  const NEXT={strike:'precision', precision:'dogfight', dogfight:'raid', raid:'naval', naval:'ladakh', ladakh:'sead', sead:'escort', escort:'tanker', tanker:'bridge', bridge:'drones', drones:'fleet', fleet:'csar', csar:'recon', recon:'tanks', tanks:'swarm', swarm:'awacs', awacs:'ironrail'}, NAMES={ironrail:'Operation Iron Rail', swarm:'Night drone swarm', awacs:'AWACS defence',fleet:'Fleet defence', csar:'Rescue cover', recon:'Recon photo run', tanks:'Tank column strike',escort:'Escort transport', tanker:'Tanker refuel strike', bridge:'Night bridge strike', drones:'Drone hunt',precision:'Precision strike', dogfight:'Dogfight', raid:'Base raid', naval:'Naval strike', ladakh:'Ladakh intercept', sead:'SEAD radar hunt'};
   const nx=$('next'), nextMode=endInfo.win && !MP.on ? NEXT[prefs.mode] : undefined, chain=!!nextMode;
   nx.hidden=!chain;
   if (chain){ nx.dataset.next=nextMode; nx.textContent=`Next mission: ${NAMES[nextMode]} ›`; }
@@ -4799,7 +5173,9 @@ function startSortie(){
     else if (ESCORT){ S.waveT=15; S.msg={text:`ESCORT · C-130J TO THE AIRSTRIP · ${(Math.hypot(HERC.p.x-DBO.x,HERC.p.z-DBO.rw0)/1000).toFixed(0)} KM`, col:AMB, t:4}; }
     else spawnWave(1);
   }
-  if (PRECISE){ enemies.forEach(e=>scene.remove(e.m)); enemies.length=0; S.wave=1; S.msg={text:'THREE CAMPS · TIGER HILL · TOLOLING · MUNTHO DHALO', col:AMB, t:4}; }
+  if (RAIL){ enemies.forEach(e=>scene.remove(e.m)); enemies.length=0; S.wave=0; S.msg={text:'OPERATION IRON RAIL · CROSS THE BORDER · FIND THE TRAIN · KILL THE LAUNCHER', col:AMB, t:5};
+    speak('control','Shadow flight, the missile train is moving north-west toward its launch point. Cross the border, find it, and destroy the launcher wagon.'); }
+  else if (PRECISE){ enemies.forEach(e=>scene.remove(e.m)); enemies.length=0; S.wave=1; S.msg={text:'THREE CAMPS · TIGER HILL · TOLOLING · MUNTHO DHALO', col:AMB, t:4}; }
   else if (RECON){ enemies.forEach(e=>scene.remove(e.m)); enemies.length=0; S.wave=1; S.msg={text:`RECON · 4 SITES TO PHOTOGRAPH · NO WEAPONS · STAY BELOW ${REC_MASK} M TO HIDE FROM SAMS`, col:AMB, t:4.5}; }
   else if (CSAR){ enemies.forEach(e=>scene.remove(e.m)); enemies.length=0; S.wave=1; S.msg={text:'RESCUE COVER · VIPER IS INBOUND TO THE HOLDING POINT · CLEAR THE GUNS', col:AMB, t:4.5}; }
   else if (BRIDGE){ enemies.forEach(e=>scene.remove(e.m)); enemies.length=0; S.wave=1; S.msg={text:`NIGHT STRIKE · DROP THE BRIDGE BEFORE THE CONVOY CROSSES · ${(Math.hypot(S.pos.x-BRG_X,S.pos.z-BRG_RZ)/1000).toFixed(0)} KM`, col:AMB, t:4.5}; }
@@ -4819,7 +5195,12 @@ function backToHangar(){
   applyPrefs(); setState('brief'); $('brief').hidden=false; setStep('brief');   // back on the briefing; Back steps out to change the jet or mission
 }
 function pauseToggle(){
-  if (state==='fly'){ setState('paused'); $('pauseNote').textContent = MP.on ? 'Press P or Esc to carry on. The others keep flying; you vanish from their radar until you resume.' : 'Press P or Esc to carry on.'; $('pause').hidden=false; $('resume').focus(); }
+  if (state==='fly'){ setState('paused'); $('pauseNote').textContent = MP.on ? 'Press P or Esc to carry on. The others keep flying; you vanish from their radar until you resume.'
+      : RAIL ? 'Wingman orders: 1 engage my target, 2 cover me, 3 attack the SAMs, 4 rejoin. Press P or Esc to carry on.'
+      : 'Press P or Esc to carry on.';
+    { const ul=$('pauseObj'), O=missionObjectives()||[]; ul.textContent=''; ul.hidden=!O.length;   // the objectives log, for every mission
+      O.forEach(([t,done,kind])=>{ const li=document.createElement('li'); li.className=done ? 'done' : kind==='rule' ? 'rule' : kind ? 'opt' : 'main'; li.textContent=t; ul.appendChild(li); }); }
+    $('pause').hidden=false; $('resume').focus(); }
   else if (state==='paused'){ $('pause').hidden=true; if (document.activeElement) document.activeElement.blur(); setState('fly'); tilt.cal=true; }
 }
 // ---------- take-off intro: scripted roll and climb-out at Srinagar with radio calls, then control passes to the player
@@ -4835,7 +5216,8 @@ const SPK={ instr:{label:'Instructor', col:'#c9a7ff', vi:0, pitch:1.0, rate:1.0}
             crew:{label:'Crew chief · walkie-talkie', col:'#ffb547', vi:0, pitch:1.0, rate:1.05},
             pilot:{label:'', col:'#8dffb0', vi:1, pitch:0.9, rate:1.1},
             tower:{label:'Srinagar Tower', col:'#9cc7ff', vi:2, pitch:1.15, rate:1.0},
-            control:{label:'Control', col:'#ffd27a', vi:3, pitch:0.8, rate:1.0} };
+            control:{label:'Control', col:'#ffd27a', vi:3, pitch:0.8, rate:1.0},
+            wing:{label:'Wingman', col:'#8dffb0', vi:2, pitch:1.05, rate:1.15} };
 function squelch(){
   try {
     if (!actx) return;
@@ -5013,6 +5395,7 @@ function musicUI(){ const on=$('musicOn').checked, b=$('openMusic');
 try { $('musicOn').checked = localStorage.getItem('thinair.music')!=='0'; } catch (e) {}
 musicUI();
 $('musicOn').addEventListener('change',()=>{ try { localStorage.setItem('thinair.music',$('musicOn').checked?'1':'0'); } catch (e) {} musicUI(); musicSync(); });
+$('diffSel').addEventListener('change',()=>{ const v=$('diffSel').value; prefs.diff=['easy','normal','hard'].includes(v) ? v : 'normal'; applyPrefs(); });
 $('openMusic').addEventListener('click',()=>{ $('musicOn').checked=!$('musicOn').checked; $('musicOn').dispatchEvent(new Event('change')); });
 // browsers only allow sound after the first tap or key press, so start the music then
 ['pointerdown','keydown','touchend'].forEach(ev=>document.addEventListener(ev,function un(){
@@ -5056,8 +5439,17 @@ function updateEngine(){
     } catch (e) {}
     ALARM.next = t + dur + (last ? iv*2.5 : iv*0.6); ALARM.n++;
   } else if (md===Infinity){ ALARM.n=0; }
+  // radar warning receiver (Iron Rail SAM wagons): a slow low tone while a SAM radar is acquiring you, a fast high one once it is locked
+  const rl = md===Infinity && state==='fly' && S.alive && $('soundOn').checked && !document.hidden ? (S.rwrLvl||0) : 0;
+  if (rl>0 && t>=RWRS.next){
+    const f=rl===2 ? 1250 : 700, dur=rl===2 ? 0.06 : 0.16;
+    try { const o=actx.createOscillator(), g=actx.createGain(); o.type='sine'; o.frequency.value=f;
+      g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(0.05,t+0.008); g.gain.setValueAtTime(0.05,t+dur-0.01); g.gain.linearRampToValueAtTime(0.0001,t+dur);
+      o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t+dur+0.02); } catch (e) {}
+    RWRS.next=t+(rl===2 ? 0.14 : 0.85);
+  }
 }
-const ALARM={next:0, n:0}, GUNSND={want:false, g:null};
+const ALARM={next:0, n:0}, GUNSND={want:false, g:null}, RWRS={next:0};
 function updateStreaks(){
   const live=(state==='fly'||state==='ending'||state==='paused') && S.alive;
   const a=live ? clamp((S.vel.length()-150)/300,0,1)*0.45 : 0;
@@ -5454,13 +5846,14 @@ function buildHangar(){
 // each mission's theatre (terrain), time of day and tags
 const MISSION_ART={
   strike:['mount',0,['Ground attack','Kargil']], precision:['mount',0,['Laser weapons','Kargil']], dogfight:['desert',1,['Air combat','Night']],
-  raid:['mount',0,['Strike + air','Wingmen']], naval:['sea',0,['Carrier','Ground attack']], ladakh:['snow',0,['Stealth bandits','Ladakh']],
+  raid:['mount',0,['Strike + air','Solo · 8 min']], naval:['sea',0,['Carrier','Ground attack']], ladakh:['snow',0,['Stealth bandits','Ladakh']],
   sead:['desert',1,['SAM hunt','Night']], escort:['snow',0,['Escort','Ladakh']], tanker:['desert',0,['Air refuel','Deep strike']],
   bridge:['mount',1,['Ground attack','Night']], drones:['jungle',0,['Drones','Arunachal']], fleet:['sea',0,['Anti-ship','Carrier']],
   csar:['plains',0,['Rescue','Punjab']], recon:['mount',0,['No weapons','Photo run']], tanks:['plains',0,['Armour','Punjab']],
   swarm:['sea',1,['Drones','Night']], awacs:['plains',0,['Escort','Punjab']], training:['plains',0,['Lessons']],
   versus:['city',0,['Live','Free for all']], coop:['mount',0,['Live','Co-op']],
-  _single:['mount',0,['17 missions']], _multi:['city',1,['Live','Voice']], _train:['plains',0,['Step by step']] };
+  ironrail:['desert',0,['Story','Train hunt']],
+  _single:['mount',0,['18 missions']], _multi:['city',1,['Live','Voice']], _train:['plains',0,['Step by step']] };
 const ART_PAL={   // sky top, sky bottom, far, mid, near
   mount:['#6fa3d0','#d8e7f2','#a5b6c8','#71859a','#3c4a58'], desert:['#e9a865','#f6dfb8','#dcab72','#c0844a','#8a5a30'],
   sea:['#79b6e2','#dcedf9','#9db7c8','#2f6f99','#1d4e72'], snow:['#9cc4e6','#eef6fb','#e3ebf2','#b6c5d4','#7d8ea0'],
@@ -5504,8 +5897,8 @@ function artSVG(key,idx){
     `<rect width="300" height="120" fill="url(#${id})"/>${sky}${jet}${land}</svg>`;
 }
 // single-player missions ranked from easiest (1) to hardest (17); the cards are in this order in the hangar
-const MISSION_RANK=['strike','naval','drones','dogfight','precision','bridge','tanks','recon','tanker','fleet','csar','swarm','escort','sead','awacs','raid','ladakh'];
-const DIFF_TIERS=[{n:'Easy',c:'d1',to:3},{n:'Medium',c:'d2',to:8},{n:'Hard',c:'d3',to:13},{n:'Expert',c:'d4',to:17}];
+const MISSION_RANK=['strike','naval','drones','dogfight','precision','bridge','tanks','recon','tanker','fleet','csar','swarm','escort','sead','awacs','raid','ladakh','ironrail'];
+const DIFF_TIERS=[{n:'Easy',c:'d1',to:3},{n:'Medium',c:'d2',to:8},{n:'Hard',c:'d3',to:13},{n:'Expert',c:'d4',to:18}];
 function missionDiff(key){ const r=MISSION_RANK.indexOf(key)+1; if (!r) return null;
   const k=DIFF_TIERS.findIndex(t=>r<=t.to); return {rank:r, tier:k+1, name:DIFF_TIERS[k].n, cls:DIFF_TIERS[k].c}; }
 function diffBadge(key){ const d=missionDiff(key); if (!d) return '';
@@ -5567,6 +5960,8 @@ function hangarUI(){
   document.querySelectorAll('[data-mode-opt]').forEach((b,i)=>decorate(b,b.dataset.modeOpt));
   document.querySelectorAll('[data-play]').forEach(b=>decorate(b,'_'+b.dataset.play));
   makeCarousel($('modeOpts'),'mode'); makeCarousel($('planeOpts'),'plane'); makeCarousel($('lessonOpts'),'lesson');
+  // the step bar: a step you have already been through is a link back to it
+  $('stepDots').addEventListener('click',e=>{ const sp=e.target.closest('span'); if (sp && sp.classList.contains('done') && state==='brief') setStep(sp.dataset.s); });
   // the Next button takes the card in the middle, even if it was only swiped to
   $('stepNext').addEventListener('click',e=>{
     const s=HSTEP.step, car = s==='mission' ? (playOf(prefs.mode)==='train' ? CARS.lesson : CARS.mode) : s==='plane' ? CARS.plane : null;
@@ -5638,17 +6033,31 @@ function briefPager(){
 }
 // ---------- hangar steps: 1 single player / multiplayer / training, 2 the mission (or game, or lesson), 3 the aircraft
 // (skipped when the mission has only one jet), 4 the briefing and Start
-const HSTEP={step:'play', lastSingle:null, lastMulti:null};
+const HSTEP={step:'play', lastSingle:null, lastMulti:null, filter:'all'};
+// mission filter (single player): All, one difficulty tier, or the missions you have not completed yet
+const MFILTERS=[['all','All'],['1','Easy'],['2','Medium'],['3','Hard'],['4','Expert'],['todo','To do']];
+function filterPass(key,f){ f=f||HSTEP.filter; if (f==='all') return true; if (f==='todo') return !BEST[key]; const d=missionDiff(key); return !!d && String(d.tier)===f; }
+function filterPaint(mine){
+  const box=$('mFilter');
+  if (!box.childElementCount) MFILTERS.forEach(([k,label])=>{ const b=document.createElement('button'); b.type='button'; b.dataset.f=k; b.append(label, document.createElement('em'));
+    b.addEventListener('click',()=>{ HSTEP.filter=k; hangarSync(); carSync(); requestAnimationFrame(carSync); }); box.appendChild(b); });
+  [...box.children].forEach(b=>{ const n=mine.filter(m=>filterPass(m.dataset.modeOpt,b.dataset.f)).length;
+    b.querySelector('em').textContent=String(n); b.disabled=!n; b.setAttribute('aria-pressed',String(b.dataset.f===HSTEP.filter)); });
+}
 const playOf=m=> m==='training' ? 'train' : (m==='versus' || m==='coop') ? 'multi' : 'single';
 const planesShown=()=>[...document.querySelectorAll('[data-plane]')].filter(b=>!b.hidden);
 function hangarSync(){   // called from applyPrefs: which missions belong to the chosen kind of play
   const pl=playOf(prefs.mode);
-  document.querySelectorAll('[data-mode-opt]').forEach(b=>{ b.hidden = playOf(b.dataset.modeOpt)!==pl || pl==='train'; });
+  const all=[...document.querySelectorAll('[data-mode-opt]')], mine=all.filter(b=>playOf(b.dataset.modeOpt)===pl && pl!=='train');
+  if (pl==='single' && !mine.some(b=>filterPass(b.dataset.modeOpt))) HSTEP.filter='all';   // a filter with nothing left to show falls back to All
+  all.forEach(b=>{ b.hidden = !mine.includes(b) || (pl==='single' && !filterPass(b.dataset.modeOpt)); });
+  $('mFilter').hidden = $('mProg').hidden = pl!=='single'; filterPaint(mine);
   document.querySelectorAll('[data-play]').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.play===pl)));
   $('modeLabel').textContent = pl==='multi' ? 'Game' : 'Mission'; $('modeLabel').hidden = pl==='train';
   const pd=document.querySelector('#stepDots [data-s="plane"]'); if (pd) pd.hidden = planesShown().length<=1;
 }
 function setStep(s){
+  if (s==='mission' && playOf(prefs.mode)==='single' && !filterPass(prefs.mode)) HSTEP.filter='all';   // arriving on the list: never hide the mission you have picked
   HSTEP.step=s; $('briefCard').dataset.step=s; $('brief').dataset.step=s; hangarSync();
   const order=['play','mission','plane','brief'], k=order.indexOf(s), pl=playOf(prefs.mode);
   document.querySelectorAll('#stepDots span').forEach(sp=>{ const i=order.indexOf(sp.dataset.s); sp.classList.toggle('on',i===k); sp.classList.toggle('done',i<k); });
@@ -5709,16 +6118,18 @@ function applyPrefs(){
   RECON = !MP.on && prefs.mode==='recon';    // the recon run flies as a raid on the green Kargil map, with cameras instead of weapons
   TANKS = !MP.on && prefs.mode==='tanks';    // the tank column strike runs as a raid on the Punjab map
   DOGN = !MP.on && prefs.mode==='dogfight';  // the solo dogfight flies at night over the Rajasthan desert
-  mode =MP.coop ? 'raid' : MP.on ? 'dogfight' : (NAVAL || PRECISE || SEAD || TANKER || BRIDGE || CSAR || RECON || TANKS) ? 'raid' : (LADAKH || ESCORT || DRONES || FLEET || AWACS) ? 'dogfight' : prefs.mode;
-  setWorld((LADAKH || ESCORT) ? 'ladakh' : SWARM ? 'sea' : DRONES ? 'jungle' : (CSAR || TANKS || AWACS) ? 'punjab' : FLEET ? 'sea' : DOGN ? 'desert' : mode==='dogfight' && prefs.map==='pune' ? 'pune' : NAVAL ? 'sea' : (SEAD || TANKER) ? 'desert' : 'kargil');   // Pune or Kargil: the multiplayer dogfight maps
+  RAIL = !MP.on && prefs.mode==='ironrail';  // Operation Iron Rail runs as a raid on the desert map, by day
+  mode =MP.coop ? 'raid' : MP.on ? 'dogfight' : (NAVAL || PRECISE || SEAD || TANKER || BRIDGE || CSAR || RECON || TANKS || RAIL) ? 'raid' : (LADAKH || ESCORT || DRONES || FLEET || AWACS) ? 'dogfight' : prefs.mode;
+  setWorld((LADAKH || ESCORT) ? 'ladakh' : SWARM ? 'sea' : DRONES ? 'jungle' : (CSAR || TANKS || AWACS) ? 'punjab' : FLEET ? 'sea' : DOGN ? 'desert' : mode==='dogfight' && prefs.map==='pune' ? 'pune' : NAVAL ? 'sea' : (SEAD || TANKER || RAIL) ? 'desert' : 'kargil');   // Pune or Kargil: the multiplayer dogfight maps
   if (DOGN && WORLD!=='desert'){ DOGN=false; setWorld('kargil'); }   // the desert failed to build: fly the dogfight over Kargil by day
   if (NAVAL && WORLD!=='sea'){ NAVAL=false; prefs.mode='raid'; }   // a map failed to build: fall back
-  if ((SEAD || TANKER) && WORLD!=='desert'){ SEAD=TANKER=false; prefs.mode='raid'; setWorld('kargil'); }
+  if ((SEAD || TANKER || RAIL) && WORLD!=='desert'){ SEAD=TANKER=RAIL=false; prefs.mode='raid'; setWorld('kargil'); }
   if (WORLD==='desert' && DES){   // the desert holds two missions' targets: show one set, hide the other
     const on=TANKER ? DES.tnk : DES, off=TANKER ? DES : DES.tnk, b=TANKER ? TNK_SITE : DES_BASE;
     RAID.targets=on.targets; RAID.ad=on.ad; hideRaidSet(off); BASE.x=b.x; BASE.z=b.z;
-    if (DOGN){ hideRaidSet(DES); hideRaidSet(DES.tnk); RAID.targets=[]; RAID.ad=[]; }   // dogfight: an empty desert, no SAM sites or depot
+    if (DOGN || RAIL){ hideRaidSet(DES); hideRaidSet(DES.tnk); RAID.targets=[]; RAID.ad=[]; }   // dogfight: an empty desert, no SAM sites or depot; Iron Rail: only the train
   }
+  irSync();   // Iron Rail: the line, the border, the air base and the train
   if (DRONES && !SWARM && WORLD!=='jungle'){ DRONES=false; prefs.mode='dogfight'; setWorld('kargil'); }   // the jungle map failed to build: fall back
   if (SWARM && WORLD!=='sea'){ SWARM=DRONES=false; DRONE_WAVES=[0,2,3,3]; DRONE_LEAKS=3; prefs.mode='dogfight'; setWorld('kargil'); }
   if (WORLD==='sea' && SEA) SEA.ad.forEach(a=>{ a.g.visible=!SWARM; });   // no port guns on the night swarm: the coast is friendly
@@ -5752,7 +6163,8 @@ function applyPrefs(){
   if (mode==='strike') prefs.plane='mig21';   // mission 1: the MiG-21 with plain bombs
   const dogList = LADAKH ? LADI_PLANES : ESCORT ? LAD_PLANES : AWACS ? AW_PLANES : SWARM ? SWARM_PLANES : DRONES ? ARUN_PLANES : FLEET ? FLEET_PLANES : DOG_PLANES;
   if (mode==='dogfight' && !MP.on && !dogList.includes(prefs.plane)) prefs.plane = LADAKH ? 'tejas' : ESCORT ? 'rafale' : DRONES ? 'su30' : FLEET ? 'mig29' : 'm2k';
-  if (SEAD){ if (!SEAD_PLANES.includes(prefs.plane)) prefs.plane='su30'; }   // SEAD: Su-30MKI or Rafale
+  if (RAIL){ if (!IR_PLANES.includes(prefs.plane)) prefs.plane='rafale'; }   // Iron Rail: Rafale or Su-30MKI, the wingman flies the other
+  else if (SEAD){ if (!SEAD_PLANES.includes(prefs.plane)) prefs.plane='su30'; }   // SEAD: Su-30MKI or Rafale
   else if (TANKER){ if (!TNK_PLANES.includes(prefs.plane)) prefs.plane='su30'; }   // tanker strike: jets the IL-78 refuels
   else if (BRIDGE){ if (!BRG_PLANES.includes(prefs.plane)) prefs.plane='jaguar'; }
   else if (CSAR){ if (!CSAR_PLANES.includes(prefs.plane)) prefs.plane='su30'; }
@@ -5761,14 +6173,14 @@ function applyPrefs(){
   else if (mode==='raid') prefs.plane = NAVAL ? 'mig29' : PRECISE ? 'm2k' : 'su30';   // the raid: three Su-30MKIs; naval: a MiG-29K; precision: a Mirage 2000
   const ffa = MP.on && !MP.coop;   // JF-17, F-16 and J-10C are flyable only in the multiplayer free-for-all
   if (!ffa && PLANES[prefs.plane].mpOnly) prefs.plane='m2k';
-  setTerrainLook(mode==='raid' && !NAVAL && !PRECISE && !SEAD && !TANKER && !CSAR);
+  setTerrainLook(mode==='raid' && !NAVAL && !PRECISE && !SEAD && !TANKER && !CSAR && !RAIL);
   S.ac=PLANES[prefs.plane]; const p=S.ac;
   document.querySelectorAll('[data-mode-opt]').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.modeOpt===prefs.mode)));
   document.querySelectorAll('[data-plane]').forEach(b=>{
-    b.hidden = (!ffa && PLANES[b.dataset.plane].mpOnly) || (mode==='strike' && b.dataset.plane!=='mig21') || (mode==='dogfight' && !MP.on && !dogList.includes(b.dataset.plane)) || (mode==='raid' && (SEAD ? !SEAD_PLANES.includes(b.dataset.plane) : TANKER ? !TNK_PLANES.includes(b.dataset.plane) : BRIDGE ? !BRG_PLANES.includes(b.dataset.plane) : CSAR ? !CSAR_PLANES.includes(b.dataset.plane) : RECON ? !RECON_PLANES.includes(b.dataset.plane) : TANKS ? !TANK_PLANES.includes(b.dataset.plane) : b.dataset.plane!==(NAVAL?'mig29':PRECISE?'m2k':'su30')));
+    b.hidden = (!ffa && PLANES[b.dataset.plane].mpOnly) || (mode==='strike' && b.dataset.plane!=='mig21') || (mode==='dogfight' && !MP.on && !dogList.includes(b.dataset.plane)) || (mode==='raid' && (RAIL ? !IR_PLANES.includes(b.dataset.plane) : SEAD ? !SEAD_PLANES.includes(b.dataset.plane) : TANKER ? !TNK_PLANES.includes(b.dataset.plane) : BRIDGE ? !BRG_PLANES.includes(b.dataset.plane) : CSAR ? !CSAR_PLANES.includes(b.dataset.plane) : RECON ? !RECON_PLANES.includes(b.dataset.plane) : TANKS ? !TANK_PLANES.includes(b.dataset.plane) : b.dataset.plane!==(NAVAL?'mig29':PRECISE?'m2k':'su30')));
     b.setAttribute('aria-pressed', String(b.dataset.plane===prefs.plane));
   });
-  $('acLabel').textContent = MP.coop ? 'Aircraft · Su-30MKI · each player flies one' : MP.on ? 'Aircraft · any jet, including the JF-17, F-16, J-10C, J-20 and F-35A' : mode==='strike' ? 'Aircraft · MiG-21 Bison · plain bombs' : PRECISE ? 'Aircraft · Mirage 2000H · laser-guided weapons' : LADAKH ? 'Aircraft · Tejas Mk1A · AESA radar, Astra Mk1 missiles' : ESCORT ? 'Aircraft · AMCA, Rafale, Su-30MKI, MiG-29, Mirage or Tejas' : AWACS ? 'Aircraft · Su-30MKI, Rafale, Tejas Mk1A, MiG-29 or Mirage 2000' : SWARM ? 'Aircraft · Su-30MKI, Rafale, Tejas Mk1A or MiG-29 · night intercept' : DRONES ? 'Aircraft · Su-30MKI, Rafale, Tejas Mk1A or Mirage 2000' : FLEET ? 'Aircraft · MiG-29K · Indian Navy, carrier-borne' : mode==='dogfight' ? 'Aircraft · Mirage, Tejas or MiG-21' : NAVAL ? 'Aircraft · MiG-29K · Indian Navy, carrier-borne' : SEAD ? 'Aircraft · Su-30MKI or Rafale · flying alone, at night' : TANKER ? 'Aircraft · Su-30MKI, Mirage 2000 or Tejas · probe-equipped' : BRIDGE ? 'Aircraft · Jaguar, Mirage 2000 or Su-30MKI · night strike' : CSAR ? 'Aircraft · Su-30MKI, Rafale, Mirage 2000 or Tejas · rescue cover' : RECON ? 'Aircraft · Tejas Mk1A · camera pod, no weapons' : TANKS ? 'Aircraft · Jaguar, Su-30MKI, Mirage 2000 or Tejas · tank busting' : mode==='raid' ? 'Aircraft · Su-30MKI · you lead a flight of three' : 'Aircraft';
+  $('acLabel').textContent = MP.coop ? 'Aircraft · Su-30MKI · each player flies one' : MP.on ? 'Aircraft · any jet, including the JF-17, F-16, J-10C, J-20 and F-35A' : mode==='strike' ? 'Aircraft · MiG-21 Bison · plain bombs' : PRECISE ? 'Aircraft · Mirage 2000H · laser-guided weapons' : LADAKH ? 'Aircraft · Tejas Mk1A · AESA radar, Astra Mk1 missiles' : ESCORT ? 'Aircraft · AMCA, Rafale, Su-30MKI, MiG-29, Mirage or Tejas' : AWACS ? 'Aircraft · Su-30MKI, Rafale, Tejas Mk1A, MiG-29 or Mirage 2000' : SWARM ? 'Aircraft · Su-30MKI, Rafale, Tejas Mk1A or MiG-29 · night intercept' : DRONES ? 'Aircraft · Su-30MKI, Rafale, Tejas Mk1A or Mirage 2000' : FLEET ? 'Aircraft · MiG-29K · Indian Navy, carrier-borne' : mode==='dogfight' ? 'Aircraft · Mirage, Tejas or MiG-21' : NAVAL ? 'Aircraft · MiG-29K · Indian Navy, carrier-borne' : RAIL ? 'Aircraft · Rafale or Su-30MKI · your wingman flies the other' : SEAD ? 'Aircraft · Su-30MKI or Rafale · flying alone, at night' : TANKER ? 'Aircraft · Su-30MKI, Mirage 2000 or Tejas · probe-equipped' : BRIDGE ? 'Aircraft · Jaguar, Mirage 2000 or Su-30MKI · night strike' : CSAR ? 'Aircraft · Su-30MKI, Rafale, Mirage 2000 or Tejas · rescue cover' : RECON ? 'Aircraft · Tejas Mk1A · camera pod, no weapons' : TANKS ? 'Aircraft · Jaguar, Su-30MKI, Mirage 2000 or Tejas · tank busting' : mode==='raid' ? 'Aircraft · Su-30MKI · you lead a flight of three' : 'Aircraft';
   $('briefCard').dataset.mode=mode; $('briefCard').dataset.mp = MP.on ? '1' : ''; $('briefCard').dataset.map = mode==='dogfight' && !DOGN && !LADAKH && !ESCORT && !DRONES && !FLEET && !AWACS ? '1' : '';
   $('touch').dataset.mode = mode!=='training' ? mode : (LESSONS[prefs.lesson].weapon==='air' ? 'dogfight' : 'strike');
   $('start').textContent = mode==='training' ? 'Start lesson' : 'Start sortie';
@@ -5810,6 +6222,13 @@ function applyPrefs(){
     $('briefBody').textContent=`Everyone in the same room code flies one Su-30MKI in the same raid. Destroy the four key structures: two hardened aircraft shelters, the fuel depot and the command post. A target any of you destroys is gone for everyone, and so are the SAM sites, AAA guns and fighters you knock out, so split the work: one of you takes the SAMs, another hunts the JF-17 and F-16, the rest bomb the base. Your teammates are the green circles with their callsigns. Each jet carries ${LO.bombs} × 250 kg bombs, ${LO.msl} missiles, 2 laser-guided missiles, ${p.gun} gun rounds and ${FLARES} flares. If you are shot down you are back at the start line, re-armed, after 5 seconds. Friends can join a raid already in progress.`;
     setFacts('briefFacts',[[MP.room ? String(MP.room.peers().filter(x=>x.kind==='viewer').length) : '–','Pilots in room'],['4','Targets'],['2 + 3','SAM + AAA'],['2','Bandits']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. BOMB when the pipper sits on a target diamond, MSL once a fighter reads LOCK, hold GUN for close fights, and tap FLR the moment MISSILE flashes.';
+  } else if (RAIL){
+    const LO=loadout(), C=irCfg(), T0=C.train, Sm=C.sam, mins=Math.round(T0.startDistanceKm*1000/(T0.speedKmh/3.6)/60), wk=prefs.plane==='rafale' ? 'Su-30MKI' : 'Rafale', LG=C.loadouts[prefs.plane]||{};
+    $('briefEyebrow').textContent='Thin Air · Operation Iron Rail · Thar desert · what-if scenario';
+    $('briefTitle').textContent='Operation Iron Rail';
+    $('briefBody').textContent=`A train is carrying a mobile missile launcher across the desert on the far side of the border, heading north-west for a launch point at the end of the line. Destroy the launcher wagon before it can fire. The train runs at about ${Math.round(T0.speedKmh)} km/h and is ${T0.startDistanceKm} km from the launch point: about ${mins} minutes. Once it gets there the crew needs ${T0.launchCountdown} seconds to launch; if you kill the locomotive the train stops, but the crew can set up where it stands in ${T0.stoppedCountdown} seconds. Kill the launcher before the train is half-way for a bonus. Cross the border to the north (red posts on the ground, red line on the map): that sets off the enemy air base in the north-west, and three waves of fighters scramble from its runway, F-16s first, then JF-17s, then J-10Cs. Intelligence gives a rough fix on the train (amber INTEL arrow); within ${T0.detectRangeKm} km you see it and the launcher is marked. Two SAM wagons ride with it: each reaches ${Sm.rangeKm} km, needs ${Sm.lockTime} seconds to lock on (the radar warning goes from a slow to a fast tone) and must see you, so fly below ${Sm.minAlt} m or keep a dune or outcrop between you and the train. Your wingman ${C.wingman.name} flies the ${wk}: press 1 to send him at your target, 2 to have him cover you, 3 to attack the SAM wagons with his laser missiles, 4 to rejoin. Laser missiles (T to designate, L to fire from 1.5 to 10 km) follow the moving train; the launcher takes about two hits. Then fly back over the border. Your ${p.name} carries ${LO.agm} laser-guided missiles, ${LO.bombs} × 250 kg bombs, ${LO.msl} × ${AAM[p.aam].name} missiles, ${LG.gun||p.gun} gun rounds and ${LG.flares||FLARES} flares. Difficulty ${prefs.diff} changes the train's speed, the SAMs and the waves.`;
+    setFacts('briefFacts',[[`${mins} min`,'Train to launch point'],['2','SAM wagons'],[String((C.waves||[]).length),'Fighter waves'],[C.wingman.name,`Wingman · ${wk}`]]);
+    $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. TGT picks a wagon (the launcher is marked), LGM fires a laser missile, BOMB drops on the pipper, MSL once a fighter reads LOCK, FLR the moment MISSILE flashes. WING gives your wingman orders.';
   } else if (TANKS){
     const LO=loadout(), nT=TANK_ORDER.filter(k=>k==='T').length, km=((TANK_FAIL_Z-TANK_LEAD0)/1000).toFixed(1), mins=Math.round((TANK_FAIL_Z-TANK_LEAD0)/TANK_V/60);
     $('briefEyebrow').textContent='Thin Air · Close air support · Punjab plains · what-if scenario';
@@ -5848,7 +6267,7 @@ function applyPrefs(){
     const LO=loadout();
     $('briefEyebrow').textContent='Thin Air · SEAD · Rajasthan desert, night · what-if scenario';
     $('briefTitle').textContent='Hunt the SAM sites';
-    $('briefBody').textContent=`Before the strike packages can go in, the enemy's air defences in the Thar desert have to be knocked out. Three SAM sites, Alpha, Bravo and Charlie, each have a search radar, two mobile launchers and an AAA gun. Destroy all three radars and all six launchers. It is night: you fly alone in a ${p.name} by moonlight, with the HUD and the targeting pod. The radars sit still and are marked from intelligence. The launchers drive around their site and stop to fire, so you have to find them: one shows up once it locks on to you (SAM LAUNCHER EMITTING) or once you are within 5 km. The radars cannot see you below ${SEAD_MASK} m above the ground, so hug the dunes on the radar altimeter, pop up only to fire, then drop low again. Kill a site's radar first and its launchers go blind, and any missile they already fired goes dumb. SAMs reach 9 km and the AAA guns 3.5 km. Your jet carries ${LO.agm} laser-guided missiles (press T to pick a target, L to fire from 1.5 to 10 km, and keep it in the pod; the pod follows a launcher on the move), ${LO.bombs} × 250 kg bombs, ${LO.msl} × ${AAM[p.aam].name} missiles, ${p.gun} gun rounds and ${FLARES} flares. A JF-17 and an F-16 patrol low over the middle of the area.`;
+    $('briefBody').textContent=`Before the strike packages can go in, the enemy's air defences in the Thar desert have to be knocked out. Three SAM sites, Alpha, Bravo and Charlie, each have a search radar, two mobile launchers and an AAA gun. Destroy all three radars and all six launchers. It is night: you fly alone in a ${p.name} by moonlight, with the HUD and the targeting pod. The radars sit still and are marked from intelligence. The launchers drive around their site and stop to fire, so you have to find them: one shows up once it locks on to you (SAM LAUNCHER EMITTING) or once you are within 5 km. A launcher that has fired relocates as soon as it loses you: it goes dark and drives off a few hundred metres (SAM LAUNCHER RELOCATING), and you have to find it again, within 3 km while it is on the move. The radars cannot see you below ${SEAD_MASK} m above the ground, so hug the dunes on the radar altimeter, pop up only to fire, then drop low again. Kill a site's radar first and its launchers go blind, and any missile they already fired goes dumb. SAMs reach 9 km and the AAA guns 3.5 km. Your jet carries ${LO.agm} laser-guided missiles (press T to pick a target, L to fire from 1.5 to 10 km, and keep it in the pod; the pod follows a launcher on the move), ${LO.bombs} × 250 kg bombs, ${LO.msl} × ${AAM[p.aam].name} missiles, ${p.gun} gun rounds and ${FLARES} flares. A JF-17 and an F-16 patrol low over the middle of the area, and the moment the first radar dies they come straight for you.`;
     setFacts('briefFacts',[['3','Radars'],['6','Mobile launchers'],[`${SEAD_MASK} m`,'Below radar'],[String(LO.agm),'Laser missiles']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. Keep the radar altitude under the limit. TGT picks a target, LGM fires a laser missile, BOMB drops on the pipper, MSL once a fighter reads LOCK, FLR the moment MISSILE flashes.';
   } else if (NAVAL){
@@ -5862,8 +6281,8 @@ function applyPrefs(){
     const LO=loadout(), dl=((locZ(BASE.x)-BASE.z)/1000).toFixed(1);
     $('briefEyebrow').textContent='Thin Air · Base raid · north of the LoC · what-if scenario';
     $('briefTitle').textContent='Destroy the forward air base';
-    $('briefBody').textContent=`An enemy forward air base sits in a green river valley ${dl} km north of the Line of Control, among fields, forest and snow-capped peaks. For this sortie you are cleared to cross it. Destroy all four key structures, spread 4 to 5 km apart: shelter A on the airfield, shelter B at a dispersal site 4.5 km west, the fuel depot 4.5 km east and the command post with its radar 4.5 km north. The raid has two checkpoints. Checkpoint 1: a JF-17 and an F-16 patrol 10 to 13 km south of the base, on your way in; shoot both down. Checkpoint 2: the base then shows on your HUD and radar. One SAM launcher covers it out to 9 km and two AAA guns open fire inside 3.5 km. You lead three Su-30MKIs: your wingmen, Flanker 2 and Flanker 3, hold formation, take on the fighters when they come up, then bomb the SAM and AAA sites. The four main targets are yours. Your jet carries ${LO.bombs} × 250 kg bombs, ${LO.msl} missiles, ${p.gun} gun rounds and ${FLARES} flares, plus 2 laser-guided missiles (L key, up to 10 km; keep the target in the pod until impact). A bomb or missile on a SAM or AAA site knocks it out too.`;
-    setFacts('briefFacts',[['3','Su-30MKIs'],['4','Targets'],['2 + 3','SAM + AAA'],['2','Bandits']]);
+    $('briefBody').textContent=`An enemy forward air base sits in a green river valley ${dl} km north of the Line of Control, among fields, forest and snow-capped peaks. For this sortie you are cleared to cross it. Destroy all four key structures, spread 4 to 5 km apart: shelter A on the airfield, shelter B at a dispersal site 4.5 km west, the fuel depot 4.5 km east and the command post with its radar 4.5 km north. The raid has two checkpoints. Checkpoint 1: a JF-17 and an F-16 patrol 10 to 13 km south of the base, on your way in; shoot both down. Checkpoint 2: the base then shows on your HUD and radar. One SAM launcher covers it out to 9 km and two AAA guns open fire inside 3.5 km. You fly this one alone, with no wingmen: the fighters, the SAM and the guns are all yours to deal with. You have ${Math.round(RAID_TIME/60)} minutes from take-off before enemy reinforcements arrive, so the clock on the HUD is running from the start. Your jet carries ${LO.bombs} × 250 kg bombs, ${LO.msl} missiles, ${p.gun} gun rounds and ${FLARES} flares, plus 2 laser-guided missiles (L key, up to 10 km; keep the target in the pod until impact). A bomb or missile on a SAM or AAA site knocks it out too.`;
+    setFacts('briefFacts',[[`${Math.round(RAID_TIME/60)} min`,'Time limit'],['4','Targets'],['1 + 2','SAM + AAA'],['2','Bandits']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. BOMB when the pipper sits on a target diamond, MSL once a fighter reads LOCK, hold GUN for close fights, and tap FLR the moment MISSILE flashes.';
   } else if (MP.on){
     const pn=WORLD==='pune';
@@ -5883,7 +6302,7 @@ function applyPrefs(){
     const total=AW_WAVES.slice(1).reduce((a,w)=>a+w.length,0);
     $('briefEyebrow').textContent='Thin Air · High-value asset protection · Punjab · what-if scenario';
     $('briefTitle').textContent='Guard the Netra';
-    $('briefBody').textContent=`A Netra AEW&C radar jet is flying a ${AW.R*2/1000} km circle ${((AW.cz-pbBorderZ(0))/1000).toFixed(0)} km south of the border in Punjab, watching the other side. The other side wants it gone. ${AW_WAVES.length-1} waves of fighters (${total} in all, ending with J-10Cs and an F-16) will come from the north for the Netra, not for you, and from the second wave on one of them sneaks in low from the west. The Netra can take two missile hits; a third brings it down and ends the mission. While you stay within ${AW_LINK/1000} km of the Netra its datalink puts every bandit on your HUD and map; stray further and you see only what your own radar sees (${((p.radar||9000)/1000).toFixed(0)} km). Meet each wave north of the orbit, take the closest threat to the Netra first, and do not cross the border. You are rearmed between waves. Your ${p.name} carries ${mslTxt({...p, msl:loadout().msl})}, ${p.gun} gun rounds and ${FLARES} flares.`;
+    $('briefBody').textContent=`A Netra AEW&C radar jet is flying a ${AW.R*2/1000} km circle ${((AW.cz-pbBorderZ(0))/1000).toFixed(0)} km south of the border in Punjab, watching the other side. The other side wants it gone. ${AW_WAVES.length-1} waves of fighters (${total} in all, ending with J-10Cs and an F-16) will come from the north for the Netra, not for you, and from the second wave on two of them sneak in low on the flanks, one from the west and one from the east, while the rest come from the north. The Netra can take two missile hits; a third brings it down and ends the mission. While you stay within ${AW_LINK/1000} km of the Netra its datalink puts every bandit on your HUD and map; stray further and you see only what your own radar sees (${((p.radar||9000)/1000).toFixed(0)} km). Meet each wave north of the orbit, take the closest threat to the Netra first, and do not cross the border. You are rearmed between waves. Your ${p.name} carries ${mslTxt({...p, msl:loadout().msl})}, ${p.gun} gun rounds and ${FLARES} flares.`;
     setFacts('briefFacts',[[String(AW_WAVES.length-1),'Waves'],[String(total),'Bandits'],[`${AW_LINK/1000} km`,'Datalink range'],['2','Hits Netra can take']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. MSL once a bandit reads LOCK, hold GUN up close, FLR the moment MISSILE flashes. Stay near the Netra (green circle) to keep the datalink.';
   } else if (SWARM){
@@ -5910,7 +6329,7 @@ function applyPrefs(){
     const R=lockRange(p), Rs=R*FOES.j20.stealth;
     $('briefEyebrow').textContent='Thin Air · Intercept · eastern Ladakh · what-if scenario';
     $('briefTitle').textContent='Four J-20s across the LAC';
-    $('briefBody').textContent=`Four J-20 stealth fighters have crossed the Line of Actual Control near Pangong Tso and are flying into Indian airspace in two pairs. You are scrambled alone to intercept. Shoot down all four. The J-20 is hard to see on radar: your ${p.name} locks a normal jet at ${(R/1000).toFixed(1).replace('.0','')} km but a J-20 only inside about ${(Rs/1000).toFixed(1).replace('.0','')} km, and its box reads STEALTH until then. Each J-20 carries the long-range PL-15 radar missile and the agile PL-10 heat-seeker, so it can shoot first${p.stealth ? `, but your AMCA is a stealth jet too: their radars lock you only inside about ${(Math.min(FOES.j20.range, AAM.pl15.lock*0.85)*p.stealth/1000).toFixed(1)} km instead of ${(Math.min(FOES.j20.range, AAM.pl15.lock*0.85)/1000).toFixed(0)} km, so it becomes a fair fight` : ''}. When RADAR MISSILE flashes, turn so the missile is on your wingtip (beam it) to break its lock; against the PL-10, pop flares and turn hard. Close in, then fire once the box reads LOCK and IN RANGE, and use the gun up close. Your jet carries ${mslTxt({...p, msl:loadout().msl})}, ${p.gun} gun rounds and ${FLARES} flares. The air here is thin: the valleys sit at 4,300 m and the ridges reach 6,400 m. Do not cross the LAC (the red line to the north) yourself: that ends the sortie.`;
+    $('briefBody').textContent=`Four J-20 stealth fighters have crossed the Line of Actual Control near Pangong Tso and are flying into Indian airspace in two pairs. You are scrambled alone to intercept. Shoot down all four. The J-20 is hard to see on radar: your ${p.name} locks a normal jet at ${(R/1000).toFixed(1).replace('.0','')} km but a J-20 only inside about ${(Rs/1000).toFixed(1).replace('.0','')} km, and its box reads STEALTH until then. Each J-20 carries the long-range PL-15 radar missile and the agile PL-10 heat-seeker, so it can shoot first${p.stealth ? `, but your AMCA is a stealth jet too: their radars lock you only inside about ${(Math.min(FOES.j20.range, AAM.pl15.lock*0.85)*p.stealth/1000).toFixed(1)} km instead of ${(Math.min(FOES.j20.range, AAM.pl15.lock*0.85)/1000).toFixed(0)} km, so it becomes a fair fight` : ''}. When RADAR MISSILE flashes, turn so the missile is on your wingtip (beam it) to break its lock; against the PL-10, pop flares and turn hard. Close in, then fire once the box reads LOCK and IN RANGE, and use the gun up close. These J-20 pilots are good: they spot your missile early, break hard across its path with a dive, and time their flares well, so a long shot often misses. Fire close and from behind, and follow up with the gun. Your jet carries ${mslTxt({...p, msl:loadout().msl})}, ${p.gun} gun rounds and ${FLARES} flares. The air here is thin: the valleys sit at 4,300 m and the ridges reach 6,400 m. Do not cross the LAC (the red line to the north) yourself: that ends the sortie.`;
     setFacts('briefFacts',[['4','J-20s'],[`${(Rs/1000).toFixed(1).replace('.0','')} km`,'Your lock on a J-20'],[String(loadout().msl),'Missiles'],['4,225 m','Pangong Tso']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. MSL fires once a J-20 reads LOCK; hold GUN with the cross inside the lead circle; tap FLR when MISSILE flashes, and turn across a radar missile to beam it.';
   } else if (WORLD==='pune'){
@@ -5929,9 +6348,12 @@ function applyPrefs(){
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. MSL fires once a bandit reads LOCK; hold GUN with the cross inside the lead circle; tap FLR when MISSILE flashes.';
   }
   if (isTouch) touchHelp();
+  briefFormat();
   setPlaneMesh(); reset();
   mpUI();
   if (MP.on && MP.lobby && !MP.joining && (MP.room ? MP.rkind!==mpKind() : !MP.err)) mpJoin();
+  DIFF = CFG.difficulty[prefs.diff] || CFG.difficulty.normal; $('diffSel').value=prefs.diff;
+  $('diffNote').innerHTML = MP.on || mode==='training' ? '' : `Difficulty: <b>${prefs.diff[0].toUpperCase()+prefs.diff.slice(1)}</b> · change it on the Settings page${STAR_MODES.includes(prefs.mode) ? ` · Your best: <span class="best">${starStr(BEST[prefs.mode]||0)}</span>` : ''}`;
   try { localStorage.setItem('thinair.hangar', JSON.stringify(prefs)); } catch (e) {}
 }
 
@@ -5959,6 +6381,7 @@ window.addEventListener('keydown',e=>{
   else if (e.code==='KeyC' && (state==='fly'||state==='ending')) view = view==='chase'?'cockpit':'chase';
   else if (e.code==='KeyP' || e.code==='Escape') pauseToggle();
   else if (e.code==='KeyN' && MP.on) voxDown();   // multiplayer: hold N to talk
+  else if (/^Digit[1-4]$/.test(e.code) && RAIL && !MP.on && state==='fly') wingCmd(+e.code.slice(5));   // Iron Rail: wingman orders
   else if (/^Digit[1-6]$/.test(e.code) && MP.on && state==='fly') rcSend(+e.code.slice(5)-1);   // quick radio calls
   else if (e.code==='Enter' && (state==='brief'||state==='ended') && document.activeElement && document.activeElement.tagName!=='BUTTON'){
     e.preventDefault(); if (state==='brief') startSortie(); else backToHangar();
@@ -6081,6 +6504,7 @@ function updateInputs(dt){
   wb.addEventListener('pointercancel',()=>{ clearTimeout(wT); });
   $('tTilt').addEventListener('click',tiltToggle);
   $('tRadio').addEventListener('click',()=>rcPanel());
+  $('tWing').addEventListener('click',()=>wingPanel());   // Iron Rail: wingman orders on a phone
   const tk=$('tTalk');   // hold to talk
   tk.addEventListener('pointerdown',e=>{ e.preventDefault(); try { tk.setPointerCapture(e.pointerId); } catch (er) {} voxDown(); });
   ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>tk.addEventListener(ev,()=>voxUp()));
@@ -6180,6 +6604,8 @@ function resize(){
     else if (ROT.a===-90){ b.position='fixed'; b.top=b.left='0'; b.width=ih+'px'; b.height=iw+'px'; b.transformOrigin='0 0'; b.transform=`translateY(${ih}px) rotate(-90deg)`; }
     else { b.position=b.top=b.left=b.width=b.height=b.transformOrigin=b.transform=''; } }
   W=W_(); H=H_();
+  { const r=document.documentElement;   // the screen as the player sees it (after any forced turn): short = a phone on its side
+    r.classList.toggle('short', H<=560); r.classList.toggle('land', W>H); r.style.setProperty('--appH', H+'px'); r.style.setProperty('--appW', W+'px'); }
   renderer.setSize(W,H,false);
   baseFov = W<H ? 78 : 60; camera.aspect=W/H; camera.fov=baseFov; camera.updateProjectionMatrix();
   hud.width=Math.round(W*HDPR); hud.height=Math.round(H*HDPR); c.setTransform(HDPR,0,0,HDPR,0,0);
@@ -6217,6 +6643,8 @@ function applyGfx(){
 }
 try { $('lowGfx').checked = localStorage.getItem('thinair.gfx')==='1'; $('stallProt').checked = localStorage.getItem('thinair.prot')!=='0'; } catch (e) {}
 $('stallProt').addEventListener('change',()=>{ try { localStorage.setItem('thinair.prot',$('stallProt').checked?'1':'0'); } catch (e) {} });
+$('newModels').addEventListener('change',()=>{ try { localStorage.setItem('thinair.newac',$('newModels').checked?'1':'0'); } catch (e) {}
+  if (state==='brief'){ applyPrefs(); THUMBS=false; if (HSTEP.step==='plane' || HSTEP.step==='brief'){ makeThumbs(); paintAcSum(); } } });   // rebuild your jet and its picture straight away
 $('lowGfx').addEventListener('change',()=>{ try { localStorage.setItem('thinair.gfx',$('lowGfx').checked?'1':'0'); } catch (e) {} applyGfx(); });
 applyGfx();
 
@@ -6253,6 +6681,57 @@ const mapCanvas=buildMap(false), mapGreen=buildMap(true);
 function txt(s,x,y,col,align,size,bold){
   c.font=`${bold?'700 ':''}${size||13}px ${NUMFONT}`; c.textAlign=align||'center'; c.textBaseline='middle';
   c.lineWidth=3; c.strokeStyle='rgba(0,12,6,.55)'; c.strokeText(s,x,y); c.fillStyle=col; c.fillText(s,x,y);
+}
+// a dark translucent plate behind HUD text, so it stays readable over snow, sand, sea and sky alike
+function hudPlate(x,y,w,h,edge){
+  const r=Math.min(6,h/2); c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath();
+  c.fillStyle='rgba(5,12,20,.52)'; c.fill(); if (edge){ c.lineWidth=1; c.strokeStyle=edge; c.stroke(); }
+}
+function txtW(s,size,bold){ c.font=`${bold?'700 ':''}${size||13}px ${NUMFONT}`; return c.measureText(s).width; }
+// text on its own plate: align 'left' (x = left edge of the text), 'right' or 'center'
+function pill(s,x,y,col,align,size,bold,edge){
+  const w=txtW(s,size,bold), px=9, h=(size||13)+9, x0=align==='left' ? x-px : align==='right' ? x-w-px : x-w/2-px;
+  hudPlate(x0,y-h/2,w+px*2,h,edge); txt(s,x,y,col,align,size,bold);
+}
+// what this mission wants from you, as [text, done, kind]: kind true = optional, 'rule' = a condition to keep, else a main objective
+function missionObjectives(){
+  if (MP.on || mode==='training' || state==='brief') return null;
+  const hit=()=>raidN()-raidLeft(), tm=t=>fmtTime(Math.max(0,t));
+  if (RAIL) return irObjectives();
+  const k=Math.min(S.kills, mode==='raid' ? 2 : (ESCORT || LADAKH) ? 4 : (AWACS || FLEET || DRONES) ? 999 : 3);   // never show more kills than there are bandits
+  if (mode==='strike') return [['Bomb the sangar on Point 4875',S.targetHit],[`${S.bombs} bomb${S.bombs===1?'':'s'} left · stay south of the LoC`,false,'rule']];
+  if (mode==='raid'){
+    if (PRECISE) return [[`Destroy the three camps (${hit()}/${raidN()})`,!raidLeft()],[`Time left ${tm(S.precT)} · stay south of the LoC`,false,'rule'],[`Optional: shoot down the F-16s (${k}/2)`,k>=2,true]];
+    if (NAVAL) return [[`Destroy the four godowns (${hit()}/${raidN()})`,!raidLeft()],[`Optional: shoot down the fighters (${k}/2)`,k>=2,true]];
+    if (SEAD) return [[`Destroy the radars and launchers (${hit()}/${raidN()})`,!raidLeft()],[`Below ${SEAD_MASK} m the radars cannot see you`,false,'rule'],[`Optional: shoot down the fighters (${k}/2)`,k>=2,true]];
+    if (TANKER) return [['Refuel from the IL-78',S.rtb || hit()>0 || S.fuel>=S.ac.fuel*0.95],[`Destroy the depot (${hit()}/${raidN()})`,!raidLeft()],['Plug in to the tanker for the trip home',false],[`Fuel ${Math.round(S.fuel)} kg`,false,'rule']];
+    if (BRIDGE) return [[`Drop both spans of the bridge (${hit()}/${raidN()})`,!raidLeft()],['Before the first lorry gets across',false,'rule']];
+    if (CSAR){ const d=RAID.ad.filter(a=>!a.alive).length; return [[`Silence the AAA guns (${d}/${RAID.ad.length})`,d>=RAID.ad.length],['VIPER picks up the pilot',!!(HELO && HELO.pilot)],['Cover VIPER until it is back across the border',false],['VIPER can take two missile hits',false,'rule']]; }
+    if (RECON) return [[`Photograph the sites (${S.photos}/${REC_SITES.length})`,S.photos>=REC_SITES.length],[`Get ${REC_HOME/1000} km back south of the LoC`,false],[`Below ${REC_MASK} m the SAM radars cannot see you`,false,'rule']];
+    if (TANKS) return [[`Destroy every tank (${hit()}/${raidN()})`,!raidLeft()],['Before the column reaches the town',false,'rule'],[`Optional: shoot down the fighters (${k}/2)`,k>=2,true]];
+    return [[`Checkpoint 1: shoot down both fighters (${Math.min(2,k)}/2)`,RCP!==1],[`Checkpoint 2: destroy the four structures (${hit()}/${raidN()})`,!raidLeft()],[`Time left ${tm(S.raidT)}`,false,'rule']];
+  }
+  if (AWACS) return [[`Beat every wave (wave ${Math.max(1,S.wave)} of ${AW_WAVES.length-1})`,false],[`Bandits down: ${k}`,false,'rule'],['Keep the Netra alive: it can take two hits',false,'rule']];
+  if (FLEET) return [[`Beat all the raids (raid ${Math.max(1,S.wave)} of ${FLEET_WAVES.length-1})`,false],[`Carrier hits ${S.cvHits} of ${FLEET_HITS} · missiles stopped ${S.asmDown}`,false,'rule']];
+  if (DRONES) return [[`Shoot down every drone (wave ${Math.max(1,S.wave)} of ${DRONE_WAVES.length-1})`,false],[`Drones down: ${k} · got through: ${S.leaks} of ${DRONE_LEAKS}`,false,'rule']];
+  if (ESCORT) return [['Escort the C-130J until it lands',false],[`Shoot down the bandits (${k}/4)`,k>=4,true],['The C-130J can take two hits',false,'rule']];
+  if (LADAKH) return [[`Shoot down the four J-20s (${k}/4)`,k>=4],['Stay south of the LAC',false,'rule']];
+  if (mode==='dogfight') return [[`Shoot down both JF-17s and the J-10C (${k}/3)`,k>=3]];
+  return null;
+}
+// the objectives panel: under the map on a desktop; on a phone one short line, the current objective, at the bottom
+function drawObjectives(){
+  if (state==='ended') return;
+  const O=missionObjectives(); if (!O || !O.length) return;
+  if (isTouch){ const cur=O.find(o=>!o[1] && !o[2]) || O[0]; pill(cur[0].toUpperCase(),W/2,H-safeB-12,'#e6ecf2','center',10,true); return; }
+  if (W<940) return;   // a narrow window: the tapes need the room
+  const w=RAIL ? wingmen[0] : null, rows=O.map(([t,done,kind])=>[`${done ? '✓' : kind==='rule' ? '·' : kind ? '○' : '□'} ${t}`, done ? HUD : kind==='rule' ? '#9fb0c0' : kind ? '#c3ccd6' : AMB, !done && !kind]);
+  if (w){ const ord=w.alive ? ({engage:'ENGAGING YOUR TARGET', cover:'COVERING YOU', sams:'ATTACKING THE SAMS', form:'IN FORMATION'}[w.cmd] || 'FREE TO ENGAGE') : 'DOWN';
+    rows.push([`${w.name} · ${ord}`, w.alive ? HUD : RED, true], ['1 ENGAGE · 2 COVER · 3 SAMS · 4 REJOIN','#9fb0c0',false]); }
+  const ms=Math.min(150,W*0.26), x=W-safeR-12, y0=safeT+12+ms+12, lh=16, wd=Math.max(txtW('OBJECTIVES',11,true), ...rows.map(r=>txtW(r[0],11,r[2])));
+  hudPlate(x-wd-10, y0, wd+20, 24+rows.length*lh, 'rgba(141,255,176,.28)');
+  txt('OBJECTIVES',x,y0+13,'#e6ecf2','right',11,true);
+  rows.forEach((r,i)=>txt(r[0],x,y0+30+i*lh,r[1],'right',11,r[2]));
 }
 function strokeP(col,w){ c.lineWidth=(w||1.5)+2; c.strokeStyle='rgba(0,12,6,.42)'; c.stroke(); c.lineWidth=w||1.5; c.strokeStyle=col; c.stroke(); }
 function proj(x,y,z){ pv.set(x,y,z).project(camera); return {x:(pv.x+1)*0.5*W, y:(1-pv.y)*0.5*H, ok:pv.z>-1&&pv.z<1}; }
@@ -6428,11 +6907,11 @@ function drawRaidHUD(fpm){
   }
   let near=null, nd=1e9;
   if (RCP===1) return;   // checkpoint 1: only the fighters are shown
-  for (const t of RAID.targets){
+  if (!RAIL) for (const t of RAID.targets){   // Iron Rail draws its own train markers (drawIronRailHUD)
     if (!t.alive) continue;
     const d=Math.hypot(S.pos.x-t.x,S.pos.z-t.z); if (d<nd){ nd=d; near=t; }
   }
-  for (const t of RAID.targets){
+  if (!RAIL) for (const t of RAID.targets){
     if (!t.alive) continue;
     const s=proj(t.x,t.y+6,t.z); if (!onScreen(s)) continue;
     if (isTouch){ diamond(s.x,s.y,t===near?7:5,AMB); if (t===near) txt((nd/1000).toFixed(1),s.x,s.y-14,AMB,'center',10,true); continue; }   // phone: diamonds, no names
@@ -6556,20 +7035,20 @@ function drawThreats(dog){
   let by=safeT+34;
   if (dog && MP.on){
     const n=enemies.filter(e=>e.remote && e.alive).length;
-    txt(`KILLS ${MP.kills}  ·  DEATHS ${MP.deaths}`,sx,safeT+38,'#e6ecf2','left',12,true);
-    txt(`ROOM ${MP.code.toUpperCase()}  ·  ${n} IN THE AIR`,sx,safeT+56,MP.room?BANDIT:AMB,'left',12,true);
+    pill(`KILLS ${MP.kills}  ·  DEATHS ${MP.deaths}`,sx,safeT+38,'#e6ecf2','left',12,true);
+    pill(`ROOM ${MP.code.toUpperCase()}  ·  ${n} IN THE AIR`,sx,safeT+56,MP.room?BANDIT:AMB,'left',12,true);
     by=safeT+68;
     if (!S.alive) txt(`RESPAWN IN ${Math.max(1,Math.ceil(MP.respawnT))}`,W/2,H/2+64,AMB,'center',16,true);
   } else if (dog){
-    txt(AWACS ? (NETRA && NETRA.alive ? `WAVE ${Math.max(1,S.wave)}/${AW_WAVES.length-1} · NETRA ${Math.round(NETRA.hp/1.2)}%` : 'NETRA LOST') : FLEET ? `RAID ${Math.max(1,S.wave)}/${FLEET_WAVES.length-1} · CARRIER HITS ${S.cvHits}/${FLEET_HITS} · MISSILES STOPPED ${S.asmDown}` : DRONES ? `WAVE ${Math.max(1,S.wave)}/${DRONE_WAVES.length-1} · DRONES DOWN ${S.kills} · STRIKES ${S.leaks}/${DRONE_LEAKS}` : ESCORT && HERC ? (HERC.alive ? `C-130J ${Math.round(HERC.hp/1.7)}% · STRIP ${(Math.hypot(HERC.p.x-DBO.x,HERC.p.z-DBO.rw0)/1000).toFixed(1)} KM` : 'C-130J LOST') : LADAKH ? `J-20 DOWN ${S.kills}/4` : `WAVE ${Math.max(1,S.wave)}/${WAVES}`,sx,safeT+38,'#e6ecf2','left',12,true);
-    txt(`SCORE ${S.score}`,sx,safeT+56,HUD,'left',12,true);
+    pill(AWACS ? (NETRA && NETRA.alive ? `WAVE ${Math.max(1,S.wave)}/${AW_WAVES.length-1} · NETRA ${Math.round(NETRA.hp/1.2)}%` : 'NETRA LOST') : FLEET ? `RAID ${Math.max(1,S.wave)}/${FLEET_WAVES.length-1} · CARRIER HITS ${S.cvHits}/${FLEET_HITS} · MISSILES STOPPED ${S.asmDown}` : DRONES ? `WAVE ${Math.max(1,S.wave)}/${DRONE_WAVES.length-1} · DRONES DOWN ${S.kills} · STRIKES ${S.leaks}/${DRONE_LEAKS}` : ESCORT && HERC ? (HERC.alive ? `C-130J ${Math.round(HERC.hp/1.7)}% · STRIP ${(Math.hypot(HERC.p.x-DBO.x,HERC.p.z-DBO.rw0)/1000).toFixed(1)} KM` : 'C-130J LOST') : LADAKH ? `J-20 DOWN ${S.kills}/4` : `WAVE ${Math.max(1,S.wave)}/${WAVES}`,sx,safeT+38,'#e6ecf2','left',12,true);
+    pill(`SCORE ${S.score}`,sx,safeT+56,HUD,'left',12,true);
     by=safeT+68;
   } else if (mode==='raid'){
-    txt(RCP===1 ? `CHECKPOINT 1/2 · FIGHTERS ${enemies.filter(e=>!e.alive).length}/${enemies.length}` : RCP===2 ? `CHECKPOINT 2/2 · TARGETS ${raidN()-raidLeft()}/${raidN()}` : RECON ? `PHOTOS ${S.photos}/${REC_SITES.length}` : CSAR ? `GUNS DOWN ${RAID.ad.filter(a=>!a.alive).length}/${RAID.ad.length}` : `${NAVAL?'GODOWNS':PRECISE?'CAMPS':TANKS?'TANKS':'TARGETS'} ${raidN()-raidLeft()}/${raidN()}`,sx,safeT+38,'#e6ecf2','left',12,true);
-    const flight = MP.coop ? `FLIGHT ${1+[...MP.ghosts.values()].filter(g=>g.alive).length}` : RECON ? (S.agl<REC_MASK ? 'LOW · SAM RADARS BLIND' : 'SAM RADARS CAN SEE YOU') : TANKS ? (()=>{ const L=tankLead(); return L ? `COLUMN ${(Math.max(0,TANK_TOWN.z-L.z)/1000).toFixed(1)} KM FROM TOWN` : 'COLUMN DESTROYED'; })() : CSAR && HELO ? (HELO.alive ? `VIPER ${Math.max(0,Math.round(HELO.hp/1.5))}% · ${CSAR_PH[HELO.ph]||'SAFE'}${HELO.ph==='hold'||HELO.ph==='pickup' ? ' '+Math.max(0,Math.ceil(HELO.t))+' S' : ''}` : 'VIPER LOST')
+    pill(RAIL ? (IR.nukeDead ? 'LAUNCHER DESTROYED · RTB' : IR.cd>0 ? `LAUNCH IN ${Math.ceil(IR.cd)} S` : `TRAIN ${(Math.max(0,IR_RAIL.L-IR.s)/1000).toFixed(1)} KM FROM LAUNCH${IR.loco && !IR.loco.ref.alive ? ' · STOPPING' : ''}`) : RCP===1 ? `CHECKPOINT 1/2 · FIGHTERS ${enemies.filter(e=>!e.alive).length}/${enemies.length}` : RCP===2 ? `CHECKPOINT 2/2 · TARGETS ${raidN()-raidLeft()}/${raidN()}` : RECON ? `PHOTOS ${S.photos}/${REC_SITES.length}` : CSAR ? `GUNS DOWN ${RAID.ad.filter(a=>!a.alive).length}/${RAID.ad.length}` : `${NAVAL?'GODOWNS':PRECISE?'CAMPS':TANKS?'TANKS':'TARGETS'} ${raidN()-raidLeft()}/${raidN()}`,sx,safeT+38,'#e6ecf2','left',12,true);
+    const flight = MP.coop ? `FLIGHT ${1+[...MP.ghosts.values()].filter(g=>g.alive).length}` : RAIL ? `WAVE ${IR.waveN}/${IR.waves.list.length} · ${wingmen[0] ? (wingmen[0].alive ? wingmen[0].name+' OK' : wingmen[0].name+' DOWN') : 'NO WINGMAN'}` : RECON ? (S.agl<REC_MASK ? 'LOW · SAM RADARS BLIND' : 'SAM RADARS CAN SEE YOU') : TANKS ? (()=>{ const L=tankLead(); return L ? `COLUMN ${(Math.max(0,TANK_TOWN.z-L.z)/1000).toFixed(1)} KM FROM TOWN` : 'COLUMN DESTROYED'; })() : CSAR && HELO ? (HELO.alive ? `VIPER ${Math.max(0,Math.round(HELO.hp/1.5))}% · ${CSAR_PH[HELO.ph]||'SAFE'}${HELO.ph==='hold'||HELO.ph==='pickup' ? ' '+Math.max(0,Math.ceil(HELO.t))+' S' : ''}` : 'VIPER LOST')
       : TANKER ? `FUEL ${Math.round(S.fuel)} KG${S.contact?' · CONTACT':S.bingo?' · BINGO':''}`
-      : BRIDGE ? (()=>{ const L=convoyLead(); return !L ? 'CONVOY DESTROYED' : BRG.targets.some(t=>!t.alive) ? 'CONVOY STOPPED AT THE GAP' : `CONVOY ${(Math.max(0,RD_BN-L.s)/1000).toFixed(1)} KM FROM BRIDGE`; })() : SEAD ? (S.agl<SEAD_MASK ? 'LOW · RADARS BLIND' : `RADARS CAN SEE YOU · ${RAID.targets.filter(t=>t.alive).length} UP`) : PRECISE ? `AAA ${RAID.ad.filter(a=>a.alive).length}/${RAID.ad.length} · ${Math.floor(Math.max(0,S.precT)/60)}:${String(Math.floor(Math.max(0,S.precT)%60)).padStart(2,'0')} LEFT` : NAVAL ? `AAA ${RAID.ad.filter(a=>a.alive).length}/${RAID.ad.length}` : `WING ${wingmen.filter(w=>w.alive).length}/2`;
-    txt(`BANDITS ${enemies.filter(e=>e.alive).length}  ·  ${flight}`,sx,safeT+56,BANDIT,'left',12,true);
+      : BRIDGE ? (()=>{ const L=convoyLead(); return !L ? 'CONVOY DESTROYED' : BRG.targets.some(t=>!t.alive) ? 'CONVOY STOPPED AT THE GAP' : `CONVOY ${(Math.max(0,RD_BN-L.s)/1000).toFixed(1)} KM FROM BRIDGE`; })() : SEAD ? (S.agl<SEAD_MASK ? 'LOW · RADARS BLIND' : `RADARS CAN SEE YOU · ${RAID.targets.filter(t=>t.alive).length} UP`) : PRECISE ? `AAA ${RAID.ad.filter(a=>a.alive).length}/${RAID.ad.length} · ${Math.floor(Math.max(0,S.precT)/60)}:${String(Math.floor(Math.max(0,S.precT)%60)).padStart(2,'0')} LEFT` : NAVAL ? `AAA ${RAID.ad.filter(a=>a.alive).length}/${RAID.ad.length}` : (plainRaid() && !MP.coop) ? `${clockTxt(S.raidT)} LEFT` : `WING ${wingmen.filter(w=>w.alive).length}/2`;
+    pill(`BANDITS ${enemies.filter(e=>e.alive).length}  ·  ${flight}`,sx,safeT+56,BANDIT,'left',12,true);
     by=safeT+68;
     if (MP.coop && !S.alive) txt(`RESPAWN IN ${Math.max(1,Math.ceil(MP.respawnT))}`,W/2,H/2+64,AMB,'center',16,true);
   }
@@ -6603,9 +7082,10 @@ function drawHUD(now){
     }
   }
 
-  if (raid){ drawRaidHUD(fpm); drawCombatHUD(); if (TANKER) drawTankerHUD(flash); if (CSAR) drawCsarHUD(); if (RECON) drawReconHUD(); }
+  if (raid){ drawRaidHUD(fpm); drawCombatHUD(); if (RAIL) drawIronRailHUD(flash); if (TANKER) drawTankerHUD(flash); if (CSAR) drawCsarHUD(); if (RECON) drawReconHUD(); }
   else if (dog){ drawCombatHUD(); if (ESCORT) drawEscortHUD(); if (AWACS) drawAwacsHUD(); if (DRONES) drawDroneHUD(); if (FLEET) drawFleetHUD(flash); } else if (mode!=='training' || carriesBombs()) drawStrikeHUD(fpm);
   if (mode==='training') drawTrainingHUD();
+  drawObjectives();
   if (isTouch && S.alive && !raid && !dog && TW.sel==='GUN'){   // phone: the gun pointer in the other missions too, when GUN is picked
     const gc=proj(S.pos.x+vF.x*800,S.pos.y+vF.y*800,S.pos.z+vF.z*800); if (gc.ok) gunPointer(gc,false,null);
   }
@@ -6685,7 +7165,7 @@ function drawHUD(now){
     else if (missiles.some(m=>m.target==='player' && m.mt && m.mt.seeker==='RADAR')) warns.push(['RADAR MISSILE · BEAM IT: TURN 90° TO IT',RED,true]);
     else if (missiles.some(m=>m.target==='player')) warns.push([isTouch?'MISSILE · FLR':'MISSILE · FLARES Z',RED,true]);
     if (!dog && S.aaFiring) warns.push(['AAA FIRE',AMB,false]);
-    if (raid && S.samTrack) warns.push(['SAM RADAR',AMB,false]);
+    if (raid && S.samTrack) warns.push(RAIL ? (S.rwrLvl===2 ? ['SAM LOCK · GET LOW OR BREAK LINE OF SIGHT',RED,true] : ['RADAR SEARCH · SAM ACQUIRING',AMB,false]) : ['SAM RADAR',AMB,false]);
     if (raid && !PRECISE){}
     else if (S.dLoc<1000) warns.push([`${lineName()} ${(Math.max(0,S.dLoc)/1000).toFixed(1)} KM · TURN SOUTH`,RED,true]);
     else if (S.dLoc<LOC_WARN) warns.push([`${lineName()} ${(S.dLoc/1000).toFixed(1)} KM`,AMB,false]);
@@ -6697,8 +7177,9 @@ function drawHUD(now){
     if (brk.on) warns.push([`BREAK ${brk.dir>0?'RIGHT':'LEFT'} → 180`,HUD,false]);
   }
   let wy=isTouch ? Math.max(safeT+34, radioCeil+16) : hy+76;   // phone: warnings and messages along the top, under the instructor's box
-  warns.slice(0,3).forEach(([t,col,fl])=>{ if (!fl||flash) txt(t,cx,wy,col,'center',16,true); wy+=24; });
-  if (S.msg) txt(S.msg.text,cx,wy,S.msg.col,'center',14,true);
+  { const ws=isTouch ? 14 : 16;   // warnings and the latest message, each on its own plate; a warning's plate is edged in its colour
+    warns.slice(0,3).forEach(([t,col,fl])=>{ if (!fl||flash) pill(t,cx,wy,col,'center',ws,true,col); wy+=ws+12; });
+    if (S.msg) pill(S.msg.text,cx,wy+1,S.msg.col,'center',isTouch ? 12 : 14,true); }
   if (isTouch && S.banner){   // phone: the result of your bomb or missile, big, in the upper middle of the screen, fading out
     c.globalAlpha=clamp(S.banner.t/0.5,0,1); txt(S.banner.text,cx,H*0.3,S.banner.col,'center',22,true); c.globalAlpha=1; }
 
@@ -6762,7 +7243,7 @@ function drawHUD(now){
     c.beginPath(); c.moveTo(r.x+8,qy); c.lineTo(qx-12,qy); c.moveTo(qx+12,qy); c.lineTo(r.x+r.w-8,qy);
     c.moveTo(qx,r.y+8); c.lineTo(qx,qy-12); c.moveTo(qx,qy+12); c.lineTo(qx,r.y+r.h-8); strokeP(HUD,1);
     c.beginPath(); c.rect(qx-12,qy-12,24,24); strokeP(HUD,1.2);
-    const las=missiles.find(m=>m.agm && m.target);
+    const las=missiles.find(m=>m.agm && m.target && !m.wl);
     if (las){   // lasing: flashing LASE cue with time to impact, and an X on the laser spot
       const tti=las.p.distanceTo(las.aim)/Math.max(1,las.v.length());
       if (flash) txt(`LASE · TTI ${tti.toFixed(1)} S`,r.x+8,r.y+12,RED,'left',11,true);
@@ -6802,7 +7283,8 @@ function drawHUD(now){
   if (raid){
     c.save(); c.beginPath(); c.rect(mx,my,ms,ms); c.clip();
     const k=MK;
-    RAID.ad.forEach(a=>{ if (a.kind!=='SAM' || !a.alive || (a.mob && !a.seen) || RCP===1) return; const [rx,ry]=mp(a.x,a.z,true); c.beginPath(); c.arc(rx,ry,SAM_RANGE*k,0,Math.PI*2); c.lineWidth=1; c.strokeStyle='rgba(255,90,79,.75)'; c.stroke();
+    if (RAIL) irMinimap(mp,k,AV);
+    RAID.ad.forEach(a=>{ if (a.kind!=='SAM' || !a.alive || (a.mob && !a.seen) || RCP===1) return; const [rx,ry]=mp(a.x,a.z,true); c.beginPath(); c.arc(rx,ry,(a.range||SAM_RANGE)*k,0,Math.PI*2); c.lineWidth=1; c.strokeStyle='rgba(255,90,79,.75)'; c.stroke();
       const [ax,ay]=mp(a.x,a.z);
       if (a.mob){ c.beginPath(); c.moveTo(ax,ay-4); c.lineTo(ax+3.5,ay+3); c.lineTo(ax-3.5,ay+3); c.closePath(); c.fillStyle=RED; c.fill(); } });
     if (SEAD) RAID.targets.forEach(t=>{ if (!t.alive) return; const [tx2,ty2]=mp(t.x,t.z,true); c.beginPath(); c.arc(tx2,ty2,SAM_RANGE*k,0,Math.PI*2); c.setLineDash([3,3]); c.lineWidth=1; c.strokeStyle='rgba(255,176,32,.55)'; c.stroke(); c.setLineDash([]); });
@@ -7928,10 +8410,44 @@ let NAVAL=false, SEA=null;
 const RAID_K={targets:RAID.targets, ad:RAID.ad}, BASE_K={...BASE};   // the Kargil raid, restored when leaving the sea map
 // ---------- mission 6, SEAD at night: the Thar desert in Rajasthan. Low dunes, rocky outcrops, a few villages, and three
 // SAM sites, each with a search radar (fixed), two launchers that drive around the site and an AAA gun.
+// ---------- reusable: a railway line. A Catmull-Rom spline through (x,z) control points, sampled into an arc-length table.
+// railAt(R,s) gives the position and heading s metres along it; railDist(R,x,z) how far a point is from the track.
+function makeRail(pts){
+  const P=[pts[0],...pts,pts[pts.length-1]], xs=[], zs=[], K=60;
+  for (let i=1;i<P.length-2;i++){ const a=P[i-1], b=P[i], c=P[i+1], d=P[i+2];
+    for (let k=0;k<K;k++){ const t=k/K, t2=t*t, t3=t2*t, f=j=>0.5*(2*b[j]+(-a[j]+c[j])*t+(2*a[j]-5*b[j]+4*c[j]-d[j])*t2+(-a[j]+3*b[j]-3*c[j]+d[j])*t3);
+      xs.push(f(0)); zs.push(f(1)); } }
+  xs.push(pts[pts.length-1][0]); zs.push(pts[pts.length-1][1]);
+  const n=xs.length, S=new Float64Array(n); for (let i=1;i<n;i++) S[i]=S[i-1]+Math.hypot(xs[i]-xs[i-1],zs[i]-zs[i-1]);
+  return {xs, zs, S, n, L:S[n-1], x0:Math.min(...xs), x1:Math.max(...xs), z0:Math.min(...zs), z1:Math.max(...zs)};
+}
+function railAt(R,s,out){
+  out=out||{}; s=Math.max(0,Math.min(R.L,s));
+  let lo=0, hi=R.n-1; while (hi-lo>1){ const m=(lo+hi)>>1; if (R.S[m]<=s) lo=m; else hi=m; }
+  const sl=R.S[hi]-R.S[lo]||1, f=(s-R.S[lo])/sl, dx=R.xs[hi]-R.xs[lo], dz=R.zs[hi]-R.zs[lo], l=Math.hypot(dx,dz)||1;
+  out.x=R.xs[lo]+dx*f; out.z=R.zs[lo]+dz*f; out.hx=dx/l; out.hz=dz/l; out.s=s; return out;
+}
+function railDist(R,x,z){
+  if (!R || x<R.x0-600 || x>R.x1+600 || z<R.z0-600 || z>R.z1+600) return 1e9;   // nowhere near the line
+  let best=1e18;
+  for (let i=0;i<R.n-1;i++){
+    const ax=R.xs[i], az=R.zs[i], dx=R.xs[i+1]-ax, dz=R.zs[i+1]-az, l2=dx*dx+dz*dz;
+    const t=l2>0 ? Math.max(0,Math.min(1,((x-ax)*dx+(z-az)*dz)/l2)) : 0, ex=ax+dx*t-x, ez=az+dz*t-z, d=ex*ex+ez*ez;
+    if (d<best) best=d;
+  }
+  return Math.sqrt(best);
+}
+// ---------- OPERATION IRON RAIL (mission 18) on the desert map: the border (hostile to the north), the line, the launch point
+// and the enemy air base. Everything here sits inside the 24 km minimap.
+const IR_START={x:0, z:11000, y:2600};
+const irBorderZ=x=>-1000+500*Math.sin(x/4200+0.6)+250*Math.sin(x/1700);
+const IR_AIRBASE={x:-10200, z:-5600};   // runway north-south
+const IR_LP={x:-10600, z:-11400};       // the launch point, at the end of the line
+const IR_RAIL=makeRail([[11500,-3600],[7500,-4500],[4000,-5500],[500,-6400],[-3000,-7300],[-6000,-8700],[-8600,-10300],[IR_LP.x,IR_LP.z]]);
 const DES_SITES=[{name:'ALPHA', x:-7500, z:-3500}, {name:'BRAVO', x:1500, z:-9500}, {name:'CHARLIE', x:8500, z:-2500}];
 const DES_BASE={x:1000, z:-5000};   // the fighters orbit over the middle of the three sites
 const TNK_SITE={x:2500, z:-15800};   // the tanker mission's deep target: a fuel depot with a railway yard, in the far north
-const DES_FLAT=[...DES_SITES, TNK_SITE];
+const DES_FLAT=[...DES_SITES, TNK_SITE, IR_AIRBASE, IR_LP];   // Iron Rail: the enemy air base and the launch pad sit on levelled ground too
 const SEAD_START={x:0, z:13000, y:1400};
 const DOGN_START={x:0, z:6000, y:3200};   // the night dogfight: in the middle of the desert, under the bandits' height
 let DOGN=false;   // set in applyPrefs
@@ -7942,6 +8458,7 @@ function desertHeight(x,z){
   h+=28*d*d*(0.5+vnoise(x/1500-2,z/1500+5));
   h+=Math.max(0,vnoise(x/2800+21,z/2800-13)-0.62)*1100*(0.7+0.3*vnoise(x/500,z/500));          // rocky outcrops
   for (const s of DES_FLAT){ const dd=Math.hypot(x-s.x,z-s.z); if (dd<1400) h=lerp(desBig(s.x,s.z)+6,h,smooth(850,1400,dd)); }   // flat ground around each site
+  const rd=railDist(IR_RAIL,x,z); if (rd<420) h=lerp(desBig(x,z)+3,h,smooth(140,420,rd));   // the railway's embankment (and cuttings through the outcrops)
   return h;
 }
 const BEACON_MAT=new T.MeshBasicMaterial({color:0xff3b30});
@@ -7996,7 +8513,7 @@ function buildDesert(){
     const rnd=()=>{ r=(r*16807)%2147483647; return r/2147483647; };
     for (let i=0, made=0; i<120 && made<14; i++){
       const vx=(rnd()-0.5)*34000, vz=(rnd()-0.5)*34000;
-      if (DES_FLAT.some(s=>Math.hypot(vx-s.x,vz-s.z)<3000) || Math.hypot(vx-SEAD_START.x,vz-SEAD_START.z)<2500) continue;
+      if (DES_FLAT.some(s=>Math.hypot(vx-s.x,vz-s.z)<3000) || Math.hypot(vx-SEAD_START.x,vz-SEAD_START.z)<2500 || railDist(IR_RAIL,vx,vz)<700) continue;
       made++; DV.push([vx,vz]);
       for (let k=0;k<10;k++){
         const hx=vx+(rnd()-0.5)*300, hz=vz+(rnd()-0.5)*300, w=6+rnd()*6, dd=5+rnd()*5;
@@ -8038,12 +8555,20 @@ function buildDesert(){
 }
 let DES=null;
 // SEAD: the launchers drive round their site for a while, then park; they stop to fire. One is found once it locks on or you come close.
+// a launcher that has fired relocates: it goes dark and drives about 400 m along its loop, and has to be found again
+const SEAD_RELOC=28;
 function updateSead(dt){
   BEACON_MAT.color.setHex((S.time%1.6)<0.3 ? 0xff3b30 : 0x3a0d0a);
   for (const a of RAID.ad){
     if (!a.mob || !a.alive) continue;
-    if (!a.seen && S.alive && Math.hypot(S.pos.x-a.x,S.pos.z-a.z)<5000){ a.seen=true; S.msg={text:`SAM LAUNCHER SPOTTED · ${a.name}`, col:AMB, t:2.2}; }
+    if (!a.seen && S.alive && Math.hypot(S.pos.x-a.x,S.pos.z-a.z)<(a.moving ? 3000 : 5000)){ a.seen=true; S.msg={text:`SAM LAUNCHER SPOTTED · ${a.name}`, col:AMB, t:2.2}; }
     if (a.track) continue;
+    if (a.reloc>0){
+      if (!a.moving){ a.moving=true; a.seen=false; if (S.td===a) S.td=null; S.msg={text:`SAM LAUNCHER RELOCATING · ${a.name} · CONTACT LOST`, col:AMB, t:2.6}; }
+      a.reloc-=dt; seadPlace(a, a.ang+dt*14/a.R);   // about 14 m/s while it scoots
+      if (a.reloc<=0){ a.reloc=0; a.moving=false; }
+      continue;
+    }
     a.cyc+=dt;
     if (a.cyc%80<32) seadPlace(a, a.ang+dt*6/a.R);   // about 6 m/s along its loop
   }
@@ -8315,6 +8840,426 @@ function drawEscortHUD(){
   const sa=proj(DBO.x,DBO.y+5,DBO.rw0);
   if (onScreen(sa)){ c.beginPath(); c.rect(sa.x-8,sa.y-8,16,16); strokeP(AMB,1.2); txt('DBO',sa.x,sa.y-16,AMB,'center',10,true); }
 }
+// ================================================================================================================
+// OPERATION IRON RAIL. Reusable systems first (border, line of sight, SAM unit, wave spawner), then the mission.
+// ================================================================================================================
+// a territory border along z = zAt(x), hostile on the north side; step() reports 'enter' or 'leave' when you cross it
+function makeBorder(zAt){
+  return {zAt, hostile:null, isHostile(p){ return p.z<zAt(p.x); },
+    step(p){ const h=this.isHostile(p), was=this.hostile; this.hostile=h; return (was===null || was===h) ? null : h ? 'enter' : 'leave'; } };
+}
+// line of sight over the terrain from a to b: a dune, ridge or outcrop in between blocks it
+function losClear(ax,ay,az,bx,by,bz){
+  const n=28; for (let i=1;i<n;i++){ const f=i/n, x=ax+(bx-ax)*f, z=az+(bz-az)*f; if (ay+(by-ay)*f < groundAt(x,z)+3) return false; }
+  return true;
+}
+// SAM unit: search, then lock (lockTime seconds of unbroken track), then launch; reload seconds between shots, a fixed
+// number of missiles, one in the air at a time. 'see' = target inside range and height limits and in line of sight.
+function samUnit(c){ return {st:'search', lock:0, cd:0, msl:c.missiles, lockTime:c.lockTime, reload:c.reload}; }
+function samStep(u,see,dt,busy){
+  if (u.cd>0) u.cd-=dt;
+  if (!see){ u.st='search'; u.lock=0; return null; }
+  if (u.st==='search'){ u.st='lock'; u.lock=0; }
+  if (u.st==='lock'){ u.lock+=dt; if (u.lock<u.lockTime) return null; u.st='locked'; }
+  if (!busy && u.cd<=0 && u.msl>0){ u.msl--; u.cd=u.reload; return 'launch'; }
+  return null;
+}
+// wave spawner: wave 1 goes 'delay' s after the trigger; each later wave 'afterDead' s after the previous one is all
+// down, or 'maxWait' s after the previous one appeared, whichever comes first. Returns the wave to launch now, or -1.
+function makeWaves(list){ return {list, armed:false, next:0, t:0, deadT:0}; }
+function wavesStep(Wv,dt,liveCount){
+  if (!Wv.armed || Wv.next>=Wv.list.length) return -1;
+  Wv.t+=dt; const w=Wv.list[Wv.next];
+  if (Wv.next===0){ if (Wv.t<(w.delay||0)) return -1; }
+  else { Wv.deadT = liveCount===0 ? Wv.deadT+dt : 0;
+    if (!(Wv.deadT>=(w.afterDead!=null ? w.afterDead : 60) || Wv.t>=(w.maxWait!=null ? w.maxWait : 90))) return -1; }
+  Wv.t=0; Wv.deadT=0; return Wv.next++;
+}
+
+// ---------- placeholder models (PH_*): one function each, in local space with the nose toward -z and y = 0 on the rail top.
+// To use a real model, return a THREE.Object3D of about the same size from the function instead (see README.md).
+function phMesh(build){ const L=[]; _B.identity(); build(L); const m=new T.Mesh(mergeParts(L),RAID_MAT); m.castShadow=m.receiveShadow=true; return m; }
+function phBogies(L,len){ [-1,1].forEach(s=>put(L,UBOX,TYRE,0,0.55,s*(len/2-3),2.4,0.9,3.2)); put(L,UBOX,0x2f2b26,0,1.15,0,2.9,0.35,len); }
+function PH_LOCO(len){ return phMesh(L=>{ phBogies(L,len);
+  put(L,UBOX,0x6a3f24,0,2.9,2.5,3.0,3.2,len-5);       // engine hood
+  put(L,UBOX,0x7b4a2a,0,3.3,-len/2+2.5,3.1,4.0,5);    // cab at the front
+  put(L,UBOX,0x1c2a33,0,4.4,-len/2+0.0,2.6,1.0,0.12); // windscreen
+  put(L,UBOX,0xd8c25a,0,1.5,-len/2-0.1,3.0,0.5,0.15); // buffer beam
+  put(L,UCYL,STEEL,0,4.8,3,0.6,1.2,0.6); }); }
+function PH_CARGO(len,i){ const cols=[0x5b6340,0x6b5a3e,0x56614a]; return phMesh(L=>{ phBogies(L,len);
+  put(L,UBOX,cols[i%3],0,2.8,0,2.9,3.0,len-1); put(L,UBOX,0x4a4f38,0,4.35,0,2.95,0.12,len-0.8); }); }
+function PH_SAM_WAGON(len){   // returns the parts a SAM needs: g, yaw (turret), pitch (tubes) and radar (spins)
+  const g=new T.Group(); g.add(phMesh(L=>{ phBogies(L,len); put(L,UBOX,0x56603f,0,1.6,len/2-3,2.8,0.6,5); }));
+  const mG=new T.MeshLambertMaterial({color:0x56603f}), mW=new T.MeshLambertMaterial({color:0xd9d6cc}), mS=new T.MeshLambertMaterial({color:STEEL});
+  const yaw=new T.Group(); yaw.position.set(0,1.6,-2); g.add(yaw);
+  const ring=new T.Mesh(UCYL,mG); ring.scale.set(2.4,0.5,2.4); yaw.add(ring);
+  const pitch=new T.Group(); pitch.position.set(0,0.7,0.6); yaw.add(pitch);
+  [[-0.55,0],[0.55,0],[-0.55,0.75],[0.55,0.75]].forEach(([tx,ty])=>{ const tb=new T.Mesh(UCYL,mW); tb.scale.set(0.5,5.2,0.5); tb.rotation.x=-Math.PI/2; tb.position.set(tx,ty,-2.0); pitch.add(tb); });
+  pitch.rotation.x=0.5;
+  const mast=new T.Mesh(UBOX,mS); mast.scale.set(0.3,3.6,0.3); mast.position.set(0,3.6,len/2-3); g.add(mast);
+  const radar=new T.Group(); radar.position.set(0,5.4,len/2-3); g.add(radar);
+  const dish=new T.Mesh(UBOX,mG); dish.scale.set(3.6,1.4,0.25); radar.add(dish);
+  g.traverse(o=>{ if (o.isMesh) o.castShadow=o.receiveShadow=true; });
+  return {g, yaw, pitch, radar};
+}
+function PH_NUKE_WAGON(len){   // a long missile canister on an erector, hinged at the back; userData.er raises it for launch
+  const g=new T.Group(); g.add(phMesh(L=>{ phBogies(L,len); put(L,UBOX,0x4f5a3c,0,1.8,len/2-1.5,2.9,1.2,3); }));
+  const er=new T.Group(); er.position.set(0,2.0,len/2-3); g.add(er);
+  const cl=len-4, can=new T.Mesh(UCYL,new T.MeshLambertMaterial({color:0xe8e6dc})); can.scale.set(2.0,cl,2.0); can.rotation.x=Math.PI/2; can.position.set(0,0.9,-cl/2); er.add(can);
+  const band=new T.Mesh(UCYL,new T.MeshLambertMaterial({color:0xc0392b})); band.scale.set(2.08,0.8,2.08); band.rotation.x=Math.PI/2; band.position.set(0,0.9,-cl+2); er.add(band);
+  g.traverse(o=>{ if (o.isMesh) o.castShadow=o.receiveShadow=true; });
+  g.userData.er=er; return g;
+}
+function PH_WRECK(len){ return phMesh(L=>{ put(L,UBOX,BURNT,0,0.8,0,2.8,1.0,len-1,0.05,0.04,0.06); put(L,UBOX,BURNT,0.3,1.9,len*0.1,2.2,1.4,len*0.5,0.3,0.2,0.25); }); }
+function PH_AIRBASE(o){   // the enemy air base: a north-south runway, a parallel taxiway, three shelters and a tower (scenery only)
+  const L=[]; base(0,0,0,o);
+  put(L,UBOX,0x3b3d40,0,0.1,0,45,0.2,1600);
+  for (let z=-760;z<=760;z+=60) put(L,UBOX,0xe9e9e2,0,0.22,z,0.9,0.02,26);
+  put(L,UBOX,0x45474a,-150,0.08,0,22,0.16,1400); put(L,UBOX,0x8c8a84,-260,0.08,-150,180,0.16,260);
+  [-300,-150,0].forEach(z=>{ put(L,HASG,0x6f735f,-330,0,z,26,10,11,0,Math.PI/2,0); });
+  put(L,UBOX,0xc9bea5,-220,6,250,8,12,8); put(L,UBOX,0x2a3a44,-220,13,250,9,2,9);
+  const m=new T.Mesh(mergeParts(L),RAID_MAT); m.castShadow=m.receiveShadow=true; return m;
+}
+function PH_LAUNCHPAD(o){   // the launch point: a concrete pad, a service gantry and a blast wall
+  const L=[]; base(0,0,0,o);
+  put(L,UBOX,0x9a968c,0,0.15,0,70,0.3,70); put(L,UBOX,STEEL,22,15,0,4,30,4); put(L,UBOX,STEEL,17,26,0,10,1,1.5);
+  put(L,UBOX,0x8a8578,-24,3,0,3,6,40);
+  const m=new T.Mesh(mergeParts(L),RAID_MAT); m.castShadow=m.receiveShadow=true; return m;
+}
+// the track: a ballast bed and two rails as ribbons that follow the ground along the line
+function railMesh(R){
+  const pos=[], col=[], idx=[], step=12, n=Math.ceil(R.L/step)+1, a={}, K=clamp(+irCfg().train.scale||1,0.5,6);   // the track is as oversized as the train
+  [[-2.6*K,2.6*K,0.0,[0.45,0.41,0.35]],[-0.85*K,-0.6*K,0.3,[0.2,0.2,0.21]],[0.6*K,0.85*K,0.3,[0.2,0.2,0.21]]].forEach(([l,r,dy,cc])=>{
+    const b=pos.length/3;
+    for (let i=0;i<n;i++){ railAt(R,Math.min(R.L,i*step),a); const px=-a.hz, pz=a.hx, y=groundAt(a.x,a.z)+0.8+dy;
+      pos.push(a.x+px*l,y,a.z+pz*l, a.x+px*r,y,a.z+pz*r); col.push(...cc,...cc);
+      if (i){ const k=b+(i-1)*2; idx.push(k,k+1,k+2, k+1,k+3,k+2); } }
+  });
+  const g=new T.BufferGeometry(); g.setAttribute('position',new T.Float32BufferAttribute(pos,3)); g.setAttribute('color',new T.Float32BufferAttribute(col,3));
+  g.setIndex(idx); g.computeVertexNormals();
+  const m=new T.Mesh(g,new T.MeshLambertMaterial({vertexColors:true, side:T.DoubleSide, polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2}));
+  m.receiveShadow=true; return m;
+}
+
+// ---------- the mission
+const IR={built:false, group:null, tg:null, trainKey:'', wag:[], targets:[], ad:[], nuke:null, loco:null, cfg:null, cfgKey:'',
+  border:makeBorder(irBorderZ), waves:makeWaves([]), waveN:0, s:0, s0:0, v:0, arrived:false, stopped:false, cd:-1, cdMax:0,
+  detected:false, nukeDead:false, half:false, halfBonus:false, obj:{}, ban:null, feed:[], intel:{x:0,z:0,t:0}, samsKilled:0, winT:-1};
+function irCfg(){ if (!IR.cfg || IR.cfgKey!==prefs.diff){ IR.cfg=missionCfg('ironRail'); IR.cfgKey=prefs.diff; } return IR.cfg; }
+const irLen=()=>{ const w=IR.wag[IR.wag.length-1]; return w ? w.off+w.len/2 : 0; };
+function irBuild(){   // built once, the first time the mission is picked (the desert map must be loaded)
+  if (IR.built) return;
+  const g=new T.Group();
+  try {
+    g.add(railMesh(IR_RAIL));
+    const L=[]; for (let x=-19000;x<=19000;x+=300){ base(x,irBorderZ(x),0,{x:0,z:0}); put(L,UBOX,0xf2f0ea,0,2,0,0.5,4,0.5); put(L,UBOX,0xd23b2e,0,4.6,0,0.6,1.2,0.6); }
+    const bm=new T.Mesh(mergeParts(L),RAID_MAT); bm.castShadow=true; g.add(bm);   // border posts every 300 m, wire strung along the tops
+    const pts=[]; for (let x=-19000;x<=19000;x+=300) pts.push(new T.Vector3(x,groundAt(x,irBorderZ(x))+4.6,irBorderZ(x)));
+    g.add(new T.Line(new T.BufferGeometry().setFromPoints(pts), new T.LineBasicMaterial({color:0xd23b2e})));
+    g.add(PH_AIRBASE(IR_AIRBASE)); g.add(PH_LAUNCHPAD(IR_LP));
+    const bc=new T.Mesh(USPH,BEACON_MAT); bc.scale.setScalar(2); bc.position.set(IR_LP.x+22,groundAt(IR_LP.x,IR_LP.z)+31,IR_LP.z); g.add(bc);
+    IR.tg=new T.Group(); g.add(IR.tg);
+    IR.group=g; IR.built=true;
+  } catch (e) { console.error('Iron Rail scenery failed to build', e); }
+}
+function irBuildTrain(C){   // (re)build the train when the wagon list in the config changes
+  const K=clamp(+C.train.scale||1,0.5,6);   // train.scale: the whole train drawn (and hit) this many times bigger, so it reads from the air
+  const key=JSON.stringify(C.train.wagons)+K; if (key===IR.trainKey) return;
+  IR.trainKey=key; for (const o of [...IR.tg.children]) IR.tg.remove(o);
+  IR.wag=[]; IR.targets=[]; IR.ad=[]; IR.nuke=IR.loco=null;
+  let off=0, nS=0, nC=0;
+  C.train.wagons.forEach((wc,i)=>{
+    const kind=wc.kind, L0=Math.max(8,+wc.len||15), len=L0*K, w={kind, len, hw:1.6*K, hp0:+wc.hp||80, hp:+wc.hp||80, off:off+len/2, hx:0, hz:-1, ad:kind==='sam'};
+    off+=len+2*K;
+    const wreck=PH_WRECK(L0); wreck.scale.setScalar(K); wreck.visible=false; IR.tg.add(wreck);
+    if (w.ad){
+      const p=PH_SAM_WAGON(L0); p.g.scale.setScalar(K); IR.tg.add(p.g);
+      w.ref={kind:'SAM', g:p.g, yaw:p.yaw, pitch:p.pitch, radar:p.radar, wreck, x:0, y:0, z:0, alive:true, cd:0, track:false, phase:0, burst:0, conv:true, unit:null, range:10000, name:`SAM WAGON ${++nS}`};
+      IR.ad.push(w.ref);
+    } else {
+      const intact = kind==='loco' ? PH_LOCO(L0) : kind==='nuke' ? PH_NUKE_WAGON(L0) : PH_CARGO(L0,i); intact.scale.setScalar(K); IR.tg.add(intact);
+      w.ref={name: kind==='loco' ? 'LOCOMOTIVE' : kind==='nuke' ? 'LAUNCHER' : `WAGON ${++nC}`, x:0, y:0, z:0, r:len/2, alive:true, intact, wreck, extras:[], sec:[], conv:true};
+      IR.targets.push(w.ref);
+    }
+    w.ref.wag=w; IR.wag.push(w);
+    if (kind==='nuke' && !IR.nuke) IR.nuke=w;
+    if (kind==='loco' && !IR.loco) IR.loco=w;
+  });
+}
+function irSync(){   // show the line, border, air base and train only while Iron Rail is picked
+  if (RAIL && WORLD==='desert'){ irBuild(); if (IR.group && !IR.group.parent) scene.add(IR.group); }
+  else if (IR.group && IR.group.parent) scene.remove(IR.group);
+  $('tWing').hidden=!RAIL; if (!RAIL) wingPanel(false);
+}
+const _ir={};
+function irPlace(){   // every wagon at its distance behind the head of the train, facing along the line
+  for (const w of IR.wag){
+    const a=railAt(IR_RAIL, IR.s-w.off, _ir), y=groundAt(a.x,a.z)+0.8, ry=Math.atan2(-a.hx,-a.hz), r=w.ref, o=w.ad ? r.g : r.intact;
+    w.hx=a.hx; w.hz=a.hz; r.x=a.x; r.y=y; r.z=a.z; r.vx=a.hx*IR.v; r.vz=a.hz*IR.v;
+    o.position.set(a.x,y,a.z); o.rotation.y=ry; r.wreck.position.set(a.x,y,a.z); r.wreck.rotation.y=ry;
+  }
+}
+function irReset(){
+  if (!IR.built) return;
+  const C=irCfg(); irBuildTrain(C);
+  if (!IR.nuke || !IR.loco){ console.warn('Iron Rail: the config train needs a "loco" and a "nuke" wagon'); }
+  IR.v=C.train.speedKmh/3.6; IR.s0=Math.max(irLen(), IR_RAIL.L-C.train.startDistanceKm*1000); IR.s=IR.s0;
+  Object.assign(IR,{arrived:false, stopped:false, cd:-1, cdMax:0, detected:false, nukeDead:false, half:false, halfBonus:false, ban:null, feed:[], samsKilled:0, winT:-1, waveN:0});
+  IR.obj={cross:false, found:false, sams:false, waves:false, nuke:false, rtb:false};
+  IR.border.hostile=null; IR.waves=makeWaves(C.waves||[]);
+  IR.wag.forEach(w=>{ w.hp=w.hp0; const r=w.ref; r.alive=true; r.wreck.visible=false;
+    if (w.ad){ r.g.visible=true; r.track=false; r.unit=samUnit(C.sam); r.unit.reload=C.sam.reload*DIFF.samReload; r.range=C.sam.rangeKm*1000; }
+    else r.intact.visible=true;
+    if (w.kind==='nuke') r.intact.userData.er.rotation.x=0; });
+  RAID.targets=[]; RAID.ad=[]; S.td=null;   // nothing to designate until you find the train
+  IR.intel.t=0; irPlace(); irIntel();
+  S.killsBy={}; S.rwrLvl=0;
+  const LO=C.loadouts[prefs.plane]; if (LO){ S.gun=LO.gun; S.flares=LO.flares; }
+}
+function irIntel(){   // a rough fix on the train from intelligence, refreshed every 25 s until you find it
+  const n=IR.nuke ? IR.nuke.ref : {x:0,z:0}; IR.intel.x=n.x+(Math.random()-0.5)*2400; IR.intel.z=n.z+(Math.random()-0.5)*2400; IR.intel.t=25;
+}
+function irBanner(text,col){ IR.ban={text,col,t:3.4}; }
+function wingSay(text){
+  const w=wingmen[0]; if (!w || !w.alive) return;
+  IR.feed.push({text, at:performance.now()}); if (IR.feed.length>3) IR.feed.shift();
+  squelch(); speak('wing',text.replace(/!/g,''));
+}
+function irDetect(how){
+  if (IR.detected) return;
+  IR.detected=true; IR.obj.found=true; RAID.targets=IR.targets; RAID.ad=IR.ad;
+  if (IR.nuke && IR.nuke.ref.alive) S.td=IR.nuke.ref;
+  irBanner(how==='sam' ? 'SAM LAUNCH FROM THE TRAIN · TRAIN LOCATED' : 'TRAIN LOCATED · LAUNCHER WAGON MARKED', how==='sam' ? RED : HUD);
+  speak('control','Train located. The launcher wagon is marked. Two SAM wagons ride with it.');
+}
+function irCountdown(t,why){
+  if (IR.cd>=0 || IR.nukeDead) return;
+  IR.cd=t; IR.cdMax=t; irBanner(`${why} · LAUNCH IN ${Math.round(t)} S`,RED);
+  speak('control',`They are setting up for launch. You have ${Math.round(t)} seconds.`);
+}
+function irSpawnWave(i){
+  const C=irCfg(), w=IR.waves.list[i]; IR.waveN=i+1; S.wave=i+1;
+  (w.types||[]).forEach((k,j)=>{
+    if (!FOES[k]) return;
+    const p=new T.Vector3(IR_AIRBASE.x+(j%2 ? 18 : -18), groundAt(IR_AIRBASE.x,IR_AIRBASE.z)+40, IR_AIRBASE.z+500-j*320);
+    const e=spawnFoe(k,p,8+j*3); e.fwd.set(0,0,1); orient(e.m,e.fwd,0); e.vel.copy(e.fwd).multiplyScalar(e.speed);
+    e.toT=9+j*1.5; e.ai=(C.enemyAI && C.enemyAI[k]) || null; e.prefW=j%2===1;   // the second jet of each pair goes for your wingman
+  });
+  irBanner(`ENEMY FIGHTERS SCRAMBLING – WAVE ${i+1}/${IR.waves.list.length}`,RED);
+  speak('control',`Fighters scrambling from the air base, wave ${i+1}.`);
+}
+function irHit(w,dmg,by){ if (!w.ref.alive) return false; w.hp-=dmg; if (w.hp>0) return false; irKill(w,by); return true; }
+function irKill(w,by){
+  const r=w.ref;
+  if (w.ad){ killAD(r); IR.samsKilled++; if (by==='w') wingSay('Good hit on the SAM wagon!'); }
+  else killRaidTarget(r);
+  if (w===IR.loco){ irBanner('LOCOMOTIVE DESTROYED · THE TRAIN IS STOPPING',HUD); speak('control','The engine is hit. The train is stopping, but the launcher can still fire.'); }
+  if (w===IR.nuke) irNukeKill();
+  if (!IR.obj.sams && IR.ad.length && IR.ad.every(a=>!a.alive)){ IR.obj.sams=true; S.msg={text:'BOTH SAM WAGONS DESTROYED', col:HUD, t:3}; }
+}
+function irNukeKill(){
+  IR.nukeDead=true; IR.obj.nuke=true; IR.cd=-1; IR.halfBonus=!IR.half;
+  const w=IR.nuke, r=w.ref;
+  for (let i=0;i<10;i++){ const f=(i/9-0.5)*w.len;   // a chain of conventional secondary explosions down the wagon, and a tall smoke column
+    secondaries.push({p:new T.Vector3(r.x+w.hx*f+(Math.random()-0.5)*6, r.y+2+Math.random()*5, r.z+w.hz*f+(Math.random()-0.5)*6), t:0.3+i*0.3+Math.random()*0.3}); }
+  effects.push(makeFx(new T.Vector3(r.x,r.y+5,r.z),0x2e2b29,false,60,12,280,0.85,16));
+  spawnExplosion(new T.Vector3(r.x,r.y+6,r.z),true);
+  irBanner(`LAUNCHER DESTROYED${IR.halfBonus ? ' · BEFORE HALF-WAY' : ''} · RTB OVER THE BORDER`,HUD);
+  speak('control','Launcher destroyed. Good work. Return to base, back over the border.');
+  if (IR.border.hostile===false) IR.winT=3;
+}
+function irScore(win){
+  const C=irCfg().score, w=wingmen[0], wa=!!(w && w.alive);
+  const parts={base:win ? C.base : 0, half:IR.halfBonus ? C.halfwayBonus : 0, kills:S.kills*C.perKill, sams:IR.samsKilled*C.perSam,
+    wing:wa ? C.wingmanAlive : 0, dmg:-Math.round((100-S.hp)*C.damagePenalty), time:-Math.round(Math.max(0,S.time-C.parSeconds)*C.timePenaltyPerSec)};
+  const total=Math.max(0,Object.values(parts).reduce((a,b)=>a+b,0));
+  const rank=!win ? '–' : total>=C.rankS ? 'S' : total>=C.rankA ? 'A' : total>=C.rankB ? 'B' : 'C';
+  return {parts, total, rank};
+}
+function irWin(){
+  if (IR.obj.rtb || state!=='fly') return;
+  IR.obj.rtb=true; const sc=irScore(true); S.score=sc.total; S.irRank=sc.rank;
+  const w=wingmen[0];
+  endMission(true,'Operation Iron Rail: the launcher is gone',`The missile train's launcher wagon is burning in the desert${IR.halfBonus ? ', destroyed before the train was half-way to the launch point' : ''}, and you are back over the border. SAM wagons destroyed: ${IR.samsKilled} of ${IR.ad.length}. Fighters shot down: ${S.kills}. ${w ? (w.alive ? `${w.name} made it home too.` : `${w.name} was lost.`) : ''} Score ${sc.total}, rank ${sc.rank}.`,3);
+}
+function irKillsTxt(){ const k=Object.entries(S.killsBy||{}); return k.length ? k.map(([n,v])=>`${n} ×${v}`).join(', ') : 'none'; }
+function irObjectives(){
+  const C=irCfg(), nW=(C.waves||[]).reduce((a,w)=>a+((w.types||[]).length),0);
+  return [[`Cross the border`, IR.obj.cross],
+          [`Find the train`, IR.obj.found],
+          [`Optional: destroy both SAM wagons (${IR.samsKilled}/${IR.ad.length})`, IR.obj.sams, true],
+          [`Optional: beat all ${(C.waves||[]).length} fighter waves (${S.kills}/${nW})`, IR.obj.waves, true],
+          [`Destroy the launcher wagon`, IR.obj.nuke],
+          [`RTB: back over the border`, IR.obj.rtb]];
+}
+function updateIronRail(dt){
+  if (!IR.built || !IR.nuke) return;
+  const C=irCfg(), fly=state==='fly', nk=IR.nuke.ref;
+  if (IR.ban){ IR.ban.t-=dt; if (IR.ban.t<=0) IR.ban=null; }
+  // the train
+  if (fly){
+    if (IR.loco && !IR.loco.ref.alive && !IR.stopped && !IR.arrived){
+      IR.v=Math.max(0,IR.v-C.train.stopDecel*dt);
+      if (IR.v===0){ IR.stopped=true; irCountdown(C.train.stoppedCountdown,'THE TRAIN HAS STOPPED'); }
+    }
+    if (!IR.arrived){ IR.s+=IR.v*dt; if (IR.s>=IR_RAIL.L){ IR.s=IR_RAIL.L; IR.v=0; IR.arrived=true; irCountdown(C.train.launchCountdown,'THE TRAIN IS AT THE LAUNCH POINT'); } }
+    if (!IR.half && IR.s-IR.s0>=(IR_RAIL.L-IR.s0)/2){ IR.half=true; if (!IR.nukeDead) S.msg={text:'THE TRAIN IS HALF-WAY TO THE LAUNCH POINT', col:AMB, t:3}; }
+  }
+  irPlace();
+  // the launch countdown: the erector raises the canister as it runs down
+  if (IR.cd>=0 && nk.alive && fly){
+    IR.cd-=dt; nk.intact.userData.er.rotation.x=Math.min(1.35,(1-clamp(IR.cd/Math.max(1,IR.cdMax),0,1))*1.6);
+    if (IR.cd<=0){ IR.cd=0; S.score=irScore(false).total;
+      endMission(false,'The missile has launched',`The launcher wagon raised its canister and fired ${IR.stopped ? 'from where the train stopped' : 'from the launch point'}. Launcher damage: ${Math.round(100-100*Math.max(0,IR.nuke.hp)/IR.nuke.hp0)}%. Find the train early (follow the INTEL arrow), kill the SAM wagons or order your wingman onto them (key 3), then put laser missiles into the launcher from 6 to 10 km: it takes about two hits. Stopping the locomotive buys time, but the launcher can still fire from where it stands.`,1.5); return; }
+  }
+  // intelligence fix, then visual detection
+  if (!IR.detected){ IR.intel.t-=dt; if (IR.intel.t<=0) irIntel();
+    if (S.alive && Math.hypot(S.pos.x-nk.x,S.pos.z-nk.z)<C.train.detectRangeKm*1000) irDetect('visual'); }
+  // the border
+  if (S.alive && fly){
+    const ev=IR.border.step(S.pos);
+    if (ev==='enter'){ irBanner('ENTERING HOSTILE AIRSPACE',RED);
+      if (!IR.obj.cross){ IR.obj.cross=true; IR.waves.armed=true; speak('control','You are in hostile airspace. Expect fighters from their air base in the north-west.'); } }
+    else if (ev==='leave'){ irBanner('LEAVING HOSTILE AIRSPACE',HUD); if (IR.nukeDead) IR.winT=2; }
+  }
+  if (IR.winT>0 && fly){ IR.winT-=dt; if (IR.winT<=0) irWin(); }
+  // fighter waves from the air base
+  const live=enemies.filter(e=>e.alive).length, wi=wavesStep(IR.waves, fly ? dt : 0, live);
+  if (wi>=0) irSpawnWave(wi);
+  if (!IR.obj.waves && IR.waveN>0 && IR.waves.next>=IR.waves.list.length && live===0){ IR.obj.waves=true; S.msg={text:'ALL FIGHTER WAVES DOWN', col:HUD, t:3}; }
+  // the SAM wagons: search, lock, launch; they need line of sight, so terrain and very low flight hide you
+  S.rwrLvl=0;
+  for (const a of IR.ad){
+    if (!a.alive) continue;
+    const u=a.unit; _t.copy(S.pos).sub(a.g.position); const hd=Math.hypot(_t.x,_t.z);
+    const inEnv=fly && S.alive && hd<a.range*DIFF.samRange && S.agl>C.sam.minAlt && S.pos.y<C.sam.maxAlt;
+    const see=inEnv && losClear(a.x,a.y+5,a.z,S.pos.x,S.pos.y,S.pos.z);
+    const ev=samStep(u,see,dt,missiles.some(m=>m.sam===a));
+    a.track=see; a.radar.rotation.y+=dt*(see ? 4 : 1.4);
+    if (see){ S.samTrack=true; S.rwrLvl=Math.max(S.rwrLvl, u.st==='locked' ? 2 : 1);
+      a.yaw.rotation.y=Math.atan2(-_t.x,-_t.z)-a.g.rotation.y; a.pitch.rotation.x=clamp(Math.atan2(_t.y,hd),0.35,1.2); }
+    if (ev==='launch'){
+      const p=a.g.position.clone(); p.y+=4; _d.copy(_t).normalize(); _d.y=Math.max(_d.y,0.5); _d.normalize();
+      const m=spawnMissile(p,_d.clone().multiplyScalar(C.sam.missileSpeed),'player','e'); m.sam=a; m.maxLife=16; m.mesh.scale.setScalar(1.8);
+      effects.push(makeFx(p.clone(),0xd8d2c4,false,3,3,16,0.7,3));
+      S.msg={text:'SAM LAUNCH FROM THE TRAIN · FLARES, BREAK, GET LOW', col:RED, t:2.4};
+      irDetect('sam');
+    }
+  }
+  // a SAM missile in the air needs its wagon's radar on you: lose line of sight for a second and it goes dumb
+  for (const m of missiles){
+    if (!m.sam || !m.sam.unit || m.target!=='player') continue;
+    if (S.alive && losClear(m.sam.x,m.sam.y+5,m.sam.z,S.pos.x,S.pos.y,S.pos.z)) m.nlos=0;
+    else { m.nlos=(m.nlos||0)+dt; if (m.nlos>1){ m.target=null; S.msg={text:'SAM LOST YOU · TERRAIN MASK', col:HUD, t:1.8}; } }
+  }
+}
+// your hits on the train: each wagon has hit points; a direct hit does full damage, a near miss splash damage
+function railImpact(b){
+  if (!IR.built) return;
+  const D=irCfg().damage, agm=!!b.agm, R=agm ? D.agmSplashR : D.bombSplashR, full=agm ? D.agmDirect : D.bombDirect, killed=[], dmgd=[], mine=b.own!=='w';
+  let nd=1e9, nn='TRAIN';
+  for (const w of IR.wag){
+    const r=w.ref, dx=b.p.x-r.x, dz=b.p.z-r.z, al=dx*w.hx+dz*w.hz, sd=-dx*w.hz+dz*w.hx;
+    const d=Math.hypot(Math.max(0,Math.abs(al)-w.len/2), Math.max(0,Math.abs(sd)-(w.hw||1.6)));   // distance to the wagon's footprint
+    if (d<nd){ nd=d; nn=r.name; }
+    if (!r.alive) continue;
+    const dmg = d<=2.5 ? full : d<R ? full*0.7*(1-d/R) : 0;
+    if (dmg<=0) continue;
+    if (irHit(w,dmg,b.own)) killed.push(r.name); else dmgd.push(`${r.name} ${Math.max(0,Math.round(100*w.hp/w.hp0))}%`);
+  }
+  const by=!mine && b.by ? b.by.name+' · ' : '';
+  if (killed.length){ if (mine) pipImpact(b,b.p,b.v,`${killed.join(' + ')} DESTROYED`,HUD); S.msg={text:`${by}${killed.join(' · ')} DESTROYED`, col:HUD, t:3}; }
+  else if (dmgd.length){ if (mine) pipImpact(b,b.p,b.v,'HIT',AMB); S.msg={text:`${by}HIT · ${dmgd.join(' · ')}`, col:AMB, t:3}; }
+  else { if (mine) pipImpact(b,b.p,b.v,`MISS ${Math.round(nd)} M`,AMB); S.msg={text:`${by}MISS ${Math.round(nd)} M FROM THE ${nn}`, col:AMB, t:3}; }
+  if (IR.nuke && IR.nuke.ref.alive && mine && S.bombs===0 && bombs.length===0 && S.agm===0 && !missiles.some(x=>x.agm && x.own==='p'))
+    endMission(false,'Out of air-to-ground weapons',`The launcher wagon is still on the line at ${Math.max(0,Math.round(100*IR.nuke.hp/IR.nuke.hp0))}% strength. It takes about two laser-missile hits or two direct bomb hits. Laser missiles follow the moving train (T to designate, L to fire from 6 to 10 km); bombs land where the wagon was, so lead it or wait for the train to stop.`,3.4);
+}
+// wingman orders (keys 1-4, or the WING button on a phone)
+const WING_CMDS=[null,['engage','ENGAGE MY TARGET'],['cover','COVER ME'],['sams','ATTACK THE SAMS'],['form','REJOIN']];
+function wingCmd(i){
+  const w=wingmen[0], c=WING_CMDS[i]; if (!c) return;
+  wingPanel(false);
+  if (!RAIL || !w || !w.alive || state!=='fly'){ S.msg={text:'NO WINGMAN', col:AMB, t:1.4}; return; }
+  if (c[0]==='engage'){
+    let t=S.lockTgt && S.lockTgt.alive ? S.lockTgt : null;
+    if (!t){ axes(); let bc=0.5; for (const e of enemies){ if (!e.alive) continue; _a.copy(e.p).sub(S.pos); const k=_a.dot(vF)/Math.max(1,_a.length()); if (k>bc){ bc=k; t=e; } } }
+    if (!t){ wingSay('No bandit on your nose, lead.'); return; }
+    w.cmd='engage'; w.cmdT=t; w.eng=t; wingSay(`Engaging the ${t.type.name}.`);
+  } else if (c[0]==='cover'){ w.cmd='cover'; wingSay('Copy, covering you.'); }
+  else if (c[0]==='sams'){
+    if (!IR.detected){ wingSay('No contact on the train yet.'); return; }
+    if (!IR.ad.some(a=>a.alive)){ wingSay('No SAMs left, lead.'); return; }
+    if ((w.agm||0)<=0){ wingSay('Winchester. No laser missiles left.'); return; }
+    w.cmd='sams'; w.eng=null; w.relT=1; wingSay('Copy, going for the SAM wagons.');
+  } else { w.cmd='form'; w.eng=null; wingSay('Rejoining.'); }
+  S.msg={text:`${w.name} · ${c[1]}`, col:HUD, t:1.8};
+}
+function wingPanel(open){
+  const p=$('wingPanel'); if (!p) return; if (open==null) open=p.hidden;
+  if (open && !p.childElementCount) WING_CMDS.forEach((c,i)=>{ if (!c) return; const b=document.createElement('button'); b.type='button'; b.textContent=c[1]; b.addEventListener('click',()=>wingCmd(i)); p.appendChild(b); });
+  p.hidden=!open; $('tWing').setAttribute('aria-expanded',open ? 'true' : 'false');
+}
+function irWingOrders(w){   // what the order means for the wingman's choice of bandit
+  if (w.cmd==='engage'){ if (w.cmdT && w.cmdT.alive) w.eng=w.cmdT; else { w.cmd='free'; w.cmdT=null; } }
+  else if (w.cmd==='cover'){ let b=null, bd=1e9; for (const e of enemies){ if (!e.alive) continue; const d=e.p.distanceTo(S.pos)*(e.tgt==='player' ? 0.5 : 1); if (d<bd){ bd=d; b=e; } } w.eng=b; }
+  else if (w.cmd==='form' || w.cmd==='sams') w.eng=null;
+}
+function irWingStrike(w,dt){   // attack the SAMs: run in on the nearest live SAM wagon and fire laser missiles from 2.5 to 9 km
+  const sams=IR.ad.filter(a=>a.alive);
+  if (!sams.length || (w.agm||0)<=0){ w.cmd='free'; wingSay(sams.length ? 'Winchester on laser missiles. Rejoining.' : 'SAM wagons are down. Rejoining.'); _d.copy(w.fwd); return {rate:0.45, spd:240}; }
+  let a=sams[0], bd=1e9; for (const s of sams){ const d=Math.hypot(s.x-w.p.x,s.z-w.p.z); if (d<bd){ bd=d; a=s; } }
+  w.job='strike';
+  _d.set(a.x-w.p.x,0,a.z-w.p.z).normalize(); if (bd<3000) _d.negate();   // too close: turn away and come round again
+  _d.y=clamp((a.y+1500-w.p.y)/900,-0.35,0.35);
+  w.relT-=dt; _a.set(a.x-w.p.x,a.y-w.p.y,a.z-w.p.z); const r=_a.length();
+  if (w.relT<=0 && r<9000 && r>2500 && w.fwd.dot(_a)/r>0.6 && !missiles.some(m=>m.wl && m.ref===a)){
+    const aim=new T.Vector3(a.x,a.y+1,a.z);
+    const m=spawnMissile(w.p.clone().addScaledVector(UP,-2), w.vel.clone(), {agm:true, alive:true, p:aim, vel:new T.Vector3()}, 'w');
+    m.agm=true; m.wl=true; m.aim=aim; m.ref=a; m.maxLife=21; m.by=w; m.mesh.scale.setScalar(1.6);
+    m.flame=new T.Mesh(sphereGeo,AGM_FLAME); m.flame.position.z=-1.9; m.flame.visible=false; m.mesh.add(m.flame);
+    w.agm--; w.relT=10; wingSay('Magnum on the SAM wagon!');
+  }
+  return {rate:0.45, spd:250};
+}
+// HUD: the train, the launch point, the countdown, banners, the wingman's radio and the objectives
+function drawIronRailHUD(flash){
+  if (!IR.built || !IR.nuke) return;
+  const nk=IR.nuke.ref;
+  if (IR.detected){
+    if (nk.alive){
+      const d=Math.hypot(S.pos.x-nk.x,S.pos.z-nk.z), s=proj(nk.x,nk.y+5,nk.z), lb=`LAUNCHER ${(d/1000).toFixed(1)} KM`;
+      if (onScreen(s)){ const r=isTouch ? 9 : 14;
+        c.beginPath(); c.rect(s.x-r,s.y-r,2*r,2*r); c.moveTo(s.x-r-7,s.y); c.lineTo(s.x-r,s.y); c.moveTo(s.x+r,s.y); c.lineTo(s.x+r+7,s.y); strokeP(RED,1.8);
+        txt(isTouch ? (d/1000).toFixed(1) : lb,s.x,s.y-r-12,RED,'center',isTouch ? 10 : 12,true);
+        txt(`${Math.max(0,Math.round(100*IR.nuke.hp/IR.nuke.hp0))}%${IR.cd>0 ? ` · ${Math.ceil(IR.cd)} S` : ''}`,s.x,s.y+r+12,RED,'center',10,true); }
+      else edgeArrow(nk.x,nk.y+5,nk.z,RED,isTouch ? (d/1000).toFixed(1) : lb);
+    }
+    const lo=IR.loco && IR.loco.ref; if (lo && lo.alive && !isTouch){ const s=proj(lo.x,lo.y+5,lo.z); if (onScreen(s)){ diamond(s.x,s.y,6,AMB); txt('LOCO',s.x,s.y-14,AMB,'center',10,true); } }
+  } else if (!IR.nukeDead){
+    const I=IR.intel, d=Math.hypot(S.pos.x-I.x,S.pos.z-I.z), gy=groundAt(I.x,I.z)+60, s=proj(I.x,gy,I.z), lb=isTouch ? `TRAIN ${(d/1000).toFixed(0)}` : `TRAIN · INTEL FIX · ${(d/1000).toFixed(0)} KM`;
+    if (onScreen(s)){ c.setLineDash([4,4]); c.beginPath(); c.arc(s.x,s.y,isTouch ? 14 : 22,0,Math.PI*2); strokeP(AMB,1.4); c.setLineDash([]); txt(lb,s.x,s.y-(isTouch ? 24 : 32),AMB,'center',isTouch ? 10 : 11,true); }
+    else edgeArrow(I.x,gy,I.z,AMB,lb);
+  }
+  if (!IR.nukeDead){ const s=proj(IR_LP.x,groundAt(IR_LP.x,IR_LP.z)+30,IR_LP.z);
+    if (onScreen(s)){ c.beginPath(); c.moveTo(s.x-7,s.y-7); c.lineTo(s.x+7,s.y+7); c.moveTo(s.x+7,s.y-7); c.lineTo(s.x-7,s.y+7); strokeP(AMB,1.5); if (!isTouch) txt('LAUNCH POINT',s.x,s.y-16,AMB,'center',10,true); } }
+  else if (S.alive && IR.border.hostile){ const bz=irBorderZ(S.pos.x), km=(Math.abs(S.pos.z-bz)/1000).toFixed(1);   // RTB: straight south to the border
+    const s=proj(S.pos.x,S.pos.y,bz); if (!onScreen(s)) edgeArrow(S.pos.x,S.pos.y,bz,HUD,`BORDER ${km} KM`); else txt(`BORDER ${km} KM`,s.x,s.y,HUD,'center',12,true); }
+  if (IR.cd>0 && !IR.nukeDead && (flash || IR.cd>15)){ const t=Math.ceil(IR.cd); txt(`LAUNCH IN ${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`,W/2,H*(isTouch ? 0.27 : 0.24),RED,'center',isTouch ? 18 : 24,true); }
+  if (IR.ban){ c.globalAlpha=clamp(IR.ban.t/0.6,0,1); txt(IR.ban.text,W/2,H*(isTouch ? 0.33 : 0.3),IR.ban.col,'center',isTouch ? 15 : 20,true); c.globalAlpha=1; }
+  { const t=performance.now(); IR.feed=IR.feed.filter(f=>t-f.at<4500); let y=H-safeB-(isTouch ? 132 : 64);   // the wingman's radio calls
+    const w=wingmen[0]; for (let i=IR.feed.length-1;i>=0;i--){ const f=IR.feed[i]; c.globalAlpha=clamp((4500-(t-f.at))/600,0,1); txt(`${w ? w.name : 'WINGMAN'}: ${f.text}`,W/2,y,HUD,'center',isTouch ? 11 : 13,true); c.globalAlpha=1; y-=17; } }
+}   // the objectives panel and the wingman's status are drawn by drawObjectives, shared by every mission
+function irMinimap(mp,MK,AV){   // the border, the line, the launch point and the train (or the intel circle)
+  c.lineWidth=1.6; c.strokeStyle='rgba(255,90,79,.9)'; c.beginPath();
+  for (let x=-AV;x<=AV;x+=400){ const [a,b]=mp(x,irBorderZ(x),true); x===-AV ? c.moveTo(a,b) : c.lineTo(a,b); } c.stroke();
+  c.lineWidth=2; c.strokeStyle='rgba(40,34,28,.85)'; c.beginPath(); const a0={};
+  for (let s=0;s<=IR_RAIL.L;s+=400){ railAt(IR_RAIL,s,a0); const [a,b]=mp(a0.x,a0.z,true); s===0 ? c.moveTo(a,b) : c.lineTo(a,b); } c.stroke();
+  { const [a,b]=mp(IR_LP.x,IR_LP.z); c.beginPath(); c.moveTo(a-4,b-4); c.lineTo(a+4,b+4); c.moveTo(a+4,b-4); c.lineTo(a-4,b+4); c.lineWidth=2; c.strokeStyle=AMB; c.stroke(); }
+  { const [a,b]=mp(IR_AIRBASE.x,IR_AIRBASE.z); c.fillStyle='#9aa3ad'; c.fillRect(a-1.5,b-6,3,12); }
+  if (IR.detected) IR.wag.forEach(w=>{ const [a,b]=mp(w.ref.x,w.ref.z); c.fillStyle=!w.ref.alive ? '#6b7480' : w===IR.nuke ? RED : w.ad ? '#ff9a3c' : AMB; c.fillRect(a-2,b-2,4,4); });
+  else if (!IR.nukeDead){ const [a,b]=mp(IR.intel.x,IR.intel.z,true); c.setLineDash([3,3]); c.beginPath(); c.arc(a,b,Math.max(5,1700*MK),0,Math.PI*2); c.lineWidth=1.2; c.strokeStyle=AMB; c.stroke(); c.setLineDash([]); }
+}
+
 // ---------- multiplayer arena, 80 km across: the detailed 40 km map in the middle, and around it a coarse ring of the
 // same terrain (625 m cells) so the extra room costs little. Only the dogfight maps (Kargil, Pune) and co-op use it.
 const OMAP=80000, OHALF=OMAP/2, OSEG=128, OSTEP=OMAP/OSEG, ON=OSEG+1;
@@ -8607,7 +9552,7 @@ function frame(now){
       updateBombs(dt); updateAAA(dt); updateManpads(dt); updateLaser(); updateMissiles(dt); updateBullets(dt); updateSecondaries(dt);
       if (S.hitFlash>0) S.hitFlash=Math.max(0,S.hitFlash-dt);
     }
-    else if (mode==='raid'){ updateBombs(dt); updateRaidAD(dt); updateWingmen(dt); if (PRECISE) updatePrecF16(dt); if (SEAD) updateSead(dt); if (TANKER) updateTanker(dt); if (BRIDGE){ updateConvoy(dt); updateIllum(dt); } if (CSAR) updateCsar(dt); if (RECON) updateRecon(dt); if (TANKS) updateTanks(dt); updateLaser(); updateDogfight(dt); updateSecondaries(dt); }
+    else if (mode==='raid'){ updateBombs(dt); updateRaidAD(dt); updateWingmen(dt); if (RAIL) updateIronRail(dt); if (PRECISE) updatePrecF16(dt); if (plainRaid() && !MP.coop) updateRaidClock(dt); if (SEAD) updateSead(dt); if (TANKER) updateTanker(dt); if (BRIDGE){ updateConvoy(dt); updateIllum(dt); } if (CSAR) updateCsar(dt); if (RECON) updateRecon(dt); if (TANKS) updateTanks(dt); updateLaser(); updateDogfight(dt); updateSecondaries(dt); }
     else if (mode==='training'){ updateBombs(dt); updateLaser(); updateDogfight(dt); updateTraining(dt); }
     else { updateDogfight(dt); if (ESCORT) updateEscort(dt); if (AWACS) updateAwacs(dt); if (DRONES) updateDroneHunt(dt); if (FLEET && state==='fly') updateFleet(dt); }
     updatePip(dt);
