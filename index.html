@@ -3506,7 +3506,7 @@ function peerLobby(){
   const okObj=v=>v && typeof v==='object' && !Array.isArray(v);
   const fits=v=>{ try { return JSON.stringify(v).length<6000; } catch (e) { return false; } };
   return { join(name){
-    const hubId='thinair-v1-'+String(name).toLowerCase().replace(/[^a-z0-9_-]/g,'_').slice(0,60)+'-0';   // broker ids must end in a letter or digit
+    const hubId='thinair-v2-'+String(name).toLowerCase().replace(/[^a-z0-9_-]/g,'_').slice(0,60)+'-0';   // broker ids must end in a letter or digit
     const R={me:null, peer:null, hub:false, up:null, conns:new Map(), others:new Map(), mine:{}, myAt:Date.now(), subs:new Set(), errs:new Set(), left:false, gen:0};
     // ---- voice: push-to-talk over direct WebRTC audio calls. Once a pilot has allowed the microphone, they hold one
     // one-way call to every other pilot; the mic track is switched on only while TALK is held, so nothing is sent otherwise.
@@ -3545,15 +3545,36 @@ function peerLobby(){
     const dropAll=()=>{ const ids=[...R.others.keys()]; ids.forEach(vDrop); R.others.clear(); if (ids.length) notify([],ids); };
     const fail=code=>{ R.errs.forEach(f=>{ try { f({code}); } catch (e) {} }); };
     function send(c,msg){ try { if (c && c.open) c.send(msg); } catch (e) {} }
+    // a link is "busy" while earlier messages are still queued in it. Positions are never queued behind a busy link:
+    // only each pilot's latest state is kept and it goes out on the next free tick, so a slow phone or relay never
+    // builds up a backlog that leaves the other pilots seeing stale or missing jets.
+    function free(c){
+      try { if (!c || !c.open) return false; if (c.bufferSize>2) return false; const dc=c.dataChannel; return !dc || dc.bufferedAmount<128*1024; }
+      catch (e) { return true; }
+    }
+    // hub: which pilots' states each link still has to receive
+    const pend=c=>c._pend||(c._pend=new Set());
+    function hubMark(id){ R.conns.forEach((o,cid)=>{ if (cid!==id) pend(o).add(id); }); }
+    function hubFlush(){
+      R.conns.forEach(c=>{
+        const P=c._pend; if (!P || !P.size || !free(c)) return;
+        const list=[]; P.forEach(id=>{ if (id===R.me) list.push([id,R.mine]); else { const o=R.others.get(id); if (o) list.push([id,o.pres]); } });
+        P.clear(); if (list.length) send(c,{t:'b', list});
+      });
+    }
+    let dirty=false;   // client: my latest state still to go to the hub
+    function clientFlush(){ if (dirty && free(R.up)){ dirty=false; send(R.up,{t:'p', pres:R.mine}); } }
+    const tick=setInterval(()=>{ if (R.left){ clearInterval(tick); return; } if (R.hub) hubFlush(); else clientFlush(); }, 66);
     function becomeHub(p){
       R.hub=true; R.me=p.id; R.peer=p; p.on('call',vOnCall);
+      R.others.forEach((o,id)=>hubMark(id));
       p.on('connection',c=>{
         c.on('open',()=>{ R.conns.set(c.peer,c);
           send(c,{t:'all', list:[[R.me,R.mine], ...[...R.others].map(([id,o])=>[id,o.pres])]}); });
         c.on('data',m=>{ if (!okObj(m) || m.t!=='p' || !okObj(m.pres) || !fits(m.pres)) return;
-          setOther(c.peer,m.pres);
-          R.conns.forEach((o,id)=>{ if (id!==c.peer) send(o,{t:'p', id:c.peer, pres:m.pres}); }); });
-        const gone=()=>{ if (R.conns.get(c.peer)!==c) return; R.conns.delete(c.peer); dropOther(c.peer); R.conns.forEach(o=>send(o,{t:'x', id:c.peer})); };
+          if (!R.conns.has(c.peer) && c.open) R.conns.set(c.peer,c);   // data can arrive before our 'open' fires
+          setOther(c.peer,m.pres); hubMark(c.peer); });
+        const gone=()=>{ if (R.conns.get(c.peer)!==c) return; R.conns.delete(c.peer); dropOther(c.peer); R.conns.forEach(o=>{ if (o._pend) o._pend.delete(c.peer); send(o,{t:'x', id:c.peer}); }); };
         c.on('close',gone); c.on('error',gone);
       });
     }
@@ -3561,9 +3582,9 @@ function peerLobby(){
       R.hub=false; R.me=p.id; R.peer=p; p.on('call',vOnCall);
       const c=p.connect(hubId,{serialization:'json'});
       const to=setTimeout(()=>{ if (gen===R.gen && !R.up){ try { p.destroy(); } catch (e) {} reject({code:'no_link'}); } },20000);   // found the host, but no path between the two networks
-      c.on('open',()=>{ clearTimeout(to); R.up=c; send(c,{t:'p', pres:R.mine}); resolve(); });
+      c.on('open',()=>{ clearTimeout(to); R.up=c; send(c,{t:'p', pres:R.mine}); dirty=false; resolve(); });
       c.on('data',m=>{ if (!okObj(m)) return;
-        if (m.t==='all' && Array.isArray(m.list)) m.list.forEach(x=>{ if (Array.isArray(x) && fits(x[1])) setOther(String(x[0]),x[1]); });
+        if ((m.t==='all' || m.t==='b') && Array.isArray(m.list)) m.list.forEach(x=>{ if (Array.isArray(x) && fits(x[1])) setOther(String(x[0]),x[1]); });
         else if (m.t==='p' && fits(m.pres)) setOther(String(m.id),m.pres);
         else if (m.t==='x') dropOther(String(m.id)); });
       c.on('close',()=>{ if (gen!==R.gen || R.left) return; R.up=null; dropAll(); try { p.destroy(); } catch (e) {} rejoin(); });   // the hub left: elect a new one
@@ -3595,7 +3616,7 @@ function peerLobby(){
       presence(patch){
         if (okObj(patch)) for (const k of Object.keys(patch)){ if (patch[k]===null) delete R.mine[k]; else R.mine[k]=patch[k]; }
         R.myAt=Date.now();
-        if (R.hub) R.conns.forEach(c=>send(c,{t:'p', id:R.me, pres:R.mine})); else send(R.up,{t:'p', pres:R.mine});
+        if (R.hub) hubMark(R.me); else dirty=true;   // goes out on the next free tick (about 15 a second), latest state only
         return Promise.resolve();
       },
       onPeers(fn,onErr){ R.subs.add(fn); if (onErr) R.errs.add(onErr); setTimeout(()=>{ if (R.subs.has(fn)) fn({peers:list(), joined:[], left:[]}); },0);
