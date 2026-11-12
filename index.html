@@ -636,7 +636,7 @@ html.short .mfilter button{padding:3px 8px;font-size:9px;}
         <label class="check"><input type="checkbox" id="musicOn" checked> Menu music</label>
         <label class="check"><input type="checkbox" id="stallProt" checked> Stall protection</label>
         <label class="check"><input type="checkbox" id="lowGfx"> Low graphics</label>
-        <label class="check"><input type="checkbox" id="newModels"> New aircraft models (Mirage 2000 so far)</label>
+        <label class="check"><input type="checkbox" id="newModels" checked> New aircraft models</label>
         <label class="check"><input type="checkbox" id="invert"> Invert pitch</label>
       </div>
     </section>
@@ -1682,6 +1682,282 @@ function buildMirage2(){
   g.userData.hp=[[-2.0,-0.62,2.2],[2.0,-0.62,2.2],[-3.2,-0.55,3.4],[3.2,-0.55,3.4],[-1.15,-0.95,0.6],[1.15,-0.95,0.6]];
   return g;
 }
+// ---------- the rest of the fleet, new style. Shared helpers first.
+// FS: one fuselage section (z, half-width, height above the centre, depth below it, centre y, squareness)
+const FS=(z,w,h,hb,y,n)=>({z, w, h, hb:hb==null ? h : hb, y:y||0, n:n||2});
+const SX=(s,x,o)=>Object.assign({},o,{x:s*x});   // the same section, moved out to one side
+const yt4=c=>5*(0.2969*Math.sqrt(c)-0.126*c-0.3516*c*c+0.2843*c*c*c-0.1036*c*c*c*c);
+function wingTop(st,x,z){   // height of the wing's upper skin at a point, for placing the roundels on it
+  x=Math.abs(x);
+  for (let i=0;i<st.length-1;i++) if (x>=st[i].x && x<=st[i+1].x){ const f=(x-st[i].x)/(st[i+1].x-st[i].x), L=k=>st[i][k]+(st[i+1][k]-st[i][k])*f, le=L('le'), te=L('te');
+    return L('y')+yt4(clamp((z-le)/(te-le),0,1))*L('t')*(te-le); }
+  return st[0].y;
+}
+// WS: wing stations from rows [x, leading edge z, trailing edge z, thickness ratio], all at height y
+const WS=(y,rows)=>rows.map(([x,le,te,t])=>({x, y, le, te, t:t||0.04}));
+function wings2(g,st,mat){ [-1,1].forEach(s=>g.add(new T.Mesh(wingGeo(st,s),mat))); }
+function rnd2(g,st,x,z){ const y=wingTop(st,x,z)+0.025; roundels(g,[[-x,y,z],[x,y,z]]); }
+function loft2(g,secs,mat,seg,a,b){ const m=new T.Mesh(loftGeo(secs,seg,a,b),mat); g.add(m); return m; }
+// a boxy side intake: the dark mouth plate (which the detail pass reads for its splitter plate) and a duct fading into the body
+function intake2(g,s,body,o){
+  const n=o.n||3.5, tx=o.tx==null ? o.x*0.8 : o.tx;
+  loft2(g,[{z:o.z,x:s*o.x,y:o.y,w:o.w,h:o.h,n},{z:o.z+o.len*0.45,x:s*o.x,y:o.y,w:o.w*1.03,h:o.h*1.03,n},{z:o.z+o.len,x:s*tx,y:o.y,w:o.w*0.35,h:o.h*0.6,n:2.4}],body,14,false,true);
+  const mouth=new T.Mesh(new T.BoxGeometry(o.w*1.8,o.h*1.8,0.05), darkMat); mouth.position.set(s*o.x,o.y,o.z+0.03); g.add(mouth);
+}
+function chin2(g,body,secs){   // a chin intake under the nose (F-16, J-10): the scoop and its dark mouth
+  loft2(g,secs,body,16,false,true); const a=secs[0];
+  const m=new T.Mesh(new T.CircleGeometry(1,18), darkMat); m.scale.set(a.w*0.9,a.h*0.88,1); m.rotation.y=Math.PI; m.position.set(0,a.y,a.z+0.03); g.add(m);
+}
+function probe2(g,x,y,z,len){   // fixed refuelling probe beside the windscreen
+  const p=new T.Mesh(new T.CylinderGeometry(0.035,0.035,len,6), darkMat); p.rotation.x=Math.PI/2-0.12; p.position.set(x,y,z); g.add(p);
+  const t=new T.Mesh(new T.SphereGeometry(0.06,8,6), darkMat); t.position.set(x,y+len*0.06,z-len/2); g.add(t);
+}
+function buildRafale2(){
+  const g=newPlane(), {body,skin}=skins('#6f7a84',['#5b656e','#828c95'],19), wsk=skin2(skin);
+  loft2(g,[FS(-7.9,0.03,0.03,null,-0.05),FS(-7.4,0.17,0.17,null,-0.05),FS(-6.6,0.36,0.36,null,-0.03),FS(-5.8,0.5,0.58,0.48),FS(-5.0,0.62,0.76,0.56),FS(-4.0,0.74,0.86,0.62),
+    FS(-2.8,0.86,0.87,0.7,0,2.4),FS(-1.5,0.98,0.83,0.78,0,2.8),FS(0.5,1.02,0.78,0.74,0,3),FS(3,1.0,0.7,0.62,0,3),FS(5.5,0.98,0.6,0.58,-0.05,3),FS(7.0,0.96,0.52,0.54,-0.12,3.2)],body,24);
+  const W=WS(-0.2,[[0.8,-1.78,5.22,0.045],[2.6,0.72,5.2,0.042],[5.2,4.32,5.17,0.038],[5.42,4.75,5.14,0.034]]);
+  wings2(g,W,wsk);
+  wings2(g,WS(0.13,[[0.7,-4.45,-2.7,0.05],[2.5,-3.05,-2.62,0.045],[2.62,-2.9,-2.65,0.04]]),wsk);   // canards
+  [-1,1].forEach(s=>{ intake2(g,s,body,{x:0.92,y:-0.42,z:-2.35,w:0.33,h:0.36,len:3.2,tx:0.75,n:3}); nozzle(g,s*0.5,-0.15,7.3,0.48); });
+  g.add(fin([[1.6,0.55],[2.6,0.85],[5.3,3.5],[5.6,3.65],[6.55,3.65],[6.6,3.3],[6.2,0.55]],0.14,skin));
+  probe2(g,0.36,0.52,-6.3,1.3);
+  canopy(g,0.6,3.8,0.8,-4.6);
+  rnd2(g,W,3.6,3.7);
+  finFlash(g,0,2.8,5.0,0.17);
+  g.userData.hp=[[-2.4,-0.45,2.0],[2.4,-0.45,2.0],[-3.4,-0.42,3.0],[3.4,-0.42,3.0],[-0.6,-0.85,2.5],[0.6,-0.85,2.5]];
+  return g;
+}
+// the two big twin-fin jets share a layout: drooped forward fuselage, a flat lifting body between two engine nacelles
+function flanker2(g,body,skin,o){
+  const wsk=skin2(skin);
+  loft2(g,o.fwd,body,24); loft2(g,o.mid,body,20,true,true);
+  wings2(g,WS(0.02,o.lerx),wsk); const W=WS(0.02,o.wing); wings2(g,W,wsk); wings2(g,WS(o.tailY,o.tail),wsk);
+  if (o.canard) wings2(g,WS(0.12,o.canard),wsk);
+  [-1,1].forEach(s=>{
+    loft2(g,o.nac.map(q=>SX(s,o.nx,q)),body,16,false,false);
+    const mouth=new T.Mesh(new T.BoxGeometry(o.mw,o.mh,0.05), darkMat); mouth.position.set(s*o.nx,o.nac[0].y,o.nac[0].z+0.03); g.add(mouth);
+    nozzle(g,s*o.nx,o.nozY,o.nozZ,o.nozR);
+    const f=fin(o.fin,o.finT,skin); f.position.x=s*o.finX; f.rotation.z=-s*(o.cant||0); g.add(f);
+    finFlash(g,s*(o.finX+(o.flashDx||0)),o.flash[0],o.flash[1],o.finT+0.04,-s*(o.cant||0));
+  });
+  return W;
+}
+function buildSu302(){
+  const g=newPlane(), {body,skin}=skins('#9ea8b0',['#7f8b95','#b6bec5'],29);
+  const W=flanker2(g,body,skin,{
+    fwd:[FS(-10,0.03,0.03,null,-0.12),FS(-9.4,0.2,0.2,null,-0.1),FS(-8.4,0.4,0.42,null,-0.06),FS(-7.4,0.56,0.66,0.52),FS(-6.4,0.68,0.86,0.6),FS(-5.0,0.8,0.97,0.66),FS(-3.5,0.9,0.96,0.6),
+      FS(-1.5,1.0,0.82,0.5,0,2.4),FS(1.0,0.9,0.62,0.4,0,2.4),FS(4,0.5,0.42,0.3),FS(8.6,0.14,0.22,0.12),FS(10.6,0.05,0.08,0.06)],
+    mid:[FS(-2.5,1.6,0.3,0.3,0,3),FS(0,2.1,0.38,0.38,0,3.5),FS(5,2.0,0.36,0.36,0,3.5),FS(8.6,1.9,0.28,0.28,-0.05,3.5)],
+    lerx:[[0.6,-6.5,-1.0,0.02],[1.9,-1.5,-0.5,0.03]], wing:[[1.8,-1.6,5.35,0.04],[4.5,1.0,4.95,0.04],[7.1,3.5,4.62,0.04],[7.25,3.7,4.6,0.035]],
+    tail:[[1.8,6.5,9.6,0.04],[4.7,8.5,9.45,0.04],[4.82,8.7,9.4,0.035]], tailY:-0.2, canard:[[0.9,-6.0,-4.3,0.05],[2.9,-4.65,-4.1,0.045],[3.02,-4.5,-4.15,0.04]],
+    nx:1.35, nac:[FS(-2.55,0.45,0.42,null,-0.68,4),FS(-1,0.5,0.48,null,-0.66,3.5),FS(2,0.6,0.6,null,-0.58),FS(6,0.64,0.64,null,-0.55),FS(9.0,0.6,0.6,null,-0.55)], mw:0.85, mh:0.8,
+    nozY:-0.55, nozZ:9.4, nozR:0.6, fin:[[4.4,0.25],[5.4,0.5],[7.4,3.7],[7.7,3.85],[8.75,3.85],[8.8,3.5],[8.4,0.25]], finT:0.14, finX:1.55, flash:[2.6,7.0]});
+  canopy(g,0.65,4.4,0.85,-5.6);
+  rnd2(g,W,4.8,3.6);
+  g.userData.hp=[[-3.2,-0.35,2.4],[3.2,-0.35,2.4],[-4.4,-0.3,3.2],[4.4,-0.3,3.2],[-5.6,-0.25,3.8],[5.6,-0.25,3.8],[-0.55,-0.6,1.0],[0.55,-0.6,1.0]];
+  return g;
+}
+function buildMig292(){
+  const g=newPlane(), {body,skin}=skins('#8c98a3',['#66788a','#aab4be'],23);
+  const W=flanker2(g,body,skin,{
+    fwd:[FS(-8.7,0.03,0.03,null,-0.1),FS(-8.1,0.2,0.2,null,-0.08),FS(-7.2,0.38,0.4,null,-0.05),FS(-6.2,0.52,0.62,0.5),FS(-5.2,0.64,0.84,0.56),FS(-4,0.74,0.92,0.58),
+      FS(-2.5,0.82,0.82,0.5,0,2.4),FS(0,0.8,0.62,0.4,0,2.4),FS(3,0.6,0.45,0.3),FS(6.5,0.3,0.3,0.2),FS(7.6,0.08,0.1,0.08)],
+    mid:[FS(-2.2,1.3,0.26,0.26,0,3),FS(0,1.75,0.34,0.34,0,3.5),FS(4,1.7,0.32,0.32,0,3.5),FS(7.2,1.6,0.26,0.26,-0.03,3.5)],
+    lerx:[[0.5,-5.6,-1.0,0.02],[1.7,-1.3,-0.6,0.03]], wing:[[1.6,-1.4,3.92,0.045],[3.8,0.65,3.75,0.042],[5.8,2.5,3.6,0.04],[5.95,2.7,3.55,0.035]],
+    tail:[[1.5,4.9,7.8,0.04],[3.9,6.8,7.65,0.04],[4.02,7.0,7.6,0.035]], tailY:-0.15,
+    nx:1.05, nac:[FS(-3.25,0.44,0.4,null,-0.62,4),FS(-1.6,0.5,0.46,null,-0.58,3.5),FS(1,0.58,0.58,null,-0.52),FS(5,0.6,0.6,null,-0.5),FS(7.0,0.56,0.56,null,-0.5)], mw:0.8, mh:0.7,
+    nozY:-0.5, nozZ:7.4, nozR:0.56, fin:[[3.4,0.2],[4.4,0.45],[5.9,2.9],[6.2,3.05],[7.05,3.05],[7.1,2.7],[6.8,0.2]], finT:0.13, finX:1.3, cant:0.14, flashDx:0.31, flash:[2.2,6.15]});
+  canopy(g,0.6,3.8,0.82,-4.6);
+  rnd2(g,W,3.8,2.9);
+  g.userData.hp=[[-2.6,-0.35,2.0],[2.6,-0.35,2.0],[-3.6,-0.3,2.6],[3.6,-0.3,2.6],[-4.6,-0.25,3.0],[4.6,-0.25,3.0]];
+  return g;
+}
+function buildTejas2(){
+  const g=newPlane(), {body,skin}=skins('#8f99a2',['#717d88','#a8b1b9'],43), wsk=skin2(skin);
+  loft2(g,[FS(-7.2,0.03,0.03,null,-0.06),FS(-6.7,0.16,0.16,null,-0.05),FS(-5.8,0.33,0.34,null,-0.03),FS(-5.0,0.45,0.52,0.44),FS(-4.2,0.56,0.7,0.5),FS(-3.2,0.68,0.8,0.58),FS(-2,0.78,0.82,0.66),
+    FS(0,0.84,0.78,0.72,0,2.3),FS(2.4,0.8,0.74,0.72),FS(4.2,0.66,0.64,0.64),FS(5.6,0.54,0.54),FS(6.15,0.5,0.5)],body,24);
+  const W=WS(-0.2,[[0.6,-3.3,4.65,0.035],[1.6,-0.6,4.65,0.045],[3.9,3.45,4.6,0.04],[4.1,3.85,4.55,0.035]]);   // the cranked double delta
+  wings2(g,W,wsk);
+  [-1,1].forEach(s=>intake2(g,s,body,{x:0.86,y:-0.3,z:-1.75,w:0.27,h:0.36,len:2.8,tx:0.7}));
+  g.add(fin([[1.1,0.6],[2.0,0.85],[4.7,3.3],[5.0,3.45],[5.85,3.45],[5.9,3.1],[5.5,0.6]],0.13,skin));
+  probe2(g,0.34,0.44,-5.3,1.2);
+  canopy(g,0.52,2.8,0.78,-3.4);
+  nozzle(g,0,0,6.2,0.5);
+  rnd2(g,W,2.8,3.4);
+  finFlash(g,0,2.5,4.7,0.16);
+  g.userData.hp=[[-1.9,-0.45,1.8],[1.9,-0.45,1.8],[-2.9,-0.42,2.9],[2.9,-0.42,2.9]];
+  return g;
+}
+function buildMig212(){
+  const g=newPlane(), {body,skin}=skins('#9aa3ab',['#7a8794','#b9c0c6'],37), wsk=skin2(skin);
+  loft2(g,[FS(-7.4,0.5,0.5),FS(-6.9,0.56,0.56),FS(-5.8,0.66,0.7,0.66),FS(-4.6,0.72,0.86,0.72),FS(-3.5,0.78,0.92,0.78),FS(-2,0.8,0.93,0.8),FS(0,0.82,0.9,0.82),FS(3.2,0.76,0.84,0.76),
+    FS(5.8,0.64,0.66,0.64),FS(6.9,0.56,0.56),FS(7.45,0.52,0.52)],body,24);
+  { const lip=new T.Mesh(new T.CircleGeometry(0.46,18), darkMat); lip.rotation.y=Math.PI; lip.position.z=-7.3; g.add(lip); }   // the nose intake, with its shock cone
+  const cone=new T.Mesh(new T.ConeGeometry(0.36,1.5,12), darkMat); cone.rotation.x=-Math.PI/2; cone.position.z=-7.8; g.add(cone);
+  const W=WS(-0.22,[[0.6,-1.35,4.25,0.045],[2.3,1.13,4.22,0.042],[3.85,3.38,4.2,0.038],[4.0,3.62,4.15,0.034]]);
+  wings2(g,W,wsk);
+  wings2(g,WS(-0.05,[[0.5,4.8,7.25,0.04],[2.5,6.7,7.2,0.04],[2.62,6.85,7.18,0.035]]),wsk);
+  g.add(fin([[1.6,0.6],[2.6,0.9],[5.6,3.2],[5.9,3.35],[6.85,3.35],[6.9,3.0],[6.5,0.6]],0.12,skin));
+  g.add(fin([[4.6,-0.55],[6.6,-0.55],[6.5,-1.25],[6.0,-1.25]],0.1,skin));
+  canopy(g,0.48,2.7,0.82,-3.9);
+  nozzle(g,0,0,7.5,0.52);
+  rnd2(g,W,2.6,3.0);
+  finFlash(g,0,2.5,5.6,0.15);
+  g.userData.hp=[[-1.9,-0.5,1.6],[1.9,-0.5,1.6],[-2.8,-0.45,2.6],[2.8,-0.45,2.6]];
+  return g;
+}
+function buildJF172(){
+  const g=newPlane(), {body,skin}=skins('#9aa2a8',['#7f8a93','#b3bac0'],61), wsk=skin2(skin);
+  loft2(g,[FS(-7.6,0.03,0.03,null,-0.06),FS(-7.0,0.18,0.18,null,-0.05),FS(-6.2,0.34,0.36,null,-0.03),FS(-5.3,0.48,0.56,0.46),FS(-4.4,0.6,0.72,0.52),FS(-3.3,0.72,0.82,0.6),FS(-2,0.82,0.83,0.7),
+    FS(0,0.88,0.8,0.76,0,2.3),FS(2.5,0.82,0.76,0.74),FS(4.6,0.64,0.62,0.62),FS(6.0,0.54,0.54),FS(6.5,0.52,0.52)],body,24);
+  wings2(g,WS(-0.1,[[0.55,-4.2,-0.6,0.025],[1.2,-1.0,-0.4,0.03]]),wsk);
+  wings2(g,WS(-0.1,[[1.1,-1.1,3.6,0.045],[2.9,0.5,3.2,0.042],[4.5,1.92,2.84,0.04],[4.62,2.1,2.8,0.035]]),wsk);
+  wings2(g,WS(-0.05,[[0.5,4.6,6.7,0.04],[2.6,5.95,6.62,0.04],[2.72,6.1,6.6,0.035]]),wsk);
+  [-1,1].forEach(s=>intake2(g,s,body,{x:0.9,y:-0.15,z:-2.05,w:0.28,h:0.38,len:2.9,tx:0.74}));
+  g.add(fin([[2.0,0.62],[3.0,0.9],[5.3,3.15],[5.6,3.3],[6.55,3.3],[6.6,2.95],[6.2,0.62]],0.13,skin));
+  canopy(g,0.55,3.0,0.78,-3.7);
+  nozzle(g,0,0,6.6,0.52);
+  pkFlag(g,2.6,5.1,0.16);
+  g.userData.hp=[[-2.2,-0.35,1.4],[2.2,-0.35,1.4],[-3.4,-0.3,2.2],[3.4,-0.3,2.2]];
+  return g;
+}
+function buildF162(){
+  const g=newPlane(), {body,skin}=skins('#8e979f',['#737d86','#a6aeb5'],83), wsk=skin2(skin);
+  loft2(g,[FS(-8,0.03,0.03,null,-0.05),FS(-7.4,0.18,0.18,null,-0.04),FS(-6.5,0.36,0.36,null,-0.02),FS(-5.6,0.5,0.56,0.48),FS(-4.8,0.62,0.76,0.54),FS(-3.8,0.74,0.88,0.6),FS(-2.6,0.84,0.88,0.7,0,2.3),
+    FS(-1,0.94,0.82,0.8,0,2.6),FS(1,0.98,0.78,0.8,0,2.8),FS(3.5,0.86,0.72,0.74,0,2.4),FS(5.5,0.66,0.64,0.64),FS(6.8,0.56,0.56)],body,24);
+  chin2(g,body,[FS(-2.65,0.56,0.3,null,-0.98,2.6),FS(-1.5,0.6,0.34,null,-0.98,2.6),FS(0.6,0.5,0.28,null,-0.9),FS(2.2,0.2,0.12,null,-0.75)]);
+  wings2(g,WS(-0.1,[[0.5,-4.6,-0.8,0.02],[1.1,-1.2,-0.6,0.03]]),wsk);
+  wings2(g,WS(-0.1,[[1.0,-1.3,3.82,0.04],[2.9,0.5,3.4,0.04],[4.6,2.1,3.02,0.04],[4.72,2.25,3.0,0.035]]),wsk);
+  wings2(g,WS(-0.1,[[0.6,5.1,7.3,0.04],[2.9,6.55,7.22,0.04],[3.02,6.7,7.2,0.035]]),wsk);
+  g.add(fin([[2.2,0.66],[3.2,0.95],[5.5,3.35],[5.8,3.5],[6.75,3.5],[6.8,3.15],[6.4,0.66]],0.13,skin));
+  [-1,1].forEach(s=>{
+    const v=fin([[5.0,-0.6],[6.4,-0.6],[6.3,-1.1],[5.9,-1.1]],0.08,skin); v.position.x=s*0.6; v.rotation.z=s*0.3; g.add(v);
+    const m=mslProtoE.clone(); m.rotation.y=Math.PI; m.position.set(s*4.8,-0.05,2.5); g.add(m);   // wingtip missiles
+  });
+  canopy(g,0.55,3.0,0.85,-4.0);
+  nozzle(g,0,0,6.9,0.55);
+  usFlag(g,2.7,5.25,0.16);
+  g.userData.hp=[[-2.2,-0.35,1.4],[2.2,-0.35,1.4],[-3.3,-0.3,2.2],[3.3,-0.3,2.2],[-4.1,-0.28,2.7],[4.1,-0.28,2.7]];
+  return g;
+}
+function buildJ102(){
+  const g=newPlane(), {body,skin}=skins('#a3abb2',['#8a949d','#bcc3c9'],73), wsk=skin2(skin);
+  loft2(g,[FS(-8.1,0.03,0.03,null,-0.05),FS(-7.5,0.18,0.18,null,-0.04),FS(-6.6,0.36,0.37,null,-0.02),FS(-5.7,0.5,0.57,0.48),FS(-4.9,0.62,0.74,0.54),FS(-3.9,0.74,0.84,0.62),FS(-2.6,0.86,0.87,0.74,0,2.3),
+    FS(-1,0.94,0.84,0.84,0,2.5),FS(1.5,0.96,0.8,0.84,0,2.6),FS(4,0.84,0.74,0.74),FS(6,0.64,0.62,0.62),FS(7.05,0.55,0.55)],body,24);
+  chin2(g,body,[FS(-2.25,0.6,0.3,null,-1.0,3),FS(-1,0.62,0.34,null,-1.0,3),FS(1.2,0.5,0.28,null,-0.92),FS(2.8,0.2,0.12,null,-0.76)]);
+  wings2(g,WS(-0.22,[[0.8,-1.35,5.05,0.04],[2.6,1.37,5.03,0.04],[4.4,4.1,5.0,0.038],[4.6,4.45,4.95,0.034]]),wsk);
+  wings2(g,WS(0.08,[[0.7,-3.7,-2.1,0.05],[2.2,-2.45,-2.02,0.045],[2.32,-2.3,-2.05,0.04]]),wsk);   // canards
+  g.add(fin([[1.9,0.66],[2.9,0.95],[5.3,3.45],[5.6,3.6],[6.55,3.6],[6.6,3.25],[6.2,0.66]],0.13,skin));
+  [-1,1].forEach(s=>{ const v=fin([[5.0,-0.6],[6.6,-0.6],[6.5,-1.2],[6.0,-1.2]],0.08,skin); v.position.x=s*0.6; v.rotation.z=s*0.3; g.add(v); });
+  canopy(g,0.55,3.2,0.82,-4.2);
+  nozzle(g,0,0,7.1,0.55);
+  cnFlag(g,2.8,5.0,0.16);
+  g.userData.hp=[[-1.9,-0.4,2.2],[1.9,-0.4,2.2],[-2.9,-0.35,3.2],[2.9,-0.35,3.2],[-3.8,-0.3,4.1],[3.8,-0.3,4.1]];
+  return g;
+}
+function buildJaguar2(){
+  const g=newPlane(), {body,skin}=skins('#7f8770',['#5e6650','#a19e86'],67), wsk=skin2(skin);
+  loft2(g,[FS(-8.6,0.03,0.03,null,-0.1),FS(-7.8,0.2,0.2,null,-0.08),FS(-6.8,0.36,0.38,null,-0.04),FS(-5.8,0.5,0.6,0.5),FS(-4.8,0.6,0.78,0.58),FS(-3.6,0.72,0.86,0.68,0,2.4),FS(-2,0.84,0.84,0.76,0,2.8),
+    FS(0,0.92,0.8,0.8,0,3.2),FS(3,0.95,0.72,0.74,-0.05,3.4),FS(6,0.95,0.62,0.66,-0.12,3.4),FS(7.9,0.93,0.5,0.58,-0.2,3.4)],body,24);
+  const W=WS(0.6,[[0.8,-1.97,2.92,0.05],[2.6,0.04,2.72,0.045],[4.2,1.83,2.56,0.04],[4.36,2.05,2.52,0.035]]);   // the high shoulder wing
+  wings2(g,W,wsk);
+  wings2(g,WS(-0.45,[[0.6,5.5,8.1,0.04],[2.9,7.3,8.02,0.04],[3.02,7.45,8.0,0.035]]),wsk);
+  [-1,1].forEach(s=>{
+    intake2(g,s,body,{x:1.05,y:-0.05,z:-2.95,w:0.28,h:0.45,len:3.2,tx:0.85});
+    nozzle(g,s*0.5,-0.3,8.2,0.42);
+    const v=fin([[5.4,-0.7],[7.0,-0.7],[6.9,-1.2],[6.3,-1.2]],0.08,skin); v.position.x=s*0.6; v.rotation.z=s*0.25; g.add(v);
+    const m=mslProtoP.clone(); m.rotation.y=Math.PI; m.position.set(s*2.4,0.98,0.7); g.add(m);   // overwing self-defence missile
+  });
+  g.add(fin([[2.8,0.36],[3.8,0.7],[7.0,3.45],[7.3,3.6],[8.35,3.6],[8.4,3.25],[7.9,0.36]],0.13,skin));
+  canopy(g,0.52,2.8,0.8,-4.6);
+  rnd2(g,W,3.1,1.95);
+  finFlash(g,0,2.6,7.0,0.16);
+  g.userData.hp=[[-2.0,0.23,0.4],[2.0,0.23,0.4],[-3.1,0.23,1.6],[3.1,0.23,1.6],[0,-1.0,0.2],[0,-1.0,3.0]];
+  return g;
+}
+function buildMig272(){
+  const g=newPlane(), {body,skin}=skins('#8a8f7c',['#666d58','#a5a088'],53), wsk=skin2(skin);
+  loft2(g,[FS(-8.9,0.04,0.04,null,-0.42),FS(-8.2,0.24,0.22,null,-0.36),FS(-7.2,0.5,0.46,0.4,-0.26),FS(-6.2,0.7,0.78,0.52,-0.12),FS(-5.2,0.84,0.98,0.62,-0.06),FS(-4.2,0.94,1.04,0.76),
+    FS(-2.5,1.0,1.08,0.9,0,2.4),FS(0,1.0,1.08,0.98,0,2.4),FS(2.5,0.98,1.05,0.96),FS(5,0.92,0.98,0.9),FS(7.2,0.8,0.8),FS(8.3,0.66,0.66)],body,24);   // the sloping "duck" nose
+  const pt=new T.Mesh(new T.CylinderGeometry(0.03,0.03,1.0,5), darkMat); pt.rotation.x=Math.PI/2; pt.position.set(0,-0.42,-9.3); g.add(pt);
+  [-1,1].forEach(s=>intake2(g,s,body,{x:1.12,y:-0.05,z:-3.75,w:0.33,h:0.62,len:4.0,tx:0.9}));
+  wings2(g,WS(0.55,[[0.9,-3.5,2.05,0.03],[2.2,-1.6,1.4,0.05],[2.3,-1.4,1.3,0.045]]),wsk);   // fixed glove
+  g.userData.swing=[-1,1].map(s=>{   // outer panels on pivots that sweep with speed (see updateSwing)
+    const pv=new T.Group(); pv.position.set(s*2.0,0.55,-0.4); g.add(pv);
+    const P=WS(0.06,[[0,-1.0,1.8,0.05],[3.9,-0.25,0.72,0.045],[4.02,-0.1,0.68,0.04]]);
+    pv.add(new T.Mesh(wingGeo(P,s),wsk)); roundels(pv,[[s*2.6,wingTop(P,2.6,0.4)+0.025,0.4]]);
+    return {pv,s};
+  });
+  wings2(g,WS(-0.1,[[0.8,4.9,7.95,0.04],[3.3,7.25,8.0,0.04],[3.42,7.4,7.98,0.035]]),wsk);
+  g.add(fin([[2.0,0.9],[3.2,1.25],[6.5,4.45],[6.8,4.6],[7.95,4.6],[8.0,4.2],[7.5,0.9]],0.14,skin));
+  g.add(fin([[6.0,-0.8],[7.8,-0.8],[7.6,-1.6],[6.9,-1.6]],0.1,skin));
+  canopy(g,0.55,3.0,0.95,-5.0);
+  nozzle(g,0,0,8.4,0.65);
+  finFlash(g,0,3.6,7.2,0.17);
+  g.userData.hp=[[-1.75,0.18,-1.4],[1.75,0.18,-1.4],[-0.55,-1.3,-0.8],[0.55,-1.3,-0.8],[-0.55,-1.3,1.8],[0.55,-1.3,1.8],[-1.25,-1.0,0.9],[1.25,-1.0,0.9]];
+  return g;
+}
+// the three stealth jets share a layout too: a chined, diamond-section nose widening into a flat blended body, canted twin fins
+function stealth2(g,body,skin,o){
+  const wsk=skin2(skin);
+  loft2(g,o.fus,body,24);
+  const W=WS(-0.05,o.wing); wings2(g,W,wsk);
+  if (o.tail) wings2(g,WS(o.tailY,o.tail),wsk);
+  if (o.canard) wings2(g,WS(0.17,o.canard),wsk);
+  [-1,1].forEach(s=>{
+    loft2(g,o.duct.map(([z,x,w,h,n])=>({z, x:s*x, y:o.dy, w, h, n:n||2})),body,14,false,true);
+    const mouth=new T.Mesh(new T.BoxGeometry(o.mw,o.mh,0.05), darkMat); mouth.position.set(s*o.mx,o.dy,o.duct[0][0]+0.03); g.add(mouth);
+    if (o.eng){ loft2(g,o.eng.map(([z,w])=>({z, x:s*o.ex, y:o.ey, w, h:w})),body,14,true,false); nozzle(g,s*o.ex,o.ey,o.nozZ,o.nozR); }
+    const f=fin(o.fin,0.13,skin); f.position.x=s*o.finX; f.rotation.z=-s*o.cant; g.add(f);
+    const fg=new T.Group(); fg.position.x=s*o.finX; fg.rotation.z=-s*o.cant; g.add(fg); o.mark(fg,s);
+  });
+  return W;
+}
+function buildAMCA2(){
+  const g=newPlane(), {body,skin}=skins('#7a838b',['#6c757d','#88919a'],131);
+  const W=stealth2(g,body,skin,{
+    fus:[FS(-9.7,0.03,0.03,null,-0.05),FS(-9.0,0.3,0.16,0.12,-0.04,1.4),FS(-8.0,0.62,0.5,0.26,0,1.4),FS(-7,0.86,0.8,0.36,0,1.5),FS(-6,1.0,0.92,0.44,0,1.6),FS(-5,1.1,0.98,0.5,0,1.7),FS(-3.8,1.3,1.0,0.56,0,1.8),
+      FS(-2,1.9,0.9,0.62,-0.05,2.2),FS(0,2.1,0.8,0.66,-0.08,2.6),FS(3,2.0,0.66,0.62,-0.1,2.8),FS(6,1.75,0.5,0.58,-0.14,2.8),FS(8.3,1.45,0.36,0.5,-0.2,2.8)],
+    wing:[[1.5,-2.55,5.62,0.035],[3.6,0.6,5.2,0.035],[5.5,3.45,4.82,0.035],[5.62,3.7,4.78,0.03]],
+    tail:[[1.5,6.1,8.6,0.035],[3.8,7.7,8.5,0.035],[3.92,7.9,8.48,0.03]], tailY:-0.2,
+    duct:[[-4.45,1.5,0.48,0.48,3],[-3,1.5,0.5,0.5,3],[-1.2,1.35,0.4,0.45],[0.5,1.2,0.2,0.3]], dy:-0.3, mx:1.55, mw:0.9, mh:0.9,
+    eng:[[5.5,0.5],[7,0.62],[8.4,0.6]], ex:0.8, ey:-0.3, nozZ:8.5, nozR:0.6,
+    fin:[[4.3,0.35],[5.2,0.6],[6.6,2.95],[6.9,3.1],[8.05,3.1],[8.1,2.75],[7.7,0.35]], finX:1.6, cant:0.45, mark:(fg,s)=>finFlash(fg,s*0.08,2.0,6.3,0.15,0)});
+  canopy(g,0.62,4.0,0.95,-5.8);
+  rnd2(g,W,3.6,2.4);
+  g.userData.hp=[];   // weapons ride in the internal bay
+  return g;
+}
+function buildF352(){
+  const g=newPlane(), {body,skin}=skins('#6f7880',['#646d75','#7b848c'],151);
+  stealth2(g,body,skin,{
+    fus:[FS(-8.6,0.03,0.03,null,-0.05),FS(-7.9,0.34,0.18,0.14,-0.03,1.4),FS(-7,0.66,0.44,0.3,0,1.4),FS(-6,0.9,0.74,0.42,0,1.5),FS(-5,1.08,0.96,0.52,0,1.6),FS(-4,1.25,1.06,0.6,0,1.8),
+      FS(-2.5,1.7,1.0,0.68,-0.03,2.2),FS(0,1.9,0.9,0.72,-0.06,2.6),FS(2.5,1.75,0.78,0.72,-0.08,2.8),FS(5,1.2,0.7,0.72,-0.1,2.4),FS(6.6,0.82,0.72,0.74,-0.1),FS(7.35,0.72,0.72,0.72,-0.1)],
+    wing:[[1.5,-1.95,4.42,0.04],[3.4,0.28,4.1,0.04],[5.3,2.48,3.82,0.038],[5.42,2.7,3.78,0.033]],
+    tail:[[1.1,5.1,7.5,0.035],[3.3,6.5,7.32,0.035],[3.42,6.7,7.3,0.03]], tailY:-0.15,
+    duct:[[-4.25,1.38,0.43,0.5,3],[-3,1.38,0.45,0.52,3],[-1.5,1.25,0.35,0.45],[-0.2,1.1,0.15,0.3]], dy:-0.15, mx:1.4, mw:0.8, mh:0.95,
+    fin:[[3.9,0.45],[4.8,0.7],[5.9,2.75],[6.2,2.9],[7.15,2.9],[7.2,2.55],[6.8,0.45]], finX:1.25, cant:0.45, mark:fg=>usFlag(fg,1.75,5.45,0.13)});
+  nozzle(g,0,-0.1,7.4,0.72);
+  canopy(g,0.62,3.6,1.0,-4.6);
+  g.userData.hp=[];   // weapons ride in the internal bays
+  return g;
+}
+function buildJ202(){
+  const g=newPlane(), {body,skin}=skins('#4f565e',['#454c54','#5a6169'],97);
+  stealth2(g,body,skin,{
+    fus:[FS(-11,0.03,0.03,null,-0.05),FS(-10.2,0.32,0.16,0.12,-0.04,1.4),FS(-9,0.66,0.52,0.28,0,1.4),FS(-8,0.86,0.8,0.38,0,1.5),FS(-7,1.0,0.92,0.46,0,1.6),FS(-6,1.1,0.97,0.52,0,1.7),FS(-4.8,1.25,1.0,0.58,0,1.8),
+      FS(-3,1.75,0.9,0.64,-0.04,2.2),FS(0,1.95,0.78,0.66,-0.08,2.6),FS(3.5,1.9,0.64,0.62,-0.1,2.8),FS(7,1.6,0.48,0.56,-0.14,2.8),FS(9.1,1.4,0.36,0.5,-0.2,2.8)],
+    wing:[[1.3,-1.62,6.22,0.035],[3.8,1.43,5.86,0.035],[6.3,4.48,5.52,0.035],[6.42,4.7,5.48,0.03]],
+    canard:[[1.0,-5.3,-3.0,0.045],[3.3,-3.68,-3.08,0.04],[3.42,-3.5,-3.1,0.035]],
+    duct:[[-4.75,1.42,0.45,0.45,3],[-3.2,1.42,0.47,0.47,3],[-1.5,1.3,0.38,0.42],[0,1.15,0.18,0.28]], dy:-0.35, mx:1.45, mw:0.85, mh:0.85,
+    eng:[[6,0.48],[7.8,0.6],[9.1,0.58]], ex:0.78, ey:-0.3, nozZ:9.2, nozR:0.58,
+    fin:[[4.9,0.35],[5.8,0.6],[7.2,3.05],[7.5,3.2],[8.55,3.2],[8.6,2.85],[8.2,0.35]], finX:1.5, cant:0.4, mark:fg=>cnFlag(fg,2.0,6.75,0.13)});
+  [-1,1].forEach(s=>{ const vf=fin([[6.5,-0.1],[8.2,-0.1],[8.4,-1.1],[7.4,-1.1]],0.1,skin); vf.position.set(s*1.1,-0.5,0); vf.rotation.z=s*0.5; g.add(vf); });
+  canopy(g,0.62,4.2,0.95,-6.6);
+  g.userData.hp=[];   // weapons ride in the internal bay
+  return g;
+}
 function buildMig29(){
   const g=newPlane(), {body,skin}=skins('#8c98a3',['#66788a','#aab4be'],23);
   g.add(new T.Mesh(lathe([[0.95,-1.5],[0.95,0.5],[0.85,2.8],[0.7,4.6],[0.5,6.3],[0.26,7.8],[0.04,8.7]]), body));
@@ -2037,11 +2313,17 @@ const DETAIL = {
   mig29:{serial:'KB 734', pitot:1}, mig21:{serial:'C 2786', pitot:1}, mig27:{serial:'TS 548', pitot:1}, jaguar:{serial:'JS 139', pitot:1},
   amca:{serial:'AX 004', ink:'#2c3238'}, jf17:{serial:'14-127', pitot:1}, f16:{serial:'AF 412'}, j10:{serial:'31-058', pitot:1},
   j20:{serial:'78-271', ink:'#9aa2aa'}, f35:{serial:'AF 6093', ink:'#3a4148'} };
-const detailed=(k,fn)=>()=>detailPlane(fn(),DETAIL[k]);
-// Settings, "New aircraft models": jets that have a new-style builder use it while the box is ticked (off by default)
-try { $('newModels').checked = localStorage.getItem('thinair.newac')==='1'; } catch (e) {}
+// Settings, "New aircraft models" (on by default): every fighter has a new-style builder; untick the box to fly the
+// original models again. If a new builder ever fails, that jet falls back to its original model.
+try { $('newModels').checked = localStorage.getItem('thinair.newac')!=='0'; } catch (e) {}
 const newModelsOn=()=>{ const e=$('newModels'); return !!(e && e.checked); };
-const BUILD = {m2k:()=>detailPlane((newModelsOn() ? buildMirage2 : buildMirage)(), DETAIL.m2k), rafale:detailed('rafale',buildRafale), su30:detailed('su30',buildSu30), tejas:detailed('tejas',buildTejas),
+const NEWB={m2k:buildMirage2, rafale:buildRafale2, su30:buildSu302, tejas:buildTejas2, mig29:buildMig292, mig21:buildMig212, mig27:buildMig272, jaguar:buildJaguar2,
+  amca:buildAMCA2, jf17:buildJF172, f16:buildF162, j10:buildJ102, j20:buildJ202, f35:buildF352};
+const detailed=(k,fn)=>()=>{
+  if (newModelsOn() && NEWB[k]){ try { return detailPlane(NEWB[k](),DETAIL[k]); } catch (e) { console.error('New model failed, using the original: '+k, e); } }
+  return detailPlane(fn(),DETAIL[k]);
+};
+const BUILD = {m2k:detailed('m2k',buildMirage), rafale:detailed('rafale',buildRafale), su30:detailed('su30',buildSu30), tejas:detailed('tejas',buildTejas),
   mig29:detailed('mig29',buildMig29), mig21:detailed('mig21',buildMig21), mig27:detailed('mig27',buildMig27), jaguar:detailed('jaguar',buildJaguar),
   amca:detailed('amca',buildAMCA), jf17:detailed('jf17',buildJF17), f16:detailed('f16',buildF16), j10:detailed('j10',buildJ10), j20:detailed('j20',buildJ20), f35:detailed('f35',buildF35)};
 
@@ -5344,39 +5626,34 @@ function musicTick(){
   if (!MUS || !MUS.on) return;
   while (MUS.next < actx.currentTime+0.25){ musicStep(MUS.step,MUS.next); MUS.step++; MUS.next+=MUS_ST; }
 }
-// the menu track file sits next to the page; it is decoded once and looped through Web Audio so the fades work on every phone.
-// While it loads nothing plays; if it cannot load, the built-in synth track above plays instead.
+// the menu track file sits next to the page; if it cannot load, the built-in synth track above plays instead.
 const MUSIC_URL='tunetank-epic-warrior-music-413439.mp3', MUSIC_FILE_VOL=0.6;
-var MFILE={buf:null, loading:false, failed:false, src:null, g:null, on:false};
-function musicLoad(){
-  if (MFILE.buf || MFILE.loading || MFILE.failed) return;
-  MFILE.loading=true;
-  fetch(MUSIC_URL).then(r=>{ if (!r.ok) throw new Error('http '+r.status); return r.arrayBuffer(); })
-    .then(ab=>new Promise((res,rej)=>actx.decodeAudioData(ab,res,rej)))
-    .then(b=>{ MFILE.buf=b; MFILE.loading=false; musicSync(); })
-    .catch(()=>{ MFILE.failed=true; MFILE.loading=false; musicSync(); });
+// The file is streamed through an <audio> element: it starts within a moment of the first tap, even on a phone, instead
+// of waiting for the whole 5 MB to download and decode (which took many seconds on a phone, or failed for lack of memory).
+var MFILE={el:null, failed:false, on:false, fade:0};
+function musicEl(){
+  if (MFILE.el || MFILE.failed) return MFILE.el;
+  try { const a=new Audio(); a.loop=true; a.preload='auto'; a.volume=0; a.src=MUSIC_URL;
+    a.addEventListener('error',()=>{ MFILE.failed=true; MFILE.on=false; musicSync(); });   // no file: the synth track takes over
+    MFILE.el=a; } catch (e) { MFILE.failed=true; }
+  return MFILE.el;
 }
-function musicFileSync(want){
-  const now=actx.currentTime;
-  if (!MFILE.g){ MFILE.g=actx.createGain(); MFILE.g.gain.value=0; MFILE.g.connect(actx.destination); }
-  const g=MFILE.g.gain; g.cancelScheduledValues(now); g.setValueAtTime(g.value,now);
-  if (want && !MFILE.on){
-    if (actx.state==='suspended') actx.resume();
-    const s=actx.createBufferSource(); s.buffer=MFILE.buf; s.loop=true; s.connect(MFILE.g); s.start(now+0.05);
-    MFILE.src=s; MFILE.on=true; g.linearRampToValueAtTime(MUSIC_FILE_VOL,now+2);
-  } else if (!want && MFILE.on){
-    const s=MFILE.src; MFILE.on=false; MFILE.src=null; g.linearRampToValueAtTime(0,now+1.2);
-    try { s.stop(now+1.3); } catch (e) {}
-  }
+function musicFade(to,secs){   // (iPhones ignore the volume of an <audio> element: there it simply starts and stops)
+  clearInterval(MFILE.fade); const a=MFILE.el, from=a.volume, t0=performance.now();
+  MFILE.fade=setInterval(()=>{ const k=Math.min(1,(performance.now()-t0)/(secs*1000)); try { a.volume=clamp(from+(to-from)*k,0,1); } catch (e) {}
+    if (k>=1){ clearInterval(MFILE.fade); if (to===0 && !MFILE.on) a.pause(); } },50);
 }
 function musicSync(){
   try {
+    const want=musicWanted(), a=want ? musicEl() : MFILE.el;
+    if (a && !MFILE.failed){
+      if (want && !MFILE.on){ MFILE.on=true; musicFade(MUSIC_FILE_VOL,2);
+        const p=a.play(); if (p && p.catch) p.catch(()=>{ MFILE.on=false; }); }   // browsers refuse sound before the first tap: the next tap or key tries again
+      else if (!want && MFILE.on){ MFILE.on=false; musicFade(0,1.2); }
+      if (!MUS || !MUS.on) return;
+    }
     if (!actx) return;
-    const want=musicWanted();
-    if (want) musicLoad();
-    if (MFILE.buf){ musicFileSync(want); if (!MUS || !MUS.on) return; }
-    else if (!MFILE.failed && !(MUS && MUS.on)) return;       // still loading: wait for the file rather than start the synth
-    if (MFILE.buf || !want){ if (MUS && MUS.on){ const g=MUS.out.gain, now=actx.currentTime; g.cancelScheduledValues(now); g.setValueAtTime(g.value,now); g.linearRampToValueAtTime(0,now+1.2); MUS.on=false; } return; }
+    if (!MFILE.failed || !want){ if (MUS && MUS.on){ const g=MUS.out.gain, now=actx.currentTime; g.cancelScheduledValues(now); g.setValueAtTime(g.value,now); g.linearRampToValueAtTime(0,now+1.2); MUS.on=false; } return; }
     if (want && !MUS) musicBuild();
     if (!MUS) return;
     const g=MUS.out.gain, now=actx.currentTime;
@@ -5398,7 +5675,7 @@ $('musicOn').addEventListener('change',()=>{ try { localStorage.setItem('thinair
 $('diffSel').addEventListener('change',()=>{ const v=$('diffSel').value; prefs.diff=['easy','normal','hard'].includes(v) ? v : 'normal'; applyPrefs(); });
 $('openMusic').addEventListener('click',()=>{ $('musicOn').checked=!$('musicOn').checked; $('musicOn').dispatchEvent(new Event('change')); });
 // browsers only allow sound after the first tap or key press, so start the music then
-['pointerdown','keydown','touchend'].forEach(ev=>document.addEventListener(ev,function un(){
+['pointerdown','pointerup','click','keydown','touchend'].forEach(ev=>document.addEventListener(ev,function un(){
   try { if (!actx) actx=new (window.AudioContext||window.webkitAudioContext)(); if (actx.state==='suspended') actx.resume(); } catch (e) {}
   musicSync();
 },{capture:true}));
@@ -5920,8 +6197,11 @@ function makeCarousel(el,name){
   nav.innerHTML='<button type="button" class="cprev" aria-label="Previous">‹</button><div><div class="ccount"></div><div class="cdots"></div></div><button type="button" class="cnext" aria-label="Next">›</button>';
   el.after(nav);
   const cards=()=>[...el.children].filter(b=>b.classList.contains('opt') && !b.hidden);
-  const mid=()=>{ const r=el.getBoundingClientRect(), cx=r.left+r.width/2; let best=null, bd=1e9;
-    cards().forEach(b=>{ const q=b.getBoundingClientRect(), d=Math.abs(q.left+q.width/2-cx); if (d<bd){ bd=d; best=b; } }); return best; };
+  // where a card's centre is along the strip, in the strip's own scroll units. (Not from on-screen rectangles: when the game
+  // turns the page for a phone held sideways, screen x and y swap and every card looked equally "in the middle".)
+  const cOf=b=>b.offsetLeft-(b.offsetParent===el ? 0 : el.offsetLeft)+b.offsetWidth/2;
+  const mid=()=>{ const cx=el.scrollLeft+el.clientWidth/2; let best=null, bd=1e9;
+    cards().forEach(b=>{ const d=Math.abs(cOf(b)-cx); if (d<bd){ bd=d; best=b; } }); return best; };
   let raf=0, dotsN=-1;
   const paint=()=>{ raf=0; const L=cards(), c=mid(), i=L.indexOf(c);
     el.classList.toggle('empty',!L.length);
@@ -5934,8 +6214,7 @@ function makeCarousel(el,name){
   const tick=()=>{ if (!raf) raf=requestAnimationFrame(paint); };
   el.addEventListener('scroll',tick,{passive:true});
   window.addEventListener('resize',tick);
-  const toMid=(b,smooth)=>{ const r=el.getBoundingClientRect(), q=b.getBoundingClientRect();
-    el.scrollTo({left:el.scrollLeft+(q.left+q.width/2)-(r.left+r.width/2), behavior:smooth?'smooth':'auto'}); };
+  const toMid=(b,smooth)=>{ el.scrollTo({left:cOf(b)-el.clientWidth/2, behavior:smooth?'smooth':'auto'}); };
   const go=k=>{ const L=cards(), i=L.indexOf(mid()), t=L[clamp(i+k,0,L.length-1)]; if (t) toMid(t,true); };
   nav.querySelector('.cprev').addEventListener('click',()=>go(-1));
   nav.querySelector('.cnext').addEventListener('click',()=>go(1));
