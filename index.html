@@ -227,6 +227,19 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
   font:700 12px var(--f-num);letter-spacing:.08em;color:var(--paper);background:rgba(9,16,28,.75);border:1px solid var(--line);border-radius:4px;padding:8px 12px;cursor:pointer;}
 #radio{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(8vh + 14px + env(safe-area-inset-bottom,0px));width:min(640px,calc(100% - 32px));box-sizing:border-box;z-index:16;
   background:rgba(9,16,28,.88);border:1px solid var(--line);border-left:3px solid var(--hud);border-radius:4px;padding:10px 14px;display:grid;gap:4px;}
+/* multiplayer comms: quick radio calls and push-to-talk */
+.vox{display:flex;flex-wrap:wrap;gap:8px 18px;align-items:center;margin-top:10px;font-size:13px;}
+.vox label{display:flex;align-items:center;gap:8px;}
+.vox input[type=range]{width:130px;accent-color:var(--hud);}
+.vnote{font-size:12px;opacity:.75;margin:6px 0 0;}
+#tRadio{left:calc(env(safe-area-inset-left,0px) + 182px);}
+#tTalk{left:calc(env(safe-area-inset-left,0px) + 248px);width:66px!important;}
+#tTalk.on{background:rgba(255,90,79,.55);border-color:#ff5a4f;color:#fff;}
+#tRadio[aria-expanded="true"]{background:rgba(141,255,176,.3);color:#fff;}
+#rcPanel{position:absolute;left:calc(env(safe-area-inset-left,0px) + 182px);bottom:calc(env(safe-area-inset-bottom,0px) + 206px);display:grid;grid-template-columns:repeat(2,112px);gap:6px;pointer-events:auto;z-index:12;}
+#touch[data-tilt="1"] #rcPanel{bottom:calc(env(safe-area-inset-bottom,0px) + 60px);}
+#rcPanel[hidden]{display:none;}
+#rcPanel button{height:36px;font:700 11px var(--f-num);letter-spacing:.05em;color:var(--hud);background:rgba(9,16,28,.78);border:1px solid var(--hud);border-radius:6px;touch-action:manipulation;}
 #radio{pointer-events:none;}
 #radio.train{background:rgba(9,16,28,.72);}
 /* phone: the instructor's box sits at the top centre, clear of the radar, the stick and the fire buttons */
@@ -266,6 +279,9 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
   <button class="tbtn pause" id="tPause" type="button" aria-label="Pause">II</button>
   <button class="tbtn top" id="tView" type="button">VIEW</button>
   <button class="tbtn top" id="tTilt" type="button" aria-pressed="false">TILT</button>
+  <button class="tbtn top" id="tRadio" type="button" hidden aria-expanded="false">RADIO</button>
+  <button class="tbtn top" id="tTalk" type="button" hidden>TALK</button>
+  <div id="rcPanel" hidden></div>
 </div>
 
 <div id="bars" hidden><i></i><i></i></div>
@@ -322,6 +338,11 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
         <label>Room code<input type="text" id="mpCode" maxlength="20" autocomplete="off" spellcheck="false" placeholder="open"></label>
         <button class="go alt" id="mpJoin" type="button">Join room</button>
       </div>
+      <div class="vox">
+        <label class="vchk"><input type="checkbox" id="vcOn" checked> Hear voice chat</label>
+        <label class="vvol">Voice volume <input type="range" id="vcVol" min="0" max="100" value="80"></label>
+      </div>
+      <p class="vnote">In the air: keys 1–6 (or RADIO on a phone) send quick radio calls. Hold N (or TALK) to speak, where voice chat is available.</p>
       <p id="mpStatus">Connecting…</p>
       <ul class="pilots" id="mpPilots"></ul>
     </div>
@@ -783,6 +804,7 @@ for (let i=0;i<STREAKS;i++) stPts.push(new T.Vector3((Math.random()-0.5)*2*HS,(M
 const wrapA=(v,c)=>c+((((v-c+HS)%(2*HS))+2*HS)%(2*HS))-HS;
 
 // Line of Control: line on the ground plus a faint curtain
+const LOC_OBJS=[];
 {
   const pts=[], wall=[], idx=[];
   let i=0;
@@ -791,9 +813,10 @@ const wrapA=(v,c)=>c+((((v-c+HS)%(2*HS))+2*HS)%(2*HS))-HS;
     pts.push(new T.Vector3(x,g+12,z)); wall.push(x,g,z, x,g+2500,z);
     if (i>0){ const a=(i-1)*2, b=a+1, c=a+2, d=a+3; idx.push(a,c,b, b,c,d); }
   }
-  scene.add(new T.Line(new T.BufferGeometry().setFromPoints(pts), new T.LineBasicMaterial({color:0xff5a4f})));
+  const ln=new T.Line(new T.BufferGeometry().setFromPoints(pts), new T.LineBasicMaterial({color:0xff5a4f})); scene.add(ln);
   const wg=new T.BufferGeometry(); wg.setAttribute('position', new T.Float32BufferAttribute(wall,3)); wg.setIndex(idx);
-  scene.add(new T.Mesh(wg, new T.MeshBasicMaterial({color:0xff5a4f, transparent:true, opacity:0.13, side:T.DoubleSide, depthWrite:false})));
+  const wm=new T.Mesh(wg, new T.MeshBasicMaterial({color:0xff5a4f, transparent:true, opacity:0.13, side:T.DoubleSide, depthWrite:false})); scene.add(wm);
+  LOC_OBJS.push(ln,wm);   // hidden in multiplayer: an open field
 }
 
 // rivers: water ribbons laid along the river valleys, flat water just above the bed
@@ -3485,17 +3508,45 @@ function peerLobby(){
   return { join(name){
     const hubId='thinair-v1-'+String(name).toLowerCase().replace(/[^a-z0-9_-]/g,'_').slice(0,60)+'-0';   // broker ids must end in a letter or digit
     const R={me:null, peer:null, hub:false, up:null, conns:new Map(), others:new Map(), mine:{}, myAt:Date.now(), subs:new Set(), errs:new Set(), left:false, gen:0};
+    // ---- voice: push-to-talk over direct WebRTC audio calls. Once a pilot has allowed the microphone, they hold one
+    // one-way call to every other pilot; the mic track is switched on only while TALK is held, so nothing is sent otherwise.
+    const V={stream:null, calls:new Map(), audios:new Map(), vol:1, mute:false};
+    function vPlay(id,s){
+      let a=V.audios.get(id);
+      if (!a){ a=new Audio(); a.autoplay=true; a.setAttribute('playsinline',''); V.audios.set(id,a); }
+      a.srcObject=s; a.volume=V.mute ? 0 : V.vol; a.play().catch(()=>{});
+    }
+    function vDrop(id){
+      const c=V.calls.get(id); if (c){ V.calls.delete(id); try { c.close(); } catch (e) {} }
+      const a=V.audios.get(id); if (a){ V.audios.delete(id); try { a.pause(); a.srcObject=null; } catch (e) {} }
+    }
+    function vOnCall(call){   // someone else's voice: receive only
+      try { call.answer(); } catch (e) { return; }
+      call.on('stream',s=>vPlay(call.peer,s));
+      call.on('close',()=>{ const a=V.audios.get(call.peer); if (a && a.srcObject && !a.srcObject.active){ V.audios.delete(call.peer); } });
+    }
+    function vCallAll(){
+      if (!V.stream || !R.peer || R.peer.destroyed) return;
+      for (const id of R.others.keys()){
+        if (V.calls.has(id)) continue;
+        try {
+          const k=R.peer.call(id,V.stream); if (!k) continue; V.calls.set(id,k);
+          const gone=()=>{ if (V.calls.get(id)===k) V.calls.delete(id); };
+          k.on('close',gone); k.on('error',gone);
+        } catch (e) {}
+      }
+    }
     const entry=(id,pres,at)=>({peer:id, sameTab:id===R.me, isMe:id===R.me, kind:'viewer', guest:false, presence:{...pres}, updatedAt:at});
     const list=()=>[entry(R.me,R.mine,R.myAt), ...[...R.others].map(([id,o])=>entry(id,o.pres,o.at))];
     const notify=(joined,left)=>{ const ch={peers:list(), joined:joined.map(id=>entry(id,{},Date.now())), left:left.map(id=>entry(id,{},Date.now()))};
       R.subs.forEach(f=>{ try { f(ch); } catch (e) {} }); };
-    const setOther=(id,pres)=>{ if (!id || id===R.me || !okObj(pres)) return; const isNew=!R.others.has(id); R.others.set(id,{pres,at:Date.now()}); if (isNew) notify([id],[]); };
-    const dropOther=id=>{ if (R.others.delete(id)) notify([],[id]); };
-    const dropAll=()=>{ const ids=[...R.others.keys()]; R.others.clear(); if (ids.length) notify([],ids); };
+    const setOther=(id,pres)=>{ if (!id || id===R.me || !okObj(pres)) return; const isNew=!R.others.has(id); R.others.set(id,{pres,at:Date.now()}); if (isNew){ notify([id],[]); if (V.stream) setTimeout(vCallAll,600); } };
+    const dropOther=id=>{ vDrop(id); if (R.others.delete(id)) notify([],[id]); };
+    const dropAll=()=>{ const ids=[...R.others.keys()]; ids.forEach(vDrop); R.others.clear(); if (ids.length) notify([],ids); };
     const fail=code=>{ R.errs.forEach(f=>{ try { f({code}); } catch (e) {} }); };
     function send(c,msg){ try { if (c && c.open) c.send(msg); } catch (e) {} }
     function becomeHub(p){
-      R.hub=true; R.me=p.id; R.peer=p;
+      R.hub=true; R.me=p.id; R.peer=p; p.on('call',vOnCall);
       p.on('connection',c=>{
         c.on('open',()=>{ R.conns.set(c.peer,c);
           send(c,{t:'all', list:[[R.me,R.mine], ...[...R.others].map(([id,o])=>[id,o.pres])]}); });
@@ -3507,7 +3558,7 @@ function peerLobby(){
       });
     }
     function becomeClient(p,resolve,reject,gen){
-      R.hub=false; R.me=p.id; R.peer=p;
+      R.hub=false; R.me=p.id; R.peer=p; p.on('call',vOnCall);
       const c=p.connect(hubId,{serialization:'json'});
       const to=setTimeout(()=>{ if (gen===R.gen && !R.up){ try { p.destroy(); } catch (e) {} reject({code:'no_link'}); } },20000);   // found the host, but no path between the two networks
       c.on('open',()=>{ clearTimeout(to); R.up=c; send(c,{t:'p', pres:R.mine}); resolve(); });
@@ -3551,7 +3602,21 @@ function peerLobby(){
         return ()=>{ R.subs.delete(fn); if (onErr) R.errs.delete(onErr); }; },
       on(){ return ()=>{}; }, emit(){ return Promise.resolve(); },
       connected:()=>!!(R.hub || R.up),
-      leave(){ R.left=true; R.gen++; try { R.peer && R.peer.destroy(); } catch (e) {} R.others.clear(); R.conns.clear(); return Promise.resolve(); },
+      voice:{
+        ready:()=>!!V.stream,
+        async mic(){   // asks for the microphone once; the track stays off until talk(true)
+          if (V.stream) return true;
+          const s=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true, noiseSuppression:true, autoGainControl:true, channelCount:1}});
+          s.getAudioTracks().forEach(t=>{ t.enabled=false; });
+          if (R.left){ s.getTracks().forEach(t=>t.stop()); return false; }
+          V.stream=s; vCallAll(); return true;
+        },
+        talk(on){ if (!V.stream) return; V.stream.getAudioTracks().forEach(t=>{ t.enabled=!!on; }); if (on) vCallAll(); },
+        volume(v,mute){ V.vol=Math.max(0,Math.min(1,+v||0)); V.mute=!!mute; V.audios.forEach(a=>{ a.volume=V.mute ? 0 : V.vol; }); },
+      },
+      leave(){ R.left=true; R.gen++;
+        [...V.calls.keys(), ...V.audios.keys()].forEach(vDrop); if (V.stream){ V.stream.getTracks().forEach(t=>t.stop()); V.stream=null; }
+        try { R.peer && R.peer.destroy(); } catch (e) {} R.others.clear(); R.conns.clear(); return Promise.resolve(); },
     };
     return connect().then(()=>api);
   } };
@@ -3628,6 +3693,7 @@ function mpPresence(){
     d.p=[r1(S.pos.x),r1(S.pos.y),r1(S.pos.z)]; d.v=[r1(S.vel.x),r1(S.vel.y),r1(S.vel.z)];
     d.q=[r4(S.q.x),r4(S.q.y),r4(S.q.z),r4(S.q.w)]; d.g=((keys.has('KeyX')||touchGun) && S.gun>0) ? 1 : 0;
   }
+  if (VOX.on) d.tk=1;   // on the air: the others light up this callsign
   if (MP.coop){
     d.co=1; d.ep=MP.ep; d.rx=MP.mask.slice();   // which targets, air defences and bandits this pilot knows are destroyed
     if (inSortie && MP.host){   // the host's picture of the two bandits
@@ -3656,7 +3722,7 @@ function mpReadEv(pr,d){
     if (!Array.isArray(e)) continue;
     const s=num(e[0],0); if (s>mx) mx=s;
     if (last===undefined || s<=last) continue;
-    const f = e[1]==='msl' ? mpOnMsl : e[1]==='boom' ? mpOnBoom : e[1]==='hit' ? mpOnHit : e[1]==='down' ? mpOnDown : null;
+    const f = e[1]==='msl' ? mpOnMsl : e[1]==='boom' ? mpOnBoom : e[1]==='hit' ? mpOnHit : e[1]==='down' ? mpOnDown : e[1]==='rc' ? mpOnRc : null;
     if (f && e[2] && typeof e[2]==='object' && !Array.isArray(e[2])){
       try { f({peer:pr.peer, sameTab:false, guest:!!pr.guest, data:e[2]}); } catch (err) {}
     }
@@ -3695,6 +3761,9 @@ function mpUpdate(dt){
     if (pr.sameTab || pr.kind!=='viewer') continue;
     const d=pr.presence && pr.presence.mp, g=mpGhost(pr.peer);
     mpReadEv(pr,d);
+    const tk = d && d.tk ? 1 : 0;   // talking: a radio click as they key the mic and let go
+    if (tk!==(g.tk||0)){ g.tk=tk; if (flying) squelch(); }
+    if (d && d.n) g.type.name=cleanName(d.n) || g.type.name;
     const live=flying && d && d.st==='fly' && Array.isArray(d.p) && Array.isArray(d.q) && Array.isArray(d.v) && now>g.hideUntil;
     if (!live){ if (g.alive) mpHide(g); continue; }
     const ac=String(d.ac);
@@ -3714,6 +3783,8 @@ function mpUpdate(dt){
     else g.gunCd=0;
   }
   if (MP.coop && flying) mpCoopSync(dt);
+  if (VOX.on && state!=='fly') voxUp();   // paused, landed or left: off the air
+  if (VOX.room!==MP.room){ VOX.room=MP.room; voxVol(); }
   MP.sendT-=dt;
   if (MP.sendT<=0){ MP.sendT = flying ? 1/15 : 1; mpPresence(); }
   MP.hitT-=dt;
@@ -3724,6 +3795,76 @@ function mpUpdate(dt){
   }
   if (flying && !S.alive){ MP.respawnT-=dt; if (MP.respawnT<=0) mpRespawn(); }
 }
+// ---------- multiplayer comms
+// quick radio calls: a tiny event to everyone in the room; each pilot hears it spoken and sees it under the heading
+const RC_CALLS=['FOX TWO!','BREAK LEFT!','BREAK RIGHT!','NEED HELP!','SPLASH ONE!','REGROUP'];
+const RC={feed:[]};
+function rcSend(i){
+  if (!MP.on || !MP.room || state!=='fly' || !RC_CALLS[i]) return;
+  mpSend('rc',{i}); rcShow(mpName,RC_CALLS[i],true); rcPanel(false);
+}
+function rcShow(name,text,mine){
+  RC.feed.push({name:shortName(name), text, at:performance.now(), mine}); if (RC.feed.length>3) RC.feed.shift();
+  squelch(); if (!mine) rcSpeak(name,text);
+}
+function rcSpeak(name,text){
+  if (!$('soundOn').checked) return;
+  try {
+    const u=new SpeechSynthesisUtterance(text.replace(/!/g,'').toLowerCase());
+    let h=0; for (const ch of String(name)) h=(h*31+ch.charCodeAt(0))>>>0;   // each pilot keeps the same voice
+    if (voices.length) u.voice=voices[h%voices.length];
+    u.pitch=0.8+(h%5)*0.1; u.rate=1.15; speechSynthesis.speak(u);
+  } catch (e) {}
+}
+function mpOnRc(ev){ const tx=RC_CALLS[num(ev.data.i,-1)]; if (!tx) return; const g=MP.ghosts.get(ev.peer); rcShow(g ? g.type.name : 'PILOT', tx, false); }
+function rcPanel(open){
+  const p=$('rcPanel'); if (open==null) open=p.hidden;
+  if (open && !p.childElementCount) RC_CALLS.forEach((t,i)=>{ const b=document.createElement('button'); b.type='button'; b.textContent=t.replace('!',''); b.addEventListener('click',()=>rcSend(i)); p.appendChild(b); });
+  p.hidden=!open; $('tRadio').setAttribute('aria-expanded',open?'true':'false');
+}
+// push-to-talk voice: only where the room offers it (the standalone copy, over WebRTC). The microphone is asked for
+// on the first press; after that the mic track is switched on only while TALK or N is held.
+const VOX={on:false, want:false, busy:false, room:null, show:''};
+function voxApi(){ return MP.on && MP.room && MP.room.voice ? MP.room.voice : null; }
+async function voxDown(){
+  const v=voxApi(); if (!v || state!=='fly') return;
+  VOX.want=true;
+  if (!v.ready()){
+    if (VOX.busy) return; VOX.busy=true; S.msg={text:'ALLOW THE MICROPHONE TO TALK', col:AMB, t:2};
+    let ok=false; try { ok=await v.mic(); } catch (e) { ok=false; }
+    VOX.busy=false;
+    if (!ok){ S.msg={text:'NO MICROPHONE · VOICE CHAT OFF', col:AMB, t:2.4}; return; }
+    voxVol(); if (!VOX.want || state!=='fly') return;
+  }
+  v.talk(true); VOX.on=true; squelch(); MP.sendT=Math.min(MP.sendT,0.03); voxBtn();
+}
+function voxUp(){
+  VOX.want=false; if (!VOX.on) return;
+  const v=voxApi(); if (v) v.talk(false);
+  VOX.on=false; squelch(); MP.sendT=Math.min(MP.sendT,0.03); voxBtn();
+}
+function voxBtn(){ $('tTalk').classList.toggle('on',VOX.on); $('tTalk').textContent = VOX.on ? 'ON AIR' : 'TALK'; }
+function voxVol(){ const v=voxApi(); if (v) v.volume(num($('vcVol').value,80)/100, !$('vcOn').checked); }
+try { $('vcOn').checked = localStorage.getItem('thinair.vcOn')!=='0'; const vv=localStorage.getItem('thinair.vcVol'); if (vv!=null) $('vcVol').value=vv; } catch (e) {}
+$('vcOn').addEventListener('change',()=>{ try { localStorage.setItem('thinair.vcOn',$('vcOn').checked?'1':'0'); } catch (e) {} voxVol(); });
+$('vcVol').addEventListener('input',()=>{ try { localStorage.setItem('thinair.vcVol',$('vcVol').value); } catch (e) {} voxVol(); });
+// HUD: who is on the air, and the last few radio calls, under the heading
+function drawComms(now){
+  if (!MP.on || !MP.room || state==='brief') return;
+  let y=safeT+(isTouch ? 30 : 52);
+  const cx=W/2, on=[]; if (VOX.on) on.push('YOU');
+  MP.ghosts.forEach(g=>{ if (g.tk) on.push(shortName(g.type.name)); });
+  if (on.length){ txt(`ON AIR · ${on.join(' · ')}`,cx,y,'#ffffff','center',11,true); y+=16; }
+  const t=performance.now();
+  RC.feed=RC.feed.filter(f=>t-f.at<4000);
+  for (const f of RC.feed){ c.globalAlpha=clamp((4000-(t-f.at))/600,0,1); txt(`${f.mine?'YOU':f.name}: ${f.text}`,cx,y,f.mine?HUD:AMB,'center',12,true); c.globalAlpha=1; y+=16; }
+}
+function commsUI(){   // phone buttons: RADIO in any room, TALK only where voice works
+  const fly=state==='fly' && MP.on && !!MP.room, k=(fly?1:0)+(fly && voxApi()?2:0)+'';
+  if (k!==VOX.show){ VOX.show=k; $('tRadio').hidden=!fly; $('tTalk').hidden=!(fly && voxApi()); if (!fly) rcPanel(false); }
+}
+// a callsign short enough for the radar: up to 7 characters, longer ones cut with an ellipsis
+const shortName=n=>{ n=String(n||'PILOT').toUpperCase(); return n.length>7 ? n.slice(0,6)+'…' : n; };
 function mpGunHit(g){ MP.hitAcc.set(g.peer,(MP.hitAcc.get(g.peer)||0)+8); }
 function mpFireMsl(m,g,ai){
   if (!MP.room) return;
@@ -4146,7 +4287,10 @@ function updateDogfight(dt){
 }
 
 // ---------- mission flow
-function loadout(){ const A=S.ac, agm=(mode==='raid'||(mode==='training' && LESSONS[prefs.lesson].weapon==='precision')) ? 2 : 0;   // the Kargil strike: plain bombs only
+// multiplayer: a bigger load for a long fight, and every jet gets a gun (the J-20 has none in the solo missions)
+const MP_MSL=12, MP_GUN=5000, MP_FLARES=40;
+function loadout(){ const L=loadout0(); if (MP.on) L.msl=MP_MSL; return L; }
+function loadout0(){ const A=S.ac, agm=(mode==='raid'||(mode==='training' && LESSONS[prefs.lesson].weapon==='precision')) ? 2 : 0;   // the Kargil strike: plain bombs only
   if (LADAKH) return {bombs:A.bombs, msl:6, agm};   // the Ladakh intercept: the Tejas Mk1A gets six Astras for four J-20s
   if (TANKER) return {bombs:4, msl:2, agm:4};    // the deep strike
   if (BRIDGE) return {bombs:4, msl:2, agm:4};
@@ -4162,8 +4306,9 @@ function reset(){
   const A=S.ac, LO=loadout();
   Object.assign(S,{maxB:LO.bombs,maxM:LO.msl,samTrack:false,locMsg:false,td:null,sol:null,agm:LO.agm,maxA:LO.agm,lastAgm:-9});
   Object.assign(S,{thr:0.78,bombs:LO.bombs,alive:true,alpha:0,beta:0,nz:1,aLim:0.41,dLoc:1e9,minLoc:1e9,bestMiss:Infinity,time:0,lastDrop:-9,targetHit:false,msg:null,
-    hp:100,msl:LO.msl,gun:A.gun,flares:FLARES,score:0,kills:0,wave:0,waveT:0,lockTgt:null,lockT:0,locked:false,lastMsl:-9,lastFlare:-9,gunCd:0,hitFlash:0,gunEmptyMsg:false,autoArm:false,armT:0,brake:false,launch:null});
+    hp:100,msl:LO.msl,gun:MP.on ? MP_GUN : A.gun,flares:MP.on ? MP_FLARES : FLARES,score:0,kills:0,wave:0,waveT:0,lockTgt:null,lockT:0,locked:false,lastMsl:-9,lastFlare:-9,gunCd:0,hitFlash:0,gunEmptyMsg:false,autoArm:false,armT:0,brake:false,launch:null});
   input.pitch=input.roll=input.yaw=0; S.banner=null;
+  LOC_OBJS.forEach(o=>{ o.visible=!MP.on; });   // multiplayer: no LoC, an open field
   if (NAVAL && plane) navalStart();   // on the carrier's deck, ready for the ski-jump launch
   S.f16T = PRECISE ? 25+Math.random()*110 : -1;   // the precision strike's F-16 turns up at a random moment
   bombs.forEach(b=>scene.remove(b.m)); bombs.length=0;
@@ -5018,8 +5163,8 @@ function applyPrefs(){
     const pn=WORLD==='pune';
     $('briefEyebrow').textContent=pn ? 'Thin Air · Multiplayer · Pune' : 'Thin Air · Multiplayer · Dras sector';
     $('briefTitle').textContent=pn ? 'Live dogfight over Pune' : 'Live dogfight: free for all';
-    $('briefBody').textContent=(pn ? 'Everyone in the same room code shares one sky over Pune: the city on the Mula-Mutha, the Sahyadri ghats to the west, Sinhagad above Khadakwasla lake, and the airport to the north-east. The ground is only about 560 m up here, so you can fight low between the hills and over the rooftops.' : 'Everyone in the same room code shares one sky over the Dras sector.')+` Every other jet is a red box: keep one ahead until it reads LOCK and fire, or close in with the gun. Your ${p.name} carries ${mslTxt(p)}, ${p.gun} gun rounds and ${FLARES} flares. Each jet has its own missile and radar, so the Rafale and Su-30 can lock from much farther than a MiG-21 or Jaguar. Against a heat-seeker, pop flares and turn hard; against a radar missile (RADAR MISSILE warning), flares barely help: turn to put it on your wingtip (beam it) so its radar loses you. If you are shot down, hit the ground or fly out of the sector, you respawn after 5 seconds. Each kill you score is counted. The Line of Control does not apply here.`;
-    setFacts('briefFacts',[[MP.room ? String(MP.room.peers().filter(x=>x.kind==='viewer').length) : '–','Pilots in room'],[String(p.msl),'Missiles'],[String(p.gun),'Gun rounds'],['5 s','Respawn']]);
+    $('briefBody').textContent=(pn ? 'Everyone in the same room code shares one sky over Pune: the city on the Mula-Mutha, the Sahyadri ghats to the west, Sinhagad above Khadakwasla lake, and the airport to the north-east. The ground is only about 560 m up here, so you can fight low between the hills and over the rooftops.' : 'Everyone in the same room code shares one sky over the Dras sector.')+` Every other jet is a red box: keep one ahead until it reads LOCK and fire, or close in with the gun. Your ${p.name} carries ${MP_MSL} ${AAM[p.aam].name} missiles, ${MP_GUN} gun rounds and ${MP_FLARES} flares. Each jet has its own missile and radar, so the Rafale and Su-30 can lock from much farther than a MiG-21 or Jaguar. Against a heat-seeker, pop flares and turn hard; against a radar missile (RADAR MISSILE warning), flares barely help: turn to put it on your wingtip (beam it) so its radar loses you. If you are shot down, hit the ground or fly out of the sector, you respawn after 5 seconds. Each kill you score is counted. There is no LoC or border: the whole sector is open.`;
+    setFacts('briefFacts',[[MP.room ? String(MP.room.peers().filter(x=>x.kind==='viewer').length) : '–','Pilots in room'],[String(MP_MSL),'Missiles'],[String(MP_GUN),'Gun rounds'],['5 s','Respawn']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. MSL fires once a jet reads LOCK; hold GUN with the cross inside the lead circle; tap FLR when MISSILE flashes.';
   } else if (FLEET){
     const Ra=lockRange(p)*FOES.asm.stealth, dk=(Math.hypot(FLEET_START.x-CARRIER.x,FLEET_START.z-CARRIER.z)/1000).toFixed(1);
@@ -5107,11 +5252,14 @@ window.addEventListener('keydown',e=>{
   else if (e.code==='KeyB' && state==='fly') startBreak();
   else if (e.code==='KeyC' && (state==='fly'||state==='ending')) view = view==='chase'?'cockpit':'chase';
   else if (e.code==='KeyP' || e.code==='Escape') pauseToggle();
+  else if (e.code==='KeyN' && MP.on) voxDown();   // multiplayer: hold N to talk
+  else if (/^Digit[1-6]$/.test(e.code) && MP.on && state==='fly') rcSend(+e.code.slice(5)-1);   // quick radio calls
   else if (e.code==='Enter' && (state==='brief'||state==='ended') && document.activeElement && document.activeElement.tagName!=='BUTTON'){
     e.preventDefault(); if (state==='brief') startSortie(); else backToHangar();
   }
 });
-window.addEventListener('keyup',e=>{ keys.delete(e.code); if (e.code==='Space') bombRelease(); });
+window.addEventListener('keyup',e=>{ keys.delete(e.code); if (e.code==='Space') bombRelease(); if (e.code==='KeyN') voxUp(); });
+window.addEventListener('blur',()=>voxUp());   // never left on the air when the window loses focus
 // mouse, on top of the keys: left click fires a missile (like M), right click drops flares (like Z)
 window.addEventListener('pointerdown',e=>{
   if (e.pointerType!=='mouse' || state!=='fly') return;
@@ -5226,6 +5374,10 @@ function updateInputs(dt){
   wb.addEventListener('pointerup',()=>{ clearTimeout(wT); if (!wLong) wpnCycle(); });
   wb.addEventListener('pointercancel',()=>{ clearTimeout(wT); });
   $('tTilt').addEventListener('click',tiltToggle);
+  $('tRadio').addEventListener('click',()=>rcPanel());
+  const tk=$('tTalk');   // hold to talk
+  tk.addEventListener('pointerdown',e=>{ e.preventDefault(); try { tk.setPointerCapture(e.pointerId); } catch (er) {} voxDown(); });
+  ['pointerup','pointercancel','lostpointercapture'].forEach(ev=>tk.addEventListener(ev,()=>voxUp()));
 })();
 // ---------- phone controls: one FIRE button for the selected weapon, and tilt steering from the motion sensor
 const TW={sel:null, down:null, lb:'', ic:undefined};
@@ -5242,7 +5394,7 @@ function wpnList(){
   const L=[], bombsFirst=mode==='raid'||mode==='strike'||(mode==='training' && carriesBombs());
   if ((carriesBombs() && S.maxB>0) || S.maxA>0) L.push('AG');   // phone: bombs and the laser-guided missile are one A/G weapon
   if (S.maxM>0) L.push('MSL');
-  if (S.ac.gun>0 && !RECON) L.push('GUN');
+  if ((S.ac.gun>0 || MP.on) && !RECON) L.push('GUN');
   if (!bombsFirst){ const i=L.indexOf('MSL'); if (i>0){ L.splice(i,1); L.unshift('MSL'); } }
   return L;
 }
@@ -5254,7 +5406,7 @@ function wpnCycle(){
   S.msg={text:`WEAPON · ${{MSL:AAM[S.ac.aam].name+' MISSILE', AG:'A/G · BOMBS + LASER MISSILE', GUN:'GUN'}[TW.sel]}${TW.sel==='AG' ? ' · HOLD WPN FOR NEXT TARGET' : ''}`, col:HUD, t:1.6};
 }
 function wpnLabel(){
-  wpnFix();
+  wpnFix(); commsUI();
   const w=TW.sel, n = w==='MSL' ? S.msl : w==='GUN' ? S.gun : 0;
   const ag=[(carriesBombs() && S.maxB>0) ? `B${S.bombs}` : '', S.maxA>0 ? `M${S.agm}` : ''].filter(Boolean).join(' ');   // A/G: bombs and missiles left
   const lb = !w ? '—' : w==='AG' ? `A/G ${ag}` : `${w} ${n}`;
@@ -5637,10 +5789,11 @@ function drawCombatHUD(){
     const stl = e.type.stealth && d>lockRange(S.ac)*e.type.stealth;
     if (isTouch){   // phone: a small diamond; only the target you are locking shows its distance
       diamond(s.x,s.y,sz,col);
+      if (e.remote) txt(shortName(e.type.name),s.x,s.y-sz-8,col,'center',9,true);   // multiplayer: whose jet it is
       if (isT) txt((d/1000).toFixed(1),s.x,s.y+sz+10,col,'center',10,true);
     } else {
       c.beginPath(); c.rect(s.x-sz,s.y-sz,sz*2,sz*2); strokeP(col,1.5);
-      txt(`${e.type.name} ${(d/1000).toFixed(1)}${stl ? (e.type.uav ? ' · TOO SMALL TO LOCK' : ' · STEALTH') : ''}`,s.x,s.y+sz+11,col,'center',11,true);
+      txt(`${e.remote ? shortName(e.type.name) : e.type.name} ${(d/1000).toFixed(1)}${stl ? (e.type.uav ? ' · TOO SMALL TO LOCK' : ' · STEALTH') : ''}`,s.x,s.y+sz+11,col,'center',11,true);
     }
     if (isT){
       const mt=AAM[S.ac.aam];
@@ -5750,6 +5903,7 @@ function drawHUD(now){
   }
   if (S.maxA) drawAGMCue();
   drawTouchLock(now);
+  drawComms(now);
   drawThreats(mode==='dogfight');
 
   // heading tape (phone: just the number)
@@ -5955,12 +6109,13 @@ function drawHUD(now){
     else if (RCP!==1){ const [bx2,by2]=mp(BASE.x,BASE.z); c.beginPath(); c.rect(bx2-4,by2-4,8,8); c.fillStyle=raidLeft()?AMB:'#6b7480'; c.fill(); c.lineWidth=1; c.strokeStyle='#0b1320'; c.stroke(); }
     if (NAVAL){ const [kx,ky]=mp(CARRIER.x,CARRIER.z); c.fillStyle='#e6ecf2'; c.fillRect(kx-1.5,ky-5,3,10); }   // the carrier
     c.fillStyle=HUD; wingmen.forEach(w=>{ if (!w.alive) return; const [wx,wy]=mp(w.p.x,w.p.z); c.fillRect(wx-2,wy-2,4,4); });
-    if (MP.coop) MP.ghosts.forEach(g=>{ if (!g.alive) return; const [gx,gy]=mp(g.p.x,g.p.z); c.fillRect(gx-2.5,gy-2.5,5,5); });
+    if (MP.coop) MP.ghosts.forEach(g=>{ if (!g.alive) return; const [gx,gy]=mp(g.p.x,g.p.z); c.fillRect(gx-2.5,gy-2.5,5,5); txt(shortName(g.type.name),gx,gy-8,g.tk?'#ffffff':HUD,'center',isTouch?8:9,true); c.fillStyle=HUD; });
     c.restore();
   }
   if (dog || raid){
     c.fillStyle=RED;
-    for (const e of enemies){ if (!e.alive || (e.type.uav && e.p.distanceTo(S.pos)>DRONE_VIS) || !awSees(e)) continue; const [ex,ey]=mp(e.p.x,e.p.z); c.fillRect(ex-2.5,ey-2.5,5,5); }
+    for (const e of enemies){ if (!e.alive || (e.type.uav && e.p.distanceTo(S.pos)>DRONE_VIS) || !awSees(e)) continue; const [ex,ey]=mp(e.p.x,e.p.z); c.fillRect(ex-2.5,ey-2.5,5,5);
+      if (e.remote){ txt(shortName(e.type.name),ex,ey-8,e.tk?'#ffffff':BANDIT,'center',isTouch?8:9,true); c.fillStyle=RED; } }   // white while they talk   // multiplayer: each pilot's callsign, kept short
     if (AWACS && NETRA){ const k2=MK, [ox,oy]=mp(AW.cx,AW.cz,true); c.beginPath(); c.arc(ox,oy,AW.R*k2,0,Math.PI*2); c.setLineDash([3,3]); c.lineWidth=1; c.strokeStyle='rgba(141,255,176,.5)'; c.stroke(); c.setLineDash([]);
       if (NETRA.alive){ const [nx,ny]=mp(NETRA.p.x,NETRA.p.z); c.beginPath(); c.arc(nx,ny,3.5,0,Math.PI*2); c.fillStyle=HUD; c.fill(); c.fillStyle=RED; } }
     if (FLEET){ const [kx,ky]=mp(CARRIER.x,CARRIER.z); c.fillStyle='#e6ecf2'; c.fillRect(kx-1.5,ky-5,3,10); const k2=MK, [fx,fy]=mp(CARRIER.x,CARRIER.z,true); c.beginPath(); c.arc(fx,fy,FLEET_LAUNCH*k2,0,Math.PI*2); c.setLineDash([3,3]); c.lineWidth=1; c.strokeStyle='rgba(255,90,79,.6)'; c.stroke(); c.setLineDash([]); }
@@ -7726,7 +7881,7 @@ function frame(now){
       }
       S.time+=dt;
       if (S.alive && state==='fly'){
-        S.dLoc = (WORLD==='kargil' || WORLD==='ladakh' || WORLD==='jungle' || WORLD==='punjab') ? S.pos.z-lineZ(S.pos.x) : 1e9; S.minLoc=Math.min(S.minLoc,S.dLoc);
+        S.dLoc = MP.on ? 1e9 : (WORLD==='kargil' || WORLD==='ladakh' || WORLD==='jungle' || WORLD==='punjab') ? S.pos.z-lineZ(S.pos.x) : 1e9; S.minLoc=Math.min(S.minLoc,S.dLoc);
         if (mode==='raid' && !PRECISE && !SEAD && !TANKER){ if (S.dLoc<0 && !S.locMsg){ S.locMsg=true; S.msg={text:`CROSSING THE ${lineName()} · CLEARED HOT`, col:AMB, t:2.5}; } }
         else if (MP.on){
           const ex=Math.max(Math.abs(S.pos.x),Math.abs(S.pos.z));
