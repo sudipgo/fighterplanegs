@@ -3569,6 +3569,7 @@ function peerLobby(){
       R.hub=true; R.me=p.id; R.peer=p; p.on('call',vOnCall);
       R.others.forEach((o,id)=>hubMark(id));
       p.on('connection',c=>{
+        if (R.probeId && c.peer===R.probeId){ R.probeOk=true; return; }   // our own self-check reached us: still the one host
         c.on('open',()=>{ R.conns.set(c.peer,c);
           send(c,{t:'all', list:[[R.me,R.mine], ...[...R.others].map(([id,o])=>[id,o.pres])]}); });
         c.on('data',m=>{ if (!okObj(m) || m.t!=='p' || !okObj(m.pres) || !fits(m.pres)) return;
@@ -3598,6 +3599,9 @@ function peerLobby(){
         p.on('open',()=>{ if (gen!==R.gen) return; becomeHub(p); ok(); });
         p.on('error',err=>{
           if (gen!==R.gen) return;
+          // we were the host, lost the broker for a while, and someone else has claimed the room's id meanwhile:
+          // step down and join them, and our pilots follow, so the room never splits in two
+          if (settled && R.hub && R.peer===p && err && err.type==='unavailable-id'){ demote(); return; }
           if (err && err.type==='unavailable-id'){   // there is already a hub
             try { p.destroy(); } catch (e) {}
             const q=new Peer(PEER_OPTS);
@@ -3610,6 +3614,35 @@ function peerLobby(){
         p.on('disconnected',()=>{ if (gen===R.gen && !R.left){ try { p.reconnect(); } catch (e) {} } });   // broker link only; peer links keep working
       });
     }
+    function demote(){
+      if (R.left || !R.hub) return;
+      const old=R.peer; R.hub=false; R.gen++;
+      R.conns.forEach(c=>{ try { c.close(); } catch (e) {} }); R.conns.clear(); dropAll();   // our pilots see the link close and rejoin too
+      try { old && old.destroy(); } catch (e) {}
+      rejoin();
+    }
+    // the host keeps checking its broker link: while it is down another pilot could claim the room's id, so keep
+    // reconnecting; if the id has been taken, the 'unavailable-id' error above makes us step down
+    const watch=setInterval(()=>{
+      if (R.left){ clearInterval(watch); return; }
+      const p=R.peer; if (!p || p.destroyed) return;
+      if (p.disconnected){ try { p.reconnect(); } catch (e) {} }
+    }, 4000);
+    // the host's self-check, every 20 s: a throwaway peer dials the room's id. If the call reaches somebody else,
+    // there are two hosts: we step down and everyone ends up in one room.
+    const probeT=setInterval(()=>{
+      if (R.left){ clearInterval(probeT); return; }
+      if (!R.hub || !R.peer || R.peer.disconnected || R.probe) return;
+      const gen=R.gen, q=new Peer(PEER_OPTS); R.probe=q; R.probeOk=false; R.probeId=null;
+      const end=()=>{ if (R.probe===q) R.probe=null; try { q.destroy(); } catch (e) {} };
+      q.on('open',id=>{
+        R.probeId=id;
+        const c=q.connect(hubId,{serialization:'json'});
+        c.on('open',()=>{ setTimeout(()=>{ if (gen===R.gen && R.hub && !R.probeOk) demote(); end(); },1500); });   // reached a host that is not us
+        setTimeout(end,10000);
+      });
+      q.on('error',()=>end());
+    }, 20000);
     function rejoin(){ setTimeout(()=>{ if (!R.left) connect().catch(e=>fail((e && e.code) || 'no_link')); }, 300+Math.random()*900); }
     const api={
       peers:()=>list(),
@@ -3688,12 +3721,12 @@ function mpUI(){
     if (MP.err){ st.className='bad'; st.textContent = (MP.err==='not_granted'||MP.err==='revoked'||MP.err==='not_permitted')
       ? `Multiplayer is not supported in this browser (code ${MP.err}). Try the latest Chrome, Edge or Firefox.`
       : (MP.err==='no_server' ? `Could not reach the multiplayer server (code no_server). Check your internet connection, wait a minute and press Join room again.` : MP.err==='no_link' ? `Found the room, but your network and the host's network would not connect (code no_link). Press Join room to try again. If it keeps failing: turn off any VPN, use Chrome or Edge, or put one of you on a mobile hotspot. Office and college Wi-Fi often block this.` : `Could not join the room (code ${MP.err}). Press Join room to try again.`); }
-    else st.textContent='Pick a callsign and a room code, then Join. Everyone who uses the same code meets in the same sky.';
+    else st.textContent='Pick a callsign and a room code, then Join. Everyone who picks the same mode (free for all or co-op), the same map and the same code meets in the same sky.';
   } else {
     const typed=cleanCode($('mpCode').value);
     jb.disabled=false; jb.textContent = typed!==MP.code ? `Join room "${typed}"` : `In room "${MP.code}"`;
     const ps=MP.room.peers().filter(p=>p.kind==='viewer'), n=ps.length;
-    st.className='ok'; st.textContent=`In ${MP.rkind==='raid'?'co-op raid':MP.rkind==='dogfight-pune'?'Pune dogfight':'Kargil dogfight'} room "${MP.code}" · ${n} pilot${n===1?'':'s'}`+(typed!==MP.code?` · press Join room to move to "${typed}"`:'')+(n<2?' · waiting for a friend to join with the same code':MP.rkind==='raid'?' · start the sortie to join the raid':' · start the sortie to fight');
+    st.className='ok'; st.textContent=`In ${MP.rkind==='raid'?'co-op raid':MP.rkind==='dogfight-pune'?'Pune dogfight':'Kargil dogfight'} room "${MP.code}" · ${n} pilot${n===1?'':'s'}`+(typed!==MP.code?` · press Join room to move to "${typed}"`:'')+(n<2?' · waiting for a friend: they need the same mode, map and code':MP.rkind==='raid'?' · start the sortie to join the raid':' · start the sortie to fight');
     ps.forEach(p=>{
       const d=p.presence && p.presence.mp, li=document.createElement('li');
       const nm=p.sameTab ? mpName : (cleanName(d && d.n) || 'Pilot');
@@ -4194,12 +4227,12 @@ function updateBullets(dt){
   for (let i=bullets.length-1;i>=0;i--){
     const b=bullets[i], ox=b.p.x, oy=b.p.y, oz=b.p.z;
     b.p.addScaledVector(b.v,dt); b.v.y-=G*dt; b.life+=dt;
-    let dead = b.life>(b.own==='aa'?3.6:1.8) || b.p.y<groundAt(b.p.x,b.p.z);
+    let dead = b.life>(b.own==='aa'?3.6:MP.on?MP_GUN_LIFE:1.8) || b.p.y<groundAt(b.p.x,b.p.z);   // multiplayer: shells fly about twice as far
     if (!dead){
       if (b.own==='p'){
         for (const e of enemies){
           if (!e.alive) continue;
-          if (segDist(ox,oy,oz,b.p,e.p)<9){
+          if (segDist(ox,oy,oz,b.p,e.p)<(e.remote ? MP_GUN_HIT : 9)){
             if (e.remote){ dead=true; mpGunHit(e); effects.push(makeFx(b.p.clone(),0xffc070,true,0.25,1,6,1,0)); break; }
             dead=true; e.hp-=12;
             effects.push(makeFx(b.p.clone(),0xffc070,true,0.25,1,6,1,0));
@@ -4289,7 +4322,7 @@ function gunLeadDir(gt){
 }
 const GUN_ASSIST=Math.cos(6*Math.PI/180);   // phone: inside 6 degrees of the lead point, the shells go to it
 function gunTarget(){
-  let best=null, bd=1800;
+  let best=null, bd=MP.on ? MP_GUN_RANGE : 1800;   // multiplayer: the gun cue and aim assist reach further
   for (const e of enemies){
     if (!e.alive) continue;
     const d=e.p.distanceTo(S.pos);
@@ -4310,6 +4343,7 @@ function updateDogfight(dt){
 // ---------- mission flow
 // multiplayer: a bigger load for a long fight, and every jet gets a gun (the J-20 has none in the solo missions)
 const MP_MSL=12, MP_GUN=5000, MP_FLARES=40;
+const MP_GUN_LIFE=3.0, MP_GUN_RANGE=3500, MP_GUN_HIT=12;   // shells live 3 s (about 3.5 km), cue and assist out to 3.5 km, a slightly bigger hit zone on other pilots
 function loadout(){ const L=loadout0(); if (MP.on) L.msl=MP_MSL; return L; }
 function loadout0(){ const A=S.ac, agm=(mode==='raid'||(mode==='training' && LESSONS[prefs.lesson].weapon==='precision')) ? 2 : 0;   // the Kargil strike: plain bombs only
   if (LADAKH) return {bombs:A.bombs, msl:6, agm};   // the Ladakh intercept: the Tejas Mk1A gets six Astras for four J-20s
