@@ -137,6 +137,135 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
 .touch-only{display:none;}
 .is-touch .touch-only{display:block;}
 .is-touch .desk-only{display:none;}
+/* hangar carousels: swipe (or arrows / ← →) through big cards; the one in the middle is in focus, tap it to choose */
+.carousel.tr-only,.carousel.empty{display:none;}
+[data-mode="training"] .carousel.tr-only:not(.empty){display:flex;}
+.carousel{--cw:min(300px,74vw);display:flex;gap:12px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;
+  margin:0 -24px;padding:6px 0 12px;scrollbar-width:none;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;touch-action:pan-x pan-y;align-items:stretch;}
+.carousel::-webkit-scrollbar{display:none;}
+.carousel::before,.carousel::after{content:"";flex:0 0 calc(50% - var(--cw)/2 - 12px);}
+.carousel>.opt{flex:0 0 var(--cw);scroll-snap-align:center;scroll-snap-stop:always;transform:scale(.9);opacity:.5;
+  transition:transform .28s cubic-bezier(.2,.8,.2,1),opacity .28s,box-shadow .28s,border-color .2s;box-shadow:0 6px 18px rgba(0,0,0,.25);}
+.carousel>.opt.cur{transform:none;opacity:1;box-shadow:0 12px 34px rgba(0,0,0,.45),0 0 0 1px rgba(141,255,176,.25);}
+.carousel>.opt[aria-pressed="true"]{border-color:var(--hud);box-shadow:0 12px 34px rgba(0,0,0,.45),0 0 0 2px var(--hud),0 0 24px rgba(141,255,176,.25);}
+.planes.carousel{--cw:min(320px,80vw);}
+.cnav{display:flex;align-items:center;justify-content:center;gap:14px;margin:-8px 0 -2px;}
+/* briefing: four swipeable pages (overview, briefing text, controls, settings) under tabs; Start always below */
+.btabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin:-4px 0 -8px;overflow-x:auto;scrollbar-width:none;}
+.btabs::-webkit-scrollbar{display:none;}
+.btabs button{flex:1;background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;color:var(--muted);font:700 11px var(--f-num);letter-spacing:.1em;
+  text-transform:uppercase;padding:10px 4px;cursor:pointer;white-space:nowrap;transition:color .2s,border-color .2s;}
+.btabs button:hover{color:var(--paper);}
+.btabs button.on{color:var(--hud);border-bottom-color:var(--hud);}
+.bpages{display:flex;gap:24px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;overscroll-behavior-x:contain;
+  align-items:flex-start;transition:height .25s ease;-webkit-overflow-scrolling:touch;}
+.bpages::-webkit-scrollbar{display:none;}
+.bpage{flex:0 0 100%;min-width:0;scroll-snap-align:start;scroll-snap-stop:always;display:grid;gap:14px;align-content:start;
+  max-height:min(52vh,460px);overflow-y:auto;overscroll-behavior-y:contain;}
+.bart{position:relative;height:118px;border-radius:5px;overflow:hidden;background:#1b2633;}
+.bart svg{display:block;width:100%;height:100%;}
+.bart .chips{position:absolute;left:8px;bottom:7px;display:flex;gap:4px;flex-wrap:wrap;}
+.bart .chip{font:700 9px var(--f-num);letter-spacing:.08em;text-transform:uppercase;background:rgba(5,10,18,.62);color:#e6ecf2;padding:3px 6px;border-radius:3px;}
+.setlist{display:grid;grid-template-columns:1fr 1fr;gap:12px 18px;}
+@media (max-width:520px){ .setlist{grid-template-columns:1fr;} .bart{height:96px;} }
+.bdots{display:flex;gap:6px;justify-content:center;margin:-6px 0 -4px;}
+.bdots i{width:6px;height:6px;border-radius:50%;background:rgba(141,255,176,.22);transition:background .2s,transform .2s;}
+.bdots i.on{background:var(--hud);transform:scale(1.3);}
+#briefCard[data-step="brief"] .stepnav{flex-wrap:nowrap;}
+#briefCard[data-step="brief"] #start{flex:1;max-width:280px;}
+/* ---------- first page as a game title screen: logo, big menu buttons, pilot badge, quick buttons; no panel box */
+.logo{display:none;}
+#briefCard[data-step="play"]{background:transparent;border:0;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;width:min(470px,100%);gap:16px;}
+#briefCard[data-step="play"] .eyebrow,#briefCard[data-step="play"] .steps,#briefCard[data-step="play"] .stepnav,
+#briefCard[data-step="play"] h1.st-play,#briefCard[data-step="play"] .lbl.st-play{display:none;}
+#briefCard[data-step="play"] .logo{display:grid;justify-items:start;gap:6px;user-select:none;animation:menuIn .6s cubic-bezier(.2,.8,.2,1) backwards;}
+.logo .lg{font:800 clamp(46px,9vw,76px)/.88 var(--f-ui);letter-spacing:.1em;color:#fff;
+  text-shadow:0 3px 0 rgba(0,0,0,.35),0 0 30px rgba(141,255,176,.28);}
+.logo .lg b{color:var(--hud);margin-left:.18em;}
+.logo .lgline{display:flex;align-items:center;gap:8px;width:100%;max-width:330px;color:var(--hud);}
+.logo .lgline i{flex:1;height:1px;background:linear-gradient(90deg,transparent,var(--hud));}
+.logo .lgline i:last-child{background:linear-gradient(90deg,var(--hud),transparent);}
+.logo em{font:600 10.5px var(--f-num);letter-spacing:.3em;text-transform:uppercase;color:var(--hud);font-style:normal;opacity:.85;}
+#brief[data-step="play"]{background:radial-gradient(ellipse 80% 90% at 75% 50%,rgba(5,10,18,.05),rgba(5,10,18,.55) 55%,rgba(3,7,13,.92));}
+#briefCard[data-step="play"] .rankline{justify-self:start;margin:0;padding:6px 14px;border-radius:999px;border:1px solid rgba(255,201,74,.35);
+  background:rgba(8,15,26,.72);animation:menuIn .6s .05s backwards;}
+#briefCard[data-step="play"] .rankline:empty{display:none;}
+#briefCard[data-step="play"] .seg.playseg{grid-template-columns:1fr;gap:10px;}
+#briefCard[data-step="play"] .playseg .opt{position:relative;overflow:hidden;min-height:80px;padding:12px 44px 12px 132px;align-content:center;gap:3px;
+  background:linear-gradient(90deg,rgba(8,16,28,.94),rgba(8,16,28,.74));border:1px solid rgba(141,255,176,.22);border-radius:9px;box-shadow:0 8px 24px rgba(0,0,0,.35);
+  transition:transform .22s cubic-bezier(.2,.8,.2,1),border-color .2s,box-shadow .2s;animation:menuIn .55s cubic-bezier(.2,.8,.2,1) backwards;}
+#briefCard[data-step="play"] .playseg .opt:nth-child(1){animation-delay:.1s;}
+#briefCard[data-step="play"] .playseg .opt:nth-child(2){animation-delay:.17s;}
+#briefCard[data-step="play"] .playseg .opt:nth-child(3){animation-delay:.24s;}
+#briefCard[data-step="play"] .playseg .opt .art{position:absolute;left:0;top:0;bottom:0;width:122px;height:auto;margin:0;border-radius:0;
+  -webkit-mask-image:linear-gradient(90deg,#000 55%,transparent);mask-image:linear-gradient(90deg,#000 55%,transparent);}
+#briefCard[data-step="play"] .playseg .opt .art .chips,#briefCard[data-step="play"] .playseg .opt .art::after{display:none;}
+#briefCard[data-step="play"] .playseg .opt b{font:800 18px var(--f-ui);letter-spacing:.14em;text-transform:uppercase;color:#fff;}
+#briefCard[data-step="play"] .playseg .opt span{font-size:12.5px;}
+#briefCard[data-step="play"] .playseg .opt::after{content:"›";position:absolute;right:16px;top:50%;transform:translateY(-50%);
+  font:700 28px/1 var(--f-num);color:var(--hud);opacity:.55;transition:transform .2s,opacity .2s;}
+#briefCard[data-step="play"] .playseg .opt:hover,#briefCard[data-step="play"] .playseg .opt:focus-visible{transform:translateX(6px);border-color:var(--hud);
+  box-shadow:0 0 0 1px var(--hud),0 10px 30px rgba(0,0,0,.45),0 0 26px rgba(141,255,176,.2);outline:none;}
+#briefCard[data-step="play"] .playseg .opt:hover::after{opacity:1;transform:translate(4px,-50%);}
+#briefCard[data-step="play"] .playseg .opt:active{transform:translateX(6px) scale(.985);}
+#briefCard[data-step="play"] .playseg .opt[aria-pressed="true"]{box-shadow:inset 3px 0 0 var(--hud),0 8px 24px rgba(0,0,0,.35);}
+#briefCard[data-step="play"] .quick{justify-content:flex-start;flex-wrap:wrap;animation:menuIn .55s .3s backwards;}
+#briefCard[data-step="play"] .qbtn{border-radius:999px;padding:9px 16px;font-size:12px;background:rgba(8,16,28,.7);}
+#openMusic.off{opacity:.6;}
+#openMusic.off svg{opacity:.5;}
+@keyframes menuIn{from{opacity:0;transform:translateX(-22px);}to{opacity:1;transform:none;}}
+@media (prefers-reduced-motion:reduce){ #briefCard[data-step="play"] *{animation:none !important;} }
+/* phone held sideways: logo on the left, the menu on the right, everything on one screen */
+@media (orientation:landscape) and (max-height:540px){
+  #briefCard[data-step="play"]{width:min(880px,100%);grid-template-columns:1fr 1.2fr;column-gap:30px;row-gap:12px;align-items:center;}
+  #briefCard[data-step="play"] .logo{grid-column:1;grid-row:1;}
+  #briefCard[data-step="play"] .rankline{grid-column:1;grid-row:2;}
+  #briefCard[data-step="play"] .quick{grid-column:1;grid-row:3;}
+  #briefCard[data-step="play"] .playseg{grid-column:2;grid-row:1 / span 3;}
+  .logo .lg{font-size:clamp(36px,7vh,52px);}
+  #briefCard[data-step="play"] .playseg .opt{min-height:62px;padding:8px 40px 8px 108px;}
+  #briefCard[data-step="play"] .playseg .opt .art{width:100px;}
+  #briefCard[data-step="play"] .playseg .opt b{font-size:16px;}
+  #briefCard[data-step="play"] .playseg .opt span{font-size:11.5px;}
+}
+/* first page: Settings and Controls open a panel on top */
+.quick{justify-content:center;gap:10px;margin-top:-4px;}
+.qbtn{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;}
+#sheet{z-index:26;background:rgba(5,10,18,.72);}
+#sheet .card{width:min(540px,100%);}
+#sheetBody{max-height:min(62vh,520px);overflow-y:auto;overscroll-behavior:contain;}
+#sheetBody .setlist{grid-template-columns:1fr 1fr;}
+@media (max-width:520px){ #sheetBody .setlist{grid-template-columns:1fr;} }
+#sheetBody .keys dd{color:var(--paper);opacity:.8;}
+.cnav[hidden],.cnav.tr-only{display:none;}
+[data-mode="training"] .cnav.tr-only:not([hidden]){display:flex;}
+.cnav button{width:38px;height:38px;border-radius:50%;border:1px solid var(--line);background:rgba(141,255,176,.06);color:var(--hud);font:700 20px/1 var(--f-num);cursor:pointer;display:grid;place-items:center;padding:0;}
+.cnav button:hover{background:rgba(141,255,176,.16);}
+.cnav button:disabled{opacity:.3;cursor:default;}
+.ccount{font:11px var(--f-num);letter-spacing:.12em;color:var(--muted);min-width:96px;text-align:center;text-transform:uppercase;}
+.cdots{display:flex;gap:4px;justify-content:center;margin-top:4px;}
+.cdots i{width:5px;height:5px;border-radius:50%;background:rgba(141,255,176,.22);transition:background .2s,transform .2s;}
+.cdots i.on{background:var(--hud);transform:scale(1.35);}
+/* mission and play-mode artwork: drawn scenery for each theatre, by day or night */
+.opt .art{position:relative;height:108px;margin:-11px -12px 6px;border-radius:5px 5px 0 0;overflow:hidden;background:#1b2633;}
+.opt .art svg{display:block;width:100%;height:100%;}
+.art .chips{position:absolute;left:8px;bottom:7px;display:flex;gap:4px;flex-wrap:wrap;max-width:75%;}
+.art .chip{font:700 9px var(--f-num);letter-spacing:.08em;text-transform:uppercase;background:rgba(5,10,18,.62);color:#e6ecf2;padding:3px 6px;border-radius:3px;}
+.art .num{position:absolute;left:9px;top:7px;font:700 10px var(--f-num);color:#fff;letter-spacing:.14em;text-shadow:0 1px 3px rgba(0,0,0,.8);}
+.art .diff,.bart .diff{position:absolute;right:7px;top:7px;display:flex;align-items:center;gap:3px;padding:3px 7px 3px 6px;border-radius:999px;
+  font:700 9.5px var(--f-num);letter-spacing:.1em;text-transform:uppercase;color:#fff;background:rgba(5,10,18,.72);border:1px solid var(--dc);}
+.diff i{width:4px;height:9px;border-radius:1px;background:rgba(255,255,255,.22);}
+.diff i:last-of-type{margin-right:4px;}
+.diff i.on{background:var(--dc);}
+.diff.d1{--dc:#5fe08a;} .diff.d2{--dc:#ffd04a;} .diff.d3{--dc:#ff9440;} .diff.d4{--dc:#ff4d5e;}
+.bart .num{position:absolute;left:9px;top:7px;font:700 10px var(--f-num);color:#fff;letter-spacing:.14em;text-shadow:0 1px 3px rgba(0,0,0,.8);}
+.opt[aria-pressed="true"] .art::after,.planes .opt[aria-pressed="true"]::before{content:"✓ SELECTED";position:absolute;right:8px;top:7px;font:700 9px var(--f-num);letter-spacing:.1em;
+  color:#052112;background:var(--hud);padding:3px 6px;border-radius:3px;z-index:1;}
+.planes .opt{position:relative;}
+.planes .opt[aria-pressed="true"]::before{top:16px;right:18px;}
+.seg.playseg .opt .art{height:84px;margin:-16px -16px 8px;}
+@media (min-width:700px){ .seg.playseg{grid-template-columns:repeat(3,1fr);} .seg.playseg .opt .art{height:96px;} }
+@media (max-width:520px){ .carousel{margin:0 -18px;} }
 @media (max-width:620px){
   .planes{grid-template-columns:1fr;}
   .planes .stats{grid-template-columns:1fr 1fr;column-gap:12px;}
@@ -295,6 +424,11 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
     <div class="eyebrow" id="briefEyebrow">Thin Air · Hangar</div>
     <div class="steps" id="stepDots"><span data-s="play">1 · Play</span><span data-s="mission">2 · Mission</span><span data-s="plane">3 · Aircraft</span><span data-s="brief">4 · Briefing</span></div>
     <h1 class="st-play">Choose how to fly</h1>
+    <div class="logo st-play" aria-label="Thin Air">
+      <div class="lg">THIN<b>AIR</b></div>
+      <div class="lgline"><i></i><svg viewBox="0 0 48 16" width="36" height="12" aria-hidden="true"><path d="M46 8 L24 6.4 L17 0.5 L13 0.5 L16 6.2 L7 5.8 L3 2 L0.5 2 L2 8 L0.5 14 L3 14 L7 10.2 L16 9.8 L13 15.5 L17 15.5 L24 9.6 Z" fill="currentColor"/></svg><i></i></div>
+      <em>Air combat · Kargil to the Arabian Sea</em>
+    </div>
     <h1 id="briefTitle">Hit the sangar on Point 4875</h1>
     <div class="rankline st-play" id="rankLine"></div>
     <div class="lbl st-play">How do you want to fly?</div>
@@ -303,25 +437,31 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
       <button class="opt" type="button" data-play="multi"><b>Multiplayer</b><span>Live dogfight or co-op raid with friends who open this page</span></button>
       <button class="opt" type="button" data-play="train"><b>Training</b><span>Learn to fly and fight, step by step</span></button>
     </div>
+    <div class="row st-play quick">
+      <button class="go alt qbtn" id="openSet" type="button"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg>Settings</button>
+      <button class="go alt qbtn" id="openCtl" type="button"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="2.5" y="7" width="19" height="10" rx="5"/><path d="M7 10v4M5 12h4"/><circle cx="15.5" cy="11" r="1" fill="currentColor"/><circle cx="17.5" cy="13.5" r="1" fill="currentColor"/></svg>Controls</button>
+      <button class="go alt qbtn" id="openMusic" type="button" aria-pressed="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/></svg><span>Music on</span></button>
+      <button class="go alt qbtn" id="openFull" type="button" hidden><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg><span>Full screen</span></button>
+    </div>
     <div class="lbl st-mission" id="modeLabel">Mission</div>
     <div class="seg st-mission" id="modeOpts">
       <button class="opt" type="button" data-mode-opt="strike"><b>Strike</b><span>Bomb Point 4875 without crossing the LoC</span></button>
-      <button class="opt" type="button" data-mode-opt="precision"><b>Precision strike</b><span>Mirage 2000 with laser weapons against three camps, and an F-16 that can appear any time</span></button>
-      <button class="opt" type="button" data-mode-opt="dogfight"><b>Dogfight</b><span>Night over the Rajasthan desert: shoot down two JF-17s</span></button>
-      <button class="opt" type="button" data-mode-opt="raid"><b>Base raid</b><span>Lead three Su-30MKIs: checkpoint 1, shoot down two fighters; checkpoint 2, strike their air base and its SAM and AAA</span></button>
       <button class="opt" type="button" data-mode-opt="naval"><b>Naval strike</b><span>Launch a MiG-29K off the carrier and bomb the port godowns</span></button>
-      <button class="opt" type="button" data-mode-opt="ladakh"><b>Ladakh intercept</b><span>Four J-20 stealth fighters have crossed the LAC near Pangong Tso</span></button>
-      <button class="opt" type="button" data-mode-opt="sead"><b>SEAD radar hunt</b><span>Night, Rajasthan desert: Su-30MKI or Rafale against SAM radars and mobile launchers; stay low to hide</span></button>
-      <button class="opt" type="button" data-mode-opt="escort"><b>Escort transport</b><span>Protect a C-130J flying into a high-altitude airstrip in Ladakh from J-10Cs and a J-20</span></button>
-      <button class="opt" type="button" data-mode-opt="tanker"><b>Tanker refuel strike</b><span>Refuel from an IL-78 in mid-air, hit a fuel depot deep in the desert, then plug in again to get home</span></button>
-      <button class="opt" type="button" data-mode-opt="bridge"><b>Night bridge strike</b><span>Drop a river bridge at night under illumination flares before an enemy convoy crosses it</span></button>
       <button class="opt" type="button" data-mode-opt="drones"><b>Drone hunt</b><span>Arunachal jungles: find small drones skimming the canopy before they hit Tawang and the border posts</span></button>
+      <button class="opt" type="button" data-mode-opt="dogfight"><b>Dogfight</b><span>Night over the Rajasthan desert: shoot down two JF-17s</span></button>
+      <button class="opt" type="button" data-mode-opt="precision"><b>Precision strike</b><span>Mirage 2000 with laser weapons against three camps, and an F-16 that can appear any time</span></button>
+      <button class="opt" type="button" data-mode-opt="bridge"><b>Night bridge strike</b><span>Drop a river bridge at night under illumination flares before an enemy convoy crosses it</span></button>
+      <button class="opt" type="button" data-mode-opt="tanks"><b>Tank column strike</b><span>Punjab plains: stop an armoured column driving for a border town, while its own AAA and SAM shoot back</span></button>
+      <button class="opt" type="button" data-mode-opt="recon"><b>Recon photo run</b><span>No weapons: photograph four sites north of the LoC flying low over each, dodge the SAMs and AAA, and get the film home</span></button>
+      <button class="opt" type="button" data-mode-opt="tanker"><b>Tanker refuel strike</b><span>Refuel from an IL-78 in mid-air, hit a fuel depot deep in the desert, then plug in again to get home</span></button>
       <button class="opt" type="button" data-mode-opt="fleet"><b>Fleet defence</b><span>MiG-29K over the carrier: shoot down strike jets and sea-skimming anti-ship missiles</span></button>
       <button class="opt" type="button" data-mode-opt="csar"><b>Rescue cover</b><span>Protect a Mi-17 rescuing a downed pilot across the border in Punjab from AAA guns and enemy jets</span></button>
-      <button class="opt" type="button" data-mode-opt="recon"><b>Recon photo run</b><span>No weapons: photograph four sites north of the LoC flying low over each, dodge the SAMs and AAA, and get the film home</span></button>
-      <button class="opt" type="button" data-mode-opt="tanks"><b>Tank column strike</b><span>Punjab plains: stop an armoured column driving for a border town, while its own AAA and SAM shoot back</span></button>
       <button class="opt" type="button" data-mode-opt="swarm"><b>Night drone swarm</b><span>Gujarat coast at night: stop swarms of sea-skimming drones before they dive into an oil refinery</span></button>
+      <button class="opt" type="button" data-mode-opt="escort"><b>Escort transport</b><span>Protect a C-130J flying into a high-altitude airstrip in Ladakh from J-10Cs and a J-20</span></button>
+      <button class="opt" type="button" data-mode-opt="sead"><b>SEAD radar hunt</b><span>Night, Rajasthan desert: Su-30MKI or Rafale against SAM radars and mobile launchers; stay low to hide</span></button>
       <button class="opt" type="button" data-mode-opt="awacs"><b>AWACS defence</b><span>Punjab: guard a Netra radar jet on its orbit from three waves of fighters; stay close to keep its datalink</span></button>
+      <button class="opt" type="button" data-mode-opt="raid"><b>Base raid</b><span>Lead three Su-30MKIs: checkpoint 1, shoot down two fighters; checkpoint 2, strike their air base and its SAM and AAA</span></button>
+      <button class="opt" type="button" data-mode-opt="ladakh"><b>Ladakh intercept</b><span>Four J-20 stealth fighters have crossed the LAC near Pangong Tso</span></button>
       <button class="opt" type="button" data-mode-opt="training"><b>Training</b><span>Learn to fly and fight, step by step</span></button>
       <button class="opt" type="button" data-mode-opt="versus"><b>Multiplayer</b><span>Live dogfight against friends who open this page and use the same room code</span></button>
       <button class="opt" type="button" data-mode-opt="coop"><b>Co-op raid</b><span>Fly the base raid together, one Su-30MKI each</span></button>
@@ -350,10 +490,16 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
     <div class="lessons tr-only st-mission" id="lessonOpts"></div>
     <div class="lbl st-plane" id="acLabel">Aircraft</div>
     <div class="planes st-plane" id="planeOpts"></div>
-    <div class="acsum st-brief" id="acSum"></div>
-    <p id="briefBody" class="st-brief"></p>
-    <div class="facts st-brief" id="briefFacts"></div>
-    <dl class="keys desk-only st-brief">
+    <div class="btabs st-brief" id="bTabs"><button type="button" data-bp="0">Overview</button><button type="button" data-bp="1">Briefing</button><button type="button" data-bp="2">Controls</button><button type="button" data-bp="3">Settings</button></div>
+    <div class="bpages st-brief" id="bPages">
+    <section class="bpage">
+    <div class="bart" id="bArt"></div>
+    <div class="acsum" id="acSum"></div>
+    <div class="facts" id="briefFacts"></div>
+    </section>
+    <section class="bpage"><p id="briefBody"></p></section>
+    <section class="bpage">
+    <dl class="keys desk-only">
       <dt>S / ↓ &nbsp; W / ↑</dt><dd>Pull up / push down</dd>
       <dt>A D / ← →</dt><dd>Roll (bank, then pull S to turn)</dd>
       <dt>R F · wheel</dt><dd>Throttle (above 100% is afterburner)</dd>
@@ -368,22 +514,45 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--amber);outline-
       <dt>B</dt><dd>Break turn: automatic hard turn south, away from the LoC</dd>
       <dt>C · P</dt><dd>Chase or cockpit view · pause</dd>
     </dl>
-    <p class="note touch-only st-brief" id="touchNote"></p>
-    <div class="row stepnav">
-      <button class="go alt" id="stepBack" type="button">‹ Back</button>
-      <button class="go" id="stepNext" type="button">Next ›</button>
-    </div>
-    <div class="row st-brief">
-      <div class="checks">
+    <dl class="keys touch-only" id="touchKeys">
+      <dt>TILT · stick</dt><dd>Fly by tilting the phone (TILT on), or with the stick: drag down to pull up</dd>
+      <dt>POWER</dt><dd>Slide up for more throttle; above the dashed line is afterburner</dd>
+      <dt>FIRE</dt><dd>Fires the weapon shown on it</dd>
+      <dt>WPN</dt><dd>Tap for the next weapon · hold for the next ground target</dd>
+      <dt>A/G</dt><dd>Bombs and laser missile: keep the target ahead until the ring turns red, then FIRE</dd>
+      <dt>FLR</dt><dd>Flares, when it glows red for an incoming missile, then turn hard</dd>
+      <dt>VIEW · II</dt><dd>Chase or cockpit view · pause</dd>
+      <dt>RADIO · TALK</dt><dd>Multiplayer: quick radio calls · hold to speak</dd>
+    </dl>
+    <p class="note touch-only" id="touchNote"></p>
+    </section>
+    <section class="bpage">
+      <div class="checks setlist">
         <label class="check k-intro"><input type="checkbox" id="introOn" checked> Take-off from Srinagar</label>
         <label class="check k-voice"><input type="checkbox" id="voiceOn" checked> Radio voices</label>
         <label class="check"><input type="checkbox" id="soundOn" checked> Engine sound</label>
+        <label class="check"><input type="checkbox" id="musicOn" checked> Menu music</label>
         <label class="check"><input type="checkbox" id="stallProt" checked> Stall protection</label>
         <label class="check"><input type="checkbox" id="lowGfx"> Low graphics</label>
         <label class="check"><input type="checkbox" id="invert"> Invert pitch</label>
       </div>
-      <button class="go" id="start" type="button">Start sortie</button>
+    </section>
     </div>
+    <div class="bdots st-brief" id="bDots"><i></i><i></i><i></i><i></i></div>
+    <div class="row stepnav">
+      <button class="go alt" id="stepBack" type="button">‹ Back</button>
+      <button class="go" id="stepNext" type="button">Next ›</button>
+      <button class="go st-brief" id="start" type="button">Start sortie</button>
+    </div>
+  </div>
+</section>
+
+<section class="overlay" id="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="card">
+    <div class="eyebrow">Thin Air · Hangar</div>
+    <h2 id="sheetTitle">Settings</h2>
+    <div id="sheetBody"></div>
+    <div class="row"><span class="note desk-only">Esc closes</span><button class="go" id="sheetClose" type="button">Done</button></div>
   </div>
 </section>
 
@@ -1501,6 +1670,19 @@ function buildDrone(){
   g.scale.setScalar(1.6); return g;
 }
 // anti-ship cruise missile for fleet defence: a slim body, mid wings, cruciform tail, glowing motor
+// fast attack craft: grey hull, bridge, mast and two angled missile canisters on the stern (bow to -z)
+function buildBoat(){
+  const g=new T.Group(), gry=new T.MeshStandardMaterial({color:0x7d858c, metalness:0.3, roughness:0.6}), dk=new T.MeshStandardMaterial({color:0x3a4046, metalness:0.2, roughness:0.7}), gl=new T.MeshStandardMaterial({color:0x1d2a36, metalness:0.5, roughness:0.3});
+  const add=(geo,mat,x,y,z,rx)=>{ const m=new T.Mesh(geo,mat); m.position.set(x,y,z); if (rx) m.rotation.x=rx; g.add(m); return m; };
+  add(new T.BoxGeometry(6.5,2.6,30),gry,0,1.3,0);                                  // hull
+  const bow=add(new T.ConeGeometry(3.25,8,4),gry,0,1.3,-19,-Math.PI/2); bow.rotation.y=Math.PI/4; bow.scale.set(1,1,0.8);
+  add(new T.BoxGeometry(5.6,0.2,29),dk,0,2.7,0);                                    // deck
+  add(new T.BoxGeometry(4.4,2.6,7),gry,0,4.0,-3); add(new T.BoxGeometry(4.5,0.9,0.2),gl,0,4.7,-6.55);   // bridge and its windows
+  add(new T.CylinderGeometry(0.18,0.18,6,6),dk,0,8.0,-2); add(new T.BoxGeometry(2.4,0.3,0.6),dk,0,9.6,-2);   // mast and radar
+  [-1.4,1.4].forEach(x=>add(new T.BoxGeometry(1.1,1.1,6),dk,x,3.8,8,-0.2));        // missile canisters
+  add(new T.CylinderGeometry(0.5,0.5,1.4,8),dk,0,3.4,-11);                          // gun mount
+  return g;
+}
 function buildASM(){
   const g=new T.Group(), gry=new T.MeshStandardMaterial({color:0xb7bcc0, metalness:0.4, roughness:0.45}), fl=new T.MeshBasicMaterial({color:0xffb050});
   const b=new T.Mesh(new T.CylinderGeometry(0.36,0.36,6.4,10), gry); b.rotation.x=Math.PI/2; g.add(b);
@@ -1610,6 +1792,8 @@ const FOES = {
   uav:  { name:'UAV', proto:buildUAV(), speed:62, turn:0.35, range:0, flares:0, cd:999, uav:true, stealth:0.3 },
   // fleet defence: a sea-skimming anti-ship missile; small and fast, but it can be locked and shot down
   asm:  { name:'C-802', proto:buildASM(), speed:270, turn:0.5, range:0, flares:0, cd:999, asm:true, stealth:0.45 },
+  // fleet defence: a fast attack craft that dashes in and fires two anti-ship missiles at the carrier
+  boat: { name:'MISSILE BOAT', proto:buildBoat(), speed:40, turn:0.12, range:0, flares:0, cd:999, boat:true, stealth:0.8 },
 };
 Object.values(FOES).forEach(f=>castAll(f.proto));
 const WAVE_MIX = [null,
@@ -1966,7 +2150,46 @@ function buildHelo(){
   for (let i=0;i<3;i++){ const h=new T.Group(); h.rotation.x=i*Math.PI*2/3; tr.add(h); add(UBOX,mBl,0.05,1.6,0.25,0,0.8,0,0,h); }
   castAll(g); g.userData.rot=rot; g.userData.tr=tr; return g;
 }
+// a shoulder-fired SAM team hides in a field near the downed pilot; it fires at VIPER once the helicopter comes in to land
+const CSAR_CMP={x:CSAR_PILOT.x+650, z:CSAR_PILOT.z-420};
+let CMP=null;
+function cmpBuild(){
+  const y=groundAt(CSAR_CMP.x,CSAR_CMP.z), g=new T.Group(), wk=new T.Group();
+  g.position.set(CSAR_CMP.x,y,CSAR_CMP.z); wk.position.copy(g.position);
+  const mSand=new T.MeshLambertMaterial({color:0x8a7d5c}), mOl=new T.MeshLambertMaterial({color:OLIVE}), mSk=new T.MeshLambertMaterial({color:SKIN}), mTube=new T.MeshLambertMaterial({color:0x4a5238});
+  const add=(geo,mat,sx,sy,sz,x,yy,z,rx,ry,par)=>{ const m=new T.Mesh(geo,mat); m.scale.set(sx,sy,sz); m.position.set(x,yy,z); if (rx) m.rotation.x=rx; if (ry) m.rotation.y=ry; (par||g).add(m); return m; };
+  for (let i=0;i<6;i++){ const a=i*Math.PI/3; add(UBOX,mSand,3.2,0.9,1.0,Math.cos(a)*3.2,0.45,Math.sin(a)*3.2,0,-a+Math.PI/2); }   // ring of sandbags
+  [[-0.8,0.4],[0.9,-0.5]].forEach(([x,z],k)=>{ add(UBOX,mOl,0.6,1.1,0.4,x,0.75,z); add(USPH,mSk,0.27,0.27,0.27,x,1.5,z);
+    if (!k) add(UCYL,mTube,0.12,1.6,0.12,x+0.25,1.55,z-0.2,-1.0); });                                                  // two soldiers, one with the launcher
+  add(UBOX,new T.MeshLambertMaterial({color:BURNT}),2.2,0.5,1.6,0,0.25,0,0,0.6,wk); add(USPH,new T.MeshLambertMaterial({color:ASH}),6,0.2,6,0,0.05,0,0,0,wk);
+  g.traverse(o=>{ if (o.isMesh) o.castShadow=o.receiveShadow=true; });
+  scene.add(g); scene.add(wk);
+  return {g, wreck:wk, x:CSAR_CMP.x, y, z:CSAR_CMP.z, alive:false, hid:true, cd:0, kind:'MANPADS'};
+}
+function cmpReset(){
+  if (!CSAR){ if (CMP){ CMP.alive=false; CMP.g.visible=false; CMP.wreck.visible=false; } return; }
+  if (!CMP) CMP=cmpBuild();
+  Object.assign(CMP,{alive:true, hid:true, cd:1.5}); CMP.g.visible=true; CMP.wreck.visible=false;
+}
+function killCmp(){
+  CMP.alive=false; CMP.g.visible=false; CMP.wreck.visible=true;
+  spawnExplosion(new T.Vector3(CMP.x,CMP.y+2,CMP.z),false);
+  missiles.forEach(m=>{ if (m.cmp) m.target=null; });
+}
+function updateCmp(dt){
+  const H=HELO; if (!CMP || !CMP.alive || !H || !H.alive || state!=='fly') return;
+  if (!(H.ph==='in' || H.ph==='land' || H.ph==='pickup' || H.ph==='out')) return;
+  if (Math.hypot(H.p.x-CMP.x,H.p.z-CMP.z)>3500) return;
+  CMP.cd-=dt; if (CMP.cd>0 || missiles.some(m=>m.cmp)) return;
+  const p=new T.Vector3(CMP.x,CMP.y+2,CMP.z); _t.copy(H.p).sub(p).normalize(); _t.y=Math.max(_t.y,0.3); _t.normalize();
+  const m=spawnMissile(p,_t.clone().multiplyScalar(60),H,'e'); m.cmp=true; m.maxLife=10;
+  effects.push(makeFx(p.clone(),0xd8d2c4,false,2.5,2,9,0.6,2));
+  CMP.cd=12+Math.random()*5;
+  S.msg={text: CMP.hid ? 'MANPADS LAUNCH AT VIPER · NEAR THE PILOT · TARGET MARKED' : 'MANPADS LAUNCH AT VIPER · KILL THE TEAM', col:RED, t:3};
+  CMP.hid=false;
+}
 function heloReset(){
+  cmpReset();
   if (HELO){ scene.remove(HELO.m); HELO=null; }
   if (!CSAR) return;
   if (!HELO_PROTO) HELO_PROTO=buildHelo();
@@ -2003,6 +2226,7 @@ function updateCsar(dt){
   // the pilot's orange smoke
   H.smokeT-=dt; if (H.smokeT<=0 && !H.pilot){ H.smokeT=0.5; effects.push(makeFx(new T.Vector3(CSAR_PILOT.x, groundAt(CSAR_PILOT.x,CSAR_PILOT.z)+2, CSAR_PILOT.z),0xff7a30,false,4,3,8,0.8,6)); }
   if (state!=='fly'){ H.m.position.copy(H.p); orient(H.m,H.fwd,H.bank); return; }
+  updateCmp(dt);
   // ground fire: each live gun within 2.2 km chews at the helicopter
   let fire=0; for (const a of RAID.ad) if (a.alive && Math.hypot(a.x-H.p.x,a.z-H.p.z)<2200) fire++;
   if (fire){ H.hp-=2.2*fire*dt; H.fireMsg-=dt; if (H.fireMsg<=0){ H.fireMsg=4; S.msg={text:`VIPER TAKING GROUND FIRE · ${fire} GUN${fire>1?'S':''} · ${Math.max(0,Math.round(H.hp/1.5))}%`, col:RED, t:2}; }
@@ -2112,8 +2336,8 @@ const FLEET_LAUNCH=14000, FLEET_HITS=3, FLEET_START={x:0, z:7000, y:3500};
 const FLEET_PLANES=['mig29'];
 function fleetGone(){ if (state==='fly' && !enemies.some(x=>x.alive)) waveCleared(); }
 function spawnAsm(e){
-  const type=FOES.asm, p=e.p.clone(); p.y-=3;
-  const fwd=new T.Vector3(CARRIER.x-p.x,0,CARRIER.z-p.z).normalize(); fwd.y=-0.15; fwd.normalize();
+  const type=FOES.asm, p=e.p.clone(); p.y += e.type.boat ? 5 : -3;
+  const fwd=new T.Vector3(CARRIER.x-p.x,0,CARRIER.z-p.z).normalize(); fwd.y = e.type.boat ? 0.12 : -0.15; fwd.normalize();
   const m=type.proto.clone(); m.position.copy(p); orient(m,fwd,0); scene.add(m);
   enemies.push({m, p, fwd, type, vel:fwd.clone().multiplyScalar(240), speed:240, hp:30, alive:true, flares:0, fireCd:999, burst:0, gunCd:0, bank:0, turn:type.turn, seed:Math.random()*100, ciws:false});
 }
@@ -2152,6 +2376,29 @@ function updateFleet(dt){
     if (e.launched && !e.salvo && e.p.z<-15500){ e.alive=false; scene.remove(e.m); if (S.lockTgt===e){ S.lockTgt=null; S.locked=false; } S.msg={text:`${e.type.name} ESCAPED NORTH`, col:AMB, t:2}; fleetGone(); }
   }
 }
+// the missile boat: comes in from the west during raid 2, fires two missiles from FLEET_LAUNCH, then turns away and escapes
+const BOAT_START={x:-14000, z:-1500};
+function spawnBoat(){
+  const type=FOES.boat, p=new T.Vector3(BOAT_START.x, 1.2, BOAT_START.z+(Math.random()-0.5)*2000);
+  const fwd=new T.Vector3(CARRIER.x-p.x,0,CARRIER.z-p.z).normalize();
+  const m=type.proto.clone(); m.position.copy(p); orient(m,fwd,0); scene.add(m);
+  enemies.push({m, p, fwd, type, vel:fwd.clone().multiplyScalar(type.speed), speed:type.speed, hp:100, alive:true, flares:0, fireCd:999, burst:0, gunCd:0, bank:0, turn:type.turn, seed:Math.random()*100, launched:false, salvo:0, salvoT:0, runT:0, wakeT:0});
+}
+function updateBoat(e,dt){
+  if (state!=='fly'){ e.m.position.copy(e.p); return; }
+  const dc=Math.hypot(e.p.x-CARRIER.x,e.p.z-CARRIER.z);
+  if (!e.launched && dc<FLEET_LAUNCH){ e.launched=true; e.salvo=2; e.salvoT=0; S.msg={text:'VAMPIRE · MISSILE BOAT FIRING AT THE CARRIER', col:RED, t:3}; }
+  if (e.salvo>0){ e.salvoT-=dt; if (e.salvoT<=0){ spawnAsm(e); e.salvo--; e.salvoT=2.2; } }
+  // run in at the carrier; after the salvo, turn west and run for it
+  if (!e.launched || e.salvo>0) _d.set(CARRIER.x-e.p.x,0,CARRIER.z-e.p.z).normalize();
+  else { _d.set(-1,0,-0.3).normalize(); e.runT+=dt; }
+  turnToward(e.fwd,_d,e.turn*dt); e.fwd.y=0; e.fwd.normalize();
+  e.vel.copy(e.fwd).multiplyScalar(e.speed); e.p.addScaledVector(e.vel,dt);
+  e.p.y=1.2+0.35*Math.sin(S.time*2.1+e.seed);
+  e.m.position.copy(e.p); orient(e.m,e.fwd,0.05*Math.sin(S.time*1.3+e.seed));
+  e.wakeT-=dt; if (e.wakeT<=0){ e.wakeT=0.3; effects.push(makeFx(e.p.clone().addScaledVector(e.fwd,-16).setY(0.8),0xf2f5f7,false,3,2,10,0.55,1.6)); }
+  if (e.runT>45 || Math.abs(e.p.x)>15500){ e.alive=false; scene.remove(e.m); if (S.lockTgt===e){ S.lockTgt=null; S.locked=false; } S.msg={text:'MISSILE BOAT ESCAPED WEST', col:AMB, t:2}; fleetGone(); }
+}
 function drawFleetHUD(flash){
   const d=Math.hypot(CARRIER.x-S.pos.x,CARRIER.z-S.pos.z), s=proj(CARRIER.x,CARRIER.deck+20,CARRIER.z), lb=`CARRIER ${(d/1000).toFixed(1)} KM`;
   if (onScreen(s)){ c.beginPath(); c.arc(s.x,s.y,14,0,Math.PI*2); strokeP(HUD,1.4); txt(lb,s.x,s.y-24,HUD,'center',11,true); }
@@ -2180,7 +2427,9 @@ function illumReset(){ ILL.t=0; ILL.drop=0; ILLUM.intensity=0; ILL_FLARES.forEac
 function updateIllum(dt){
   if (ILL.t<=0 && S.alive && state==='fly' && Math.hypot(S.pos.x-BRG_X,S.pos.z-BRG_RZ)<7500){
     ILL.t=80; ILL.drop=0; S.msg={text:'PATHFINDER · ILLUMINATION FLARES OVER THE BRIDGE', col:AMB, t:3};
+    if (BRIDGE && !S.nfIn){ S.nfIn=true; S.nfT=6; }   // the night fighter shows up a few seconds after the flares
   }
+  if (BRIDGE && S.nfT>0 && S.alive && state==='fly'){ S.nfT-=dt; if (S.nfT<=0){ S.nfT=0; spawnNightFighter(); } }
   if (ILL.t<=0){ ILLUM.intensity=0; ILL_FLARES.forEach(s=>{ s.visible=false; }); return; }
   ILL.t-=dt; ILL.drop+=dt*4;
   const fade=Math.min(1,ILL.t/6)*Math.min(1,ILL.drop/12), y=BRG_Y+650-ILL.drop;
@@ -2880,7 +3129,8 @@ const tgp={on:true, d:null, dist:0};
 function tdList(){
   if (mode==='raid' && RCP===1) return [];   // nothing to designate until the fighters are down
   if (mode==='raid') return [...RAID.targets.filter(t=>t.alive).map(t=>({ref:t, x:t.x, y:t.y, z:t.z, name:t.name, r:t.r})),
-                             ...RAID.ad.filter(a=>a.alive && !(a.mob && !a.seen)).map(a=>({ref:a, x:a.x, y:a.y, z:a.z, name:a.kind, r:a.kind==='SAM'?38:30}))];
+                             ...RAID.ad.filter(a=>a.alive && !(a.mob && !a.seen)).map(a=>({ref:a, x:a.x, y:a.y, z:a.z, name:a.kind, r:a.kind==='SAM'?38:30})),
+                             ...(CSAR && CMP && CMP.alive && !CMP.hid ? [{ref:CMP, x:CMP.x, y:CMP.y, z:CMP.z, name:'MANPADS', r:30}] : [])];
   if (mode==='training') return trTargets().map(t=>({ref:t, x:t.x, y:t.y, z:t.z, name:t.name, r:t.r}));
   return S.targetHit ? [] : [{ref:'p4875', x:TARGET.x, y:TG_Y, z:TARGET.z, name:'PT 4875', r:HIT_RADIUS}];
 }
@@ -3171,6 +3421,7 @@ function raidBombImpact(b){
   if (lorries) hits.push(lorries>1 ? `${lorries} LORRIES` : 'LORRY');
   RAID.targets.forEach(t=>{ if (t.alive && Math.hypot(b.p.x-t.x,b.p.z-t.z)<=t.r){ killRaidTarget(t); hits.push(t.name); } });
   RAID.ad.forEach(a=>{ if (a.alive && Math.hypot(b.p.x-a.x,b.p.z-a.z)<=(a.kind==='SAM'?38:30)){ killAD(a); hits.push(a.kind); } });
+  if (CSAR && CMP && CMP.alive && Math.hypot(b.p.x-CMP.x,b.p.z-CMP.z)<=30){ killCmp(); hits.push('MANPADS'); }
   let nd=Infinity, nt=null;
   RAID.targets.forEach(t=>{ if (!t.alive) return; const d=Math.hypot(b.p.x-t.x,b.p.z-t.z); if (d<nd){ nd=d; nt=t; } });
   if (nt) S.bestMiss=Math.min(S.bestMiss,nd);
@@ -3190,7 +3441,7 @@ function raidBombImpact(b){
     else if (BRIDGE) endMission(true,'The bridge is down',`Both spans are in the river and the convoy is stranded on the north bank. Lorries destroyed: ${CONVOY.trucks.filter(t=>!t.alive).length} of ${CONVOY.trucks.length}. AAA and SAM knocked out: ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length}.`,4);
     else if (TANKER){ S.rtb=true; S.msg={text:'DEPOT DESTROYED · RTB · PLUG IN TO THE TANKER FOR THE TRIP HOME', col:HUD, t:4.5}; }
     else if (SEAD) endMission(true,'Air defences suppressed',`All three radars and all six SAM launchers in the desert are destroyed, so the strike packages can now fly through. AAA guns knocked out: ${RAID.ad.filter(a=>a.kind==='AAA' && !a.alive).length} of ${RAID.ad.filter(a=>a.kind==='AAA').length}. Fighters shot down: ${S.kills} of 2.`,4);
-    else if (PRECISE) endMission(true,'All three camps destroyed',`Tiger Hill, Tololing and Muntho Dhalo are burning, and you stayed south of the Line of Control. AAA guns knocked out: ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length}. F-16 ${S.kills ? 'shot down' : 'not engaged'}.`,4);
+    else if (PRECISE) endMission(true,'All three camps destroyed',`Tiger Hill, Tololing and Muntho Dhalo are burning, and you stayed south of the Line of Control. AAA guns knocked out: ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length}. F-16s shot down: ${S.kills}. Time left: ${Math.floor(Math.max(0,S.precT)/60)}:${String(Math.floor(Math.max(0,S.precT)%60)).padStart(2,'0')}.`,4);
     else if (NAVAL) endMission(true,'Port godowns destroyed',`All four godowns along the coast are burning. You knocked out ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length} AAA guns and shot down ${S.kills} of 2 fighters, flying a single MiG-29K off the carrier.`,4);
     else endMission(true,'Base destroyed',`All four structures are burning: both aircraft shelters, the fuel depot and the command post. You knocked out ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length} air-defence sites and shot down ${S.kills} of 2 fighters.`,4);
   } else if (MP.coop){ if (S.bombs===0 && S.agm===0) S.msg={text:`OUT OF BOMBS · ${left} TO GO · LEAVE IT TO YOUR FLIGHT`, col:AMB, t:3}; }
@@ -3253,26 +3504,56 @@ function spawnRaidFighters(){
   // further on (less on short missions, where the start is close to the target)
   const dx=S.pos.x-BASE.x, dz=S.pos.z-BASE.z, dd=Math.max(1,Math.hypot(dx,dz)), off=clamp(dd-10000,0,10000+Math.random()*3000);
   const capC={x:BASE.x+dx/dd*off, z:BASE.z+dz/dd*off};
-  ['jf17','f16'].forEach((k,i)=>{
-    const type=FOES[k], ang=i*Math.PI, y=(NAVAL ? 2600 : SEAD ? 2400 : TANKER ? 3200 : TANKS ? 3800 : 6600)+i*400;   // over the port and the desert they patrol low
+  const FL = TANKER ? ['jf17','f16','jf17'] : ['jf17','f16'];   // the deep strike: a third fighter over the depot
+  FL.forEach((k,i)=>{
+    const type=FOES[k], ang=i*Math.PI*2/FL.length, y=(NAVAL ? 2600 : SEAD ? 2400 : TANKER ? 3200 : TANKS ? 3800 : 6600)+i*400;   // over the port and the desert they patrol low
     const p=new T.Vector3(capC.x+Math.cos(ang)*RAID_CAP_R, y, capC.z+Math.sin(ang)*RAID_CAP_R), fwd=new T.Vector3(-Math.sin(ang),0,Math.cos(ang));
     const m=type.proto.clone(); m.position.copy(p); orient(m,fwd,0); scene.add(m);
     enemies.push({m, p, fwd, type, vel:fwd.clone().multiplyScalar(type.speed), speed:type.speed, hp:100, alive:true,
       flares:type.flares, fireCd:4+Math.random()*4, burst:0, gunCd:0, bank:0, turn:type.turn+0.03, seed:Math.random()*100, cap:true, capY:y, capC, bi:i});
   });
 }
-// precision strike: one F-16 crosses the LoC at a random moment and comes straight for you
-function updatePrecF16(dt){
-  if (S.f16T<0 || !S.alive || state!=='fly') return;
-  S.f16T-=dt; if (S.f16T>0) return;
-  S.f16T=-1;
-  const type=FOES.f16, x=clamp(S.pos.x+(Math.random()-0.5)*9000,-14000,14000), z=locZ(x)-2500;
-  const p=new T.Vector3(x, Math.max(groundAt(x,z)+1500, S.pos.y+(Math.random()-0.3)*800), z);
-  const fwd=new T.Vector3(S.pos.x-x,0,S.pos.z-z).normalize();
+// a single fighter appears at p and turns straight for you
+function spawnFoe(k,p,fireCd){
+  const type=FOES[k], fwd=new T.Vector3(S.pos.x-p.x,0,S.pos.z-p.z); if (fwd.lengthSq()<1) fwd.set(0,0,1); fwd.normalize();
   const m=type.proto.clone(); m.position.copy(p); orient(m,fwd,0); scene.add(m);
-  enemies.push({m, p, fwd, type, vel:fwd.clone().multiplyScalar(type.speed), speed:type.speed, hp:100, alive:true,
-    flares:type.flares, fireCd:6+Math.random()*4, burst:0, gunCd:0, bank:0, turn:type.turn+0.03, seed:Math.random()*100});
-  S.msg={text:`BANDIT INBOUND · F-16 FROM THE NORTH · ${(p.distanceTo(S.pos)/1000).toFixed(0)} KM`, col:RED, t:3.5};
+  const e={m, p, fwd, type, vel:fwd.clone().multiplyScalar(type.speed), speed:type.speed, hp:100, alive:true,
+    flares:type.flares, fireCd:fireCd, burst:0, gunCd:0, bank:0, turn:type.turn+0.03, seed:Math.random()*100};
+  enemies.push(e); return e;
+}
+// precision strike: two F-16s cross the LoC, one after the other, at random moments; and the intruders pull out after PREC_TIME
+const PREC_TIME=360;
+function precF16(second){
+  const x=clamp(S.pos.x+(Math.random()-0.5)*9000,-14000,14000), z=locZ(x)-2500;
+  const p=new T.Vector3(x, Math.max(groundAt(x,z)+1500, S.pos.y+(Math.random()-0.3)*800), z);
+  spawnFoe('f16',p,6+Math.random()*4);
+  S.msg={text:`${second?'SECOND ':''}BANDIT INBOUND · F-16 FROM THE NORTH · ${(p.distanceTo(S.pos)/1000).toFixed(0)} KM`, col:RED, t:3.5};
+}
+function updatePrecF16(dt){
+  if (!S.alive || state!=='fly') return;
+  if (raidLeft()>0){
+    const was=S.precT; S.precT-=dt;
+    if (was>60 && S.precT<=60) S.msg={text:'ONE MINUTE · THE INTRUDERS ARE PULLING OUT', col:RED, t:3};
+    if (S.precT<=0){ endMission(false,'Out of time',`The intruders slipped away from the camps you did not reach. You have ${Math.round(PREC_TIME/60)} minutes: fly straight to the nearest camp, fire the laser missiles from 6 to 10 km and move on without waiting to watch, and when an F-16 turns up, kill it quickly and get back to the camps. Camps destroyed: ${raidN()-raidLeft()} of ${raidN()}.`,2.4); return; }
+  }
+  if (S.f16T>=0){ S.f16T-=dt; if (S.f16T<=0){ S.f16T=-1; precF16(false); S.f16T2=60+Math.random()*60; } }
+  if (S.f16T2>=0){ S.f16T2-=dt; if (S.f16T2<=0){ S.f16T2=-1; precF16(true); } }
+}
+// solo dogfight: once the first JF-17 goes down, a J-10C joins from the other side
+function plainDog(){ return mode==='dogfight' && !MP.on && !LADAKH && !ESCORT && !AWACS && !FLEET && !DRONES && !SWARM; }
+function spawnLateJ10(){
+  const o=enemies.find(e=>e.alive), ang = o ? Math.atan2(o.p.z-S.pos.z,o.p.x-S.pos.x)+Math.PI+(Math.random()-0.5)*1.2 : Math.random()*Math.PI*2, d=7000+Math.random()*2000;
+  const x=clamp(S.pos.x+Math.cos(ang)*d,-14000,14000), pn=WORLD==='pune' || WORLD==='desert';
+  const z=clamp(S.pos.z+Math.sin(ang)*d, pn ? -14000 : locZ(x)+3500, 14000);
+  const y=Math.max(groundAt(x,z)+1000, clamp(S.pos.y+(Math.random()-0.3)*1000, pn ? 1800 : 4500, pn ? 4500 : 8000));
+  spawnFoe('j10',new T.Vector3(x,y,z),5+Math.random()*3);
+  S.msg={text:`NEW BANDIT · J-10C JOINING · ${(d/1000).toFixed(0)} KM`, col:RED, t:3.5};
+}
+// night bridge strike: a JF-17 on night patrol comes for you when the illumination flares light the bridge
+function spawnNightFighter(){
+  const x=clamp(BRG_X+(Math.random()-0.5)*5000,-14000,14000), z=BRG_RZ-7000-Math.random()*2000;
+  spawnFoe('jf17',new T.Vector3(x,Math.max(groundAt(x,z)+1500,S.pos.y+400),z),7+Math.random()*3);
+  S.msg={text:'NIGHT FIGHTER · JF-17 FROM THE NORTH · THE FLARES GAVE YOU AWAY', col:RED, t:3.5};
 }
 function raidWake(){
   if (!enemies.some(e=>e.cap)) return;
@@ -3293,7 +3574,8 @@ function spawnWave(n){
         flares:type.flares, fireCd:6+Math.random()*4, burst:0, gunCd:0, bank:0, turn:type.turn, seed:Math.random()*100, striker:k!=='f16', launched:false, salvo:0});
     });
     const ns=W.filter(k=>k!=='f16').length;
-    S.msg={text:`WAVE ${n} OF ${FLEET_WAVES.length-1} · ${ns} STRIKE JETS${W.includes('f16')?' + F-16 ESCORT':''} FROM THE NORTH`, col:RED, t:3.5};
+    if (n===2) spawnBoat();   // raid 2: a missile boat comes in low from the west at the same time
+    S.msg={text:`WAVE ${n} OF ${FLEET_WAVES.length-1} · ${ns} STRIKE JETS${W.includes('f16')?' + F-16 ESCORT':''} FROM THE NORTH${n===2?' · MISSILE BOAT FROM THE WEST':''}`, col:RED, t:4};
     return;
   }
   if (DRONES){   // drones cross the LoC low, each heading for one of the posts
@@ -3302,15 +3584,16 @@ function spawnWave(n){
     const sz0=-1000+Math.random()*13000;   // the swarm: one tight group per wave, low off the sea to the west
     for (let i=0;i<cnt;i++){
       const PS=dronePosts();
-      const x = SWARM ? -12500-i*220-Math.random()*150 : clamp(-12000+Math.random()*24000,-14000,14000);
-      const z = SWARM ? sz0+(Math.random()-0.5)*1400 : lineZ(x)-700;
+      const south = SWARM && n>=2 && i%2===1;   // from swarm 2 on, half the drones come up from the south at the same time
+      const x = south ? 4500+(Math.random()-0.5)*1400 : SWARM ? -12500-i*220-Math.random()*150 : clamp(-12000+Math.random()*24000,-14000,14000);
+      const z = south ? 13500+i*110+Math.random()*150 : SWARM ? sz0+(Math.random()-0.5)*1400 : lineZ(x)-700;
       const post=PS[Math.floor(Math.random()*PS.length)], agl = SWARM ? 50+Math.random()*60 : 120+Math.random()*150;
       const p=new T.Vector3(x,groundAt(x,z)+agl,z), fwd=new T.Vector3(post.x-x,0,post.z-z).normalize();
       const m=type.proto.clone(); m.position.copy(p); orient(m,fwd,0); scene.add(m);
       enemies.push({m, p, fwd, type, vel:fwd.clone().multiplyScalar(type.speed), speed:type.speed, hp:60, alive:true, flares:0, fireCd:999, burst:0, gunCd:0, bank:0, turn:type.turn, seed:Math.random()*100, post, agl});
     }
     S.obsT=3;   // first observer report comes quickly
-    S.msg={text: SWARM ? `WAVE ${n} OF ${DRONE_WAVES.length-1} · SWARM OF ${cnt} DRONES OFF THE COAST TO THE WEST · SEA-SKIMMING` : `WAVE ${n} OF ${DRONE_WAVES.length-1} · ${cnt} DRONES CROSSING THE LOC · FLYING LOW`, col:RED, t:3.5};
+    S.msg={text: SWARM ? (n>=2 ? `WAVE ${n} OF ${DRONE_WAVES.length-1} · ${cnt} DRONES IN TWO GROUPS · WEST AND SOUTH · SEA-SKIMMING` : `WAVE ${n} OF ${DRONE_WAVES.length-1} · SWARM OF ${cnt} DRONES OFF THE COAST TO THE WEST · SEA-SKIMMING`) : `WAVE ${n} OF ${DRONE_WAVES.length-1} · ${cnt} DRONES CROSSING THE LOC · FLYING LOW`, col:RED, t:3.5};
     return;
   }
   if (AWACS){   // fighters from across the border, going for the Netra; from wave 2 one of them sneaks in low from the west
@@ -3333,7 +3616,7 @@ function spawnWave(n){
   }
   if (ESCORT){   // two waves from across the LAC, added to whoever is still flying
     if (n<=S.wave || !HERC) return; S.wave=n;
-    const W = n===1 ? ['j10','j10'] : ['j20','j10'];
+    const W = n===1 ? ['j10','j10'] : ['j20','j20'];   // the second wave: two stealth J-20s
     W.forEach((k,i)=>{
       const type=FOES[k], x=clamp(HERC.p.x+(n===1 ? -1500 : -4500)+i*1100,-15000,15000), z=lacZ(x)+2800+i*300, y=7900+i*300;
       const p=new T.Vector3(x,Math.max(y,groundAt(x,z)+1200),z), fwd=new T.Vector3(HERC.p.x-x,0,HERC.p.z-z).normalize();
@@ -3341,7 +3624,7 @@ function spawnWave(n){
       enemies.push({m, p, fwd, type, vel:fwd.clone().multiplyScalar(type.speed), speed:type.speed, hp:100, alive:true,
         flares:type.flares, fireCd:6+i*3+Math.random()*4, burst:0, gunCd:0, bank:0, turn:type.turn, seed:Math.random()*100});
     });
-    S.msg={text: n===1 ? 'TWO J-10Cs ACROSS THE LAC · HEADING FOR THE HERCULES' : 'SECOND WAVE · J-20 AND J-10C · PROTECT THE HERCULES', col:RED, t:3.5};
+    S.msg={text: n===1 ? 'TWO J-10Cs ACROSS THE LAC · HEADING FOR THE HERCULES' : 'SECOND WAVE · TWO J-20s · STEALTH · PROTECT THE HERCULES', col:RED, t:3.5};
     return;
   }
   enemies.forEach(e=>scene.remove(e.m)); enemies.length=0;
@@ -3389,6 +3672,7 @@ function killEnemy(e,how){
       else S.msg={text:`SKY CLEAR · ${raidLeft()} TARGET${raidLeft()===1?'':'S'} LEFT`, col:HUD, t:2.6};
     }
     return; }
+  if (state==='fly' && plainDog() && !S.j10In){ S.j10In=true; spawnLateJ10(); }
   if (state==='fly' && !enemies.some(x=>x.alive)) waveCleared();
 }
 function waveCleared(){
@@ -3435,7 +3719,7 @@ function waveCleared(){
   }
   if (S.wave>=WAVES){
     S.score+=500;
-    endMission(true,'Sector secure', DOGN ? `You shot down both JF-17s in the dark over the Thar desert.` : `You shot down both JF-17s and stayed south of the Line of Control.`,3.4);
+    endMission(true,'Sector secure', DOGN ? `You shot down both JF-17s and the J-10C in the dark over the Thar desert.` : `You shot down both JF-17s and the J-10C, and stayed south of the Line of Control.`,3.4);
     return;
   }
   S.msg={text:`WAVE ${S.wave} CLEAR · REARMING`, col:HUD, t:3.5};
@@ -3455,9 +3739,9 @@ function damagePlayer(d){
     else if (CSAR)
       endMission(false,'Shot down on rescue cover',`With you gone, VIPER is on its own. Kill the AAA guns from outside 3.5 km with the laser-guided missiles, then stay near the helicopter for the jets; pop flares the moment MISSILE flashes. Guns knocked out: ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length}.`,2.4);
     else if (BRIDGE)
-      endMission(false,'Shot down over the river',`An AAA gun guards each end of the bridge (3.5 km) and a SAM sits 1 km north of it (9 km). Fire the laser-guided missiles from 6 to 10 km, wait for the illumination flares if you cannot see the spans, and pop flares the moment MISSILE flashes. Spans destroyed: ${raidN()-raidLeft()} of ${raidN()}.`,2.4);
+      endMission(false,'Shot down over the river',`An AAA gun guards each end of the bridge (3.5 km) and a SAM sits 1 km north of it (9 km). Fire the laser-guided missiles from 6 to 10 km, wait for the illumination flares if you cannot see the spans, and pop flares the moment MISSILE flashes. When the JF-17 turns up, deal with it before your attack run. Spans destroyed: ${raidN()-raidLeft()} of ${raidN()}.`,2.4);
     else if (TANKER)
-      endMission(false,'Shot down on the deep strike',`The depot has a SAM that reaches 9 km, two AAA guns inside 3.5 km and two fighters on patrol. Fire the laser-guided missiles from 6 to 10 km, pop flares the moment MISSILE flashes, and deal with the fighters before your attack run. Targets destroyed: ${raidN()-raidLeft()} of ${raidN()}.`,2.4);
+      endMission(false,'Shot down on the deep strike',`The depot has a SAM that reaches 9 km, two AAA guns inside 3.5 km and three fighters on patrol. Fire the laser-guided missiles from 6 to 10 km, pop flares the moment MISSILE flashes, and deal with the fighters before your attack run. Targets destroyed: ${raidN()-raidLeft()} of ${raidN()}.`,2.4);
     else if (SEAD)
       endMission(false,'Shot down over the desert',`The SAM radars see you above ${SEAD_MASK} m and their missiles reach 9 km; each site also has an AAA gun inside 3.5 km. Fly below ${SEAD_MASK} m on the radar altimeter to stay hidden, pop up only to fire a laser missile from 6 to 10 km, then drop low again. Kill a site's radar first and its launchers go blind. Targets destroyed: ${raidN()-raidLeft()} of ${raidN()}.`,2.4);
     else if (NAVAL)
@@ -3831,7 +4115,11 @@ function mpUpdate(dt){
     g.qT.set(num(d.q[0],0),num(d.q[1],0),num(d.q[2],0),num(d.q[3],1)).normalize();
     if (!g.alive || g.p.distanceTo(g.pT)>600){ g.p.copy(g.pT); g.q.copy(g.qT); }
     else { g.p.addScaledVector(g.vel,dt).lerp(g.pT,1-Math.exp(-8*dt)); g.q.slerp(g.qT,1-Math.exp(-10*dt)); }
-    g.hp=clamp(num(d.hp,100),0,100);
+    if (typeof d.hp==='number'){   // their game's own count of their health
+      const rh=clamp(d.hp,0,100);   // for a moment after our own shells hit, keep our lower estimate until their count catches up
+      g.hp = (g.estT && performance.now()-g.estT<1500 && g.alive) ? Math.min(rh, g.hp==null?100:g.hp) : rh;
+    }
+    else if (!g.alive) g.hp=100;                          // an older copy that does not send it: our estimate, full on each (re)spawn
     g.alive=true; g.m.visible=true; g.m.position.copy(g.p); g.m.quaternion.copy(g.q);
     g.fwd.set(0,0,-1).applyQuaternion(g.q);
     if (d.g){ g.gunCd-=dt; while (g.gunCd<=0){ g.gunCd+=1/20;   // their tracers, for show; their own client reports any hits
@@ -3922,15 +4210,15 @@ function commsUI(){   // phone buttons: RADIO in any room, TALK only where voice
   if (k!==VOX.show){ VOX.show=k; $('tRadio').hidden=!fly; $('tTalk').hidden=!(fly && voxApi()); if (!fly) rcPanel(false); }
 }
 // another pilot's health over their jet: a thin bar, green for what is left, red for the damage taken
-function hpBar(x,y,hp,w){
-  const k=clamp((hp==null?100:hp)/100,0,1), h=isTouch?3:4, x0=Math.round(x-w/2), y0=Math.round(y-h/2);
+function hpBar(x,y,hp,w,hh){
+  const k=clamp((hp==null?100:hp)/100,0,1), h=hh||(isTouch?3:4), x0=Math.round(x-w/2), y0=Math.round(y-h/2);
   c.fillStyle='rgba(0,0,0,.55)'; c.fillRect(x0-1,y0-1,w+2,h+2);
   c.fillStyle='#3ddc6a'; c.fillRect(x0,y0,w*k,h);
   c.fillStyle='#ff4a3d'; c.fillRect(x0+w*k,y0,w*(1-k),h);
 }
 // a callsign short enough for the radar: up to 7 characters, longer ones cut with an ellipsis
 const shortName=n=>{ n=String(n||'PILOT').toUpperCase(); return n.length>7 ? n.slice(0,6)+'…' : n; };
-function mpGunHit(g){ MP.hitAcc.set(g.peer,(MP.hitAcc.get(g.peer)||0)+8); }
+function mpGunHit(g){ MP.hitAcc.set(g.peer,(MP.hitAcc.get(g.peer)||0)+8); g.hp=Math.max(1,(g.hp==null?100:g.hp)-8); g.estT=performance.now(); }   // the bar shows each shell at once
 function mpFireMsl(m,g,ai){
   if (!MP.room) return;
   m.mpId=(++MP.mslN)+'-'+Math.floor(Math.random()*1e6);
@@ -3998,7 +4286,7 @@ function mpCoopSync(dt){
 }
 function mpRespawnCoop(){   // back at the start line, re-armed; the base keeps whatever damage the flight has done
   const LO=loadout();
-  Object.assign(S,{alive:true,hp:100,bombs:LO.bombs,msl:LO.msl,agm:LO.agm,gun:S.ac.gun,flares:FLARES,thr:0.78,lockTgt:null,lockT:0,locked:false,
+  Object.assign(S,{alive:true,hp:100,bombs:LO.bombs,msl:LO.msl,agm:LO.agm,gun:MP_GUN,flares:MP_FLARES,thr:0.78,lockTgt:null,lockT:0,locked:false,
     td:null,sol:null,hitFlash:0,alpha:0,beta:0,nz:1,brake:false,autoArm:false,lastDrop:-9,lastMsl:-9,lastAgm:-9,gunEmptyMsg:false});
   for (let i=missiles.length-1;i>=0;i--){ const m=missiles[i]; if (m.target==='player'){ missiles.splice(i,1); scene.remove(m.mesh); m.trail.fade=2; } }
   S.pos.set(BASE_RAID_START.x+(Math.random()-0.5)*1600, BASE_RAID_START.y, BASE_RAID_START.z+Math.random()*1200);
@@ -4034,6 +4322,7 @@ function mpOnBoom(msg){
     if (d.hit) spawnExplosion(g && g.alive ? g.p : m.p,false);
     pipImpact(m,m.p,m.v,d.hit?'HIT':'DEFEATED',d.hit?HUD:AMB);
   }
+  if (d.hit && g) g.hp=Math.max(0,(g.hp==null?100:g.hp)-55);   // their bar drops at once; their next update confirms it
   if (MP.coop) return;   // a bandit's missile on a teammate: nothing to report here
   if (state==='fly') S.msg = d.hit ? {text:`MISSILE HIT · ${nm}`, col:HUD, t:1.6} : {text:`${nm} DEFEATED YOUR MISSILE`, col:AMB, t:1.6};
 }
@@ -4083,7 +4372,8 @@ function updateEnemies(dt){
   for (const e of enemies){
     if (!e.alive || e.remote || e.rep) continue;   // rep: a co-op teammate's game is flying this bandit
     if (e.type.uav){ updateUav(e,dt); continue; }   // drone hunt: its own low-level flight to a post
-    if (e.type.asm){ updateAsm(e,dt); continue; }   // fleet defence: a sea-skimming missile on its way to the carrier
+    if (e.type.asm){ updateAsm(e,dt); continue; }
+    if (e.type.boat){ updateBoat(e,dt); continue; }   // fleet defence: the missile boat on the water   // fleet defence: a sea-skimming missile on its way to the carrier
     _p.copy(e.fwd);
     const tg=enemyTarget(e), TP=tg.p, TV=tg.v;
     const dist=_a.copy(TP).sub(e.p).length();
@@ -4386,6 +4676,7 @@ function reset(){
   LOC_OBJS.forEach(o=>{ o.visible=!MP.on; });   // multiplayer: no LoC, an open field
   if (NAVAL && plane) navalStart();   // on the carrier's deck, ready for the ski-jump launch
   S.f16T = PRECISE ? 25+Math.random()*110 : -1;   // the precision strike's F-16 turns up at a random moment
+  S.f16T2=-1; S.precT=PREC_TIME; S.j10In=false; S.nfIn=false; S.nfT=0;   // second F-16 and time limit (precision), late J-10C (dogfight), night fighter (bridge)
   bombs.forEach(b=>scene.remove(b.m)); bombs.length=0;
   effects.forEach(e=>{scene.remove(e.m); e.m.material.dispose();}); effects.length=0;
   enemies.forEach(e=>scene.remove(e.m)); enemies.length=0;
@@ -4412,7 +4703,7 @@ function reset(){
   plane.visible=true; camQ.copy(S.q); endInfo=null; endTimer=0; fpsSum=0; fpsN=0;
   if (!S.launch && plane.userData.gear) plane.userData.gear.visible=false;
 }
-function setState(s){ state=s; $('touch').hidden = !(isTouch && (s==='fly'||s==='ending')); }
+function setState(s){ state=s; $('touch').hidden = !(isTouch && (s==='fly'||s==='ending')); musicSync(); }
 function endMission(win,title,body,delay){ if (state!=='fly') return; endInfo={win,title,body}; endTimer=delay; setState('ending'); }
 function crash(){
   if (!S.alive) return;
@@ -4477,7 +4768,7 @@ function showEnd(){
   } else if (mode==='raid'){
     if (RECON) setFacts('endFacts',[[fmtTime(S.time),'Flight time'],[`${S.photos} / ${REC_SITES.length}`,'Sites photographed'],[String(FLARES-S.flares),'Flares used'],[Math.round(S.hp)+'%','Hull']]);
     else setFacts('endFacts',[[fmtTime(S.time),'Flight time'],CSAR ? [HELO && HELO.pilot && HELO.alive ? 'Yes' : 'No','Pilot recovered'] : [`${raidN()-raidLeft()} / ${raidN()}`,NAVAL?'Godowns destroyed':PRECISE?'Camps destroyed':SEAD?'Radars + launchers':TANKER?'Depot targets hit':BRIDGE?'Spans dropped':TANKS?'Tanks destroyed':'Targets destroyed'],
-      BRIDGE ? [`${CONVOY.trucks.filter(t=>!t.alive).length} / ${CONVOY.trucks.length}`,'Lorries destroyed'] : [`${S.kills} / ${PRECISE?1:CSAR?3:2}`,'Fighters downed'],[`${RAID.ad.filter(a=>!a.alive).length} / ${RAID.ad.length}`,NAVAL?'AAA guns hit':'Air defences hit']]);
+      BRIDGE ? [`${CONVOY.trucks.filter(t=>!t.alive).length} / ${CONVOY.trucks.length}`,'Lorries destroyed'] : [`${S.kills} / ${PRECISE?2:(CSAR||TANKER)?3:BRIDGE?1:2}`,'Fighters downed'],[`${RAID.ad.filter(a=>!a.alive).length} / ${RAID.ad.length}`,NAVAL?'AAA guns hit':'Air defences hit']]);
   } else {
     const cleared = endInfo.win ? WAVES : Math.max(0,S.wave-1);
     if (FLEET) setFacts('endFacts',[[fmtTime(S.time),'Flight time'],[`${S.cvHits} / ${FLEET_HITS}`,'Hits on the carrier'],[String(S.asmDown),'Missiles stopped'],[String(S.kills),'Jets shot down']]);
@@ -4578,6 +4869,157 @@ function ensureAudio(){
     eng={lp,g};
   } catch (e) {}
 }
+// ---------- menu music: an original motivational trap-style track built live with Web Audio
+// 140 bpm half-time feel, Am–F–C–G, bright supersaw chords, distorted gliding 808, trap hats with rolls, claps, synth lead
+// 8 bars (128 sixteenths) per loop: loop 0 is the intro with a riser, loop 1 the drop, then the lead comes in and out
+// plays only while the hangar/briefing menu is open (state 'brief'); fades in and out
+var MUS=null;
+const MUS_BPM=140, MUS_ST=60/MUS_BPM/4, MUS_VOL=0.55;
+const MUS_CH=[ {v:[57,60,64,69], r:33}, {v:[53,57,60,65], r:29}, {v:[55,60,64,67], r:36}, {v:[55,59,62,67], r:31} ];
+const MUS_LEAD=[[0,76,4],[4,72,2],[6,76,2],[8,79,6],[14,76,2],[16,74,4],[20,72,4],[24,69,8],
+  [32,69,2],[34,72,2],[36,77,4],[40,76,4],[44,72,4],[48,74,8],[56,72,4],[60,69,4],
+  [64,67,4],[68,72,4],[72,76,4],[76,79,4],[80,81,6],[86,79,2],[88,76,8],
+  [96,74,4],[100,76,2],[102,79,6],[108,77,4],[112,76,4],[116,74,4],[120,71,8]];
+const MUS_ARP=[0,1,2,3,2,1,2,3];
+const MUS_808=[0,7,10,16,22,27];          // 808 hits in each two-bar chord (sixteenths); each note rings until the next one
+const mhz=m=>440*Math.pow(2,(m-69)/12);
+function musicWanted(){ return state==='brief' && !document.hidden && !!($('musicOn')&&$('musicOn').checked); }
+function musicBuild(){
+  const out=actx.createGain(), comp=actx.createDynamicsCompressor(), dl=actx.createDelay(1), fb=actx.createGain(), dlp=actx.createBiquadFilter(), wet=actx.createGain();
+  out.gain.value=0; comp.threshold.value=-16; comp.ratio.value=4; comp.attack.value=0.005; comp.release.value=0.2;
+  dl.delayTime.value=MUS_ST*3; fb.gain.value=0.3; dlp.type='lowpass'; dlp.frequency.value=3000; wet.gain.value=0.3;
+  dl.connect(dlp); dlp.connect(fb); fb.connect(dl); dlp.connect(wet); wet.connect(out); out.connect(comp); comp.connect(actx.destination);
+  const pad=actx.createGain(); pad.connect(out);                                   // chords bus, ducked by the kick
+  const sh=actx.createWaveShaper(), cur=new Float32Array(1024);                     // 808 saturation
+  for (let i=0;i<1024;i++){ const x=i/511.5-1; cur[i]=Math.tanh(2.6*x); }
+  sh.curve=cur; const b8=actx.createGain(), b8o=actx.createGain(), b8lp=actx.createBiquadFilter();
+  b8.gain.value=0.6; b8o.gain.value=0.42; b8lp.type='lowpass'; b8lp.frequency.value=1100;
+  b8.connect(sh); sh.connect(b8lp); b8lp.connect(b8o); b8o.connect(out);
+  MUS={out, send:dl, pad, b8, step:0, next:0, timer:null, on:false};
+}
+function mNote(t,f,len,type,peak,att,rel,cut,send,det,bus){
+  const o=actx.createOscillator(), g=actx.createGain(), lp=actx.createBiquadFilter();
+  o.type=type; o.frequency.value=f; if (det) o.detune.value=det;
+  lp.type='lowpass'; lp.frequency.value=cut;
+  g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(peak,t+att);
+  g.gain.setValueAtTime(peak,t+Math.max(att,len)); g.gain.exponentialRampToValueAtTime(0.0001,t+Math.max(att,len)+rel);
+  o.connect(lp); lp.connect(g); g.connect(bus||MUS.out); if (send) g.connect(MUS.send);
+  o.start(t); o.stop(t+Math.max(att,len)+rel+0.05);
+  return {o,lp};
+}
+function m808(t,f,len,glideTo){                     // sine 808: punchy pitch drop, long body, optional glide into the next note
+  const o=actx.createOscillator(), g=actx.createGain();
+  o.type='sine'; o.frequency.setValueAtTime(f*2.2,t); o.frequency.exponentialRampToValueAtTime(f,t+0.05);
+  if (glideTo){ o.frequency.setValueAtTime(f,t+Math.max(0.06,len-0.14)); o.frequency.exponentialRampToValueAtTime(glideTo,t+len); }
+  g.gain.setValueAtTime(0.0001,t); g.gain.linearRampToValueAtTime(1,t+0.004);
+  g.gain.setValueAtTime(1,t+Math.max(0.01,len*0.6)); g.gain.exponentialRampToValueAtTime(0.0001,t+len+0.08);
+  o.connect(g); g.connect(MUS.b8); o.start(t); o.stop(t+len+0.12);
+}
+function mKick(t){ const o=actx.createOscillator(), g=actx.createGain();
+  o.frequency.setValueAtTime(160,t); o.frequency.exponentialRampToValueAtTime(50,t+0.09);
+  g.gain.setValueAtTime(0.8,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.18);
+  o.connect(g); g.connect(MUS.out); o.start(t); o.stop(t+0.2);
+  const p=MUS.pad.gain; p.setValueAtTime(0.3,t); p.linearRampToValueAtTime(1,t+0.32); }     // sidechain pump on the chords
+function mNoise(t,type,f,peak,dec,q,send){ const s=actx.createBufferSource(), fl=actx.createBiquadFilter(), g=actx.createGain();
+  s.buffer=noiseB(); fl.type=type; fl.frequency.value=f; if (q) fl.Q.value=q;
+  g.gain.setValueAtTime(peak,t); g.gain.exponentialRampToValueAtTime(0.0001,t+dec);
+  s.connect(fl); fl.connect(g); g.connect(MUS.out); if (send) g.connect(MUS.send);
+  s.start(t, Math.random()*Math.max(0,1.9-dec)); s.stop(t+dec+0.05); }
+function mClap(t){ [0,0.012,0.024].forEach((d,k)=>mNoise(t+d,'bandpass',1300,k===2?0.4:0.25,k===2?0.2:0.03,1.2,k===2)); }
+function mRiser(t,len){ const s=actx.createBufferSource(), fl=actx.createBiquadFilter(), g=actx.createGain();
+  s.buffer=noiseB(); s.loop=true; fl.type='bandpass'; fl.Q.value=2;
+  fl.frequency.setValueAtTime(400,t); fl.frequency.exponentialRampToValueAtTime(9000,t+len);
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.25,t+len);
+  s.connect(fl); fl.connect(g); g.connect(MUS.out); s.start(t); s.stop(t+len+0.02); }
+function musicStep(i,t){
+  const cyc=Math.floor(i/128), s=i%128, bar=s%16, c32=s%32, ci=Math.floor(s/32), ch=MUS_CH[ci], drums=cyc>=1;
+  const lead=cyc>=2 && cyc%4!==1, sweep=cyc===0;
+  if (c32===0) ch.v.forEach(m=>{ [-14,0,14].forEach(d=>{                                           // supersaw chords
+    const n=mNote(t,mhz(m),MUS_ST*30,'sawtooth',drums ? 0.022 : 0.018,0.25,0.9,sweep ? 500+ci*500 : 2600,false,d,MUS.pad);
+    if (sweep) n.lp.frequency.linearRampToValueAtTime(900+ci*600,t+MUS_ST*31); }); });
+  if (s%2===0 && (s%4===0 || !drums)) { const a=ch.v[MUS_ARP[(s/2)%8]]+12;                         // pluck arpeggio
+    mNote(t,mhz(a),MUS_ST*0.5,'square',drums ? 0.022 : 0.03,0.004,0.18,2600,true); }
+  if (cyc===0 && s===64) mRiser(t,MUS_ST*64);                                                      // build into the drop
+  if (cyc===0 && s>=120 && s%2===0) mClap(t);
+  if (!drums) return;
+  const k8=MUS_808.indexOf(c32);
+  if (k8>=0){ const nx=MUS_808[k8+1], len=((nx===undefined ? 32 : nx)-c32)*MUS_ST;
+    const glide = nx===undefined ? mhz(MUS_CH[(ci+1)%4].r) : (k8===4 ? mhz(ch.r+12) : 0);
+    m808(t,mhz(ch.r)*(k8===5 ? 2 : 1),len,glide); }
+  if (bar===0||bar===10||(c32===22)) mKick(t);
+  if (bar===8) mClap(t);
+  const roll=(bar>=12 && (Math.floor(s/16)%2===1));                                                // hat rolls at the end of every second bar
+  if (roll){ const n=(bar>=14 ? 3 : 2); for (let k=0;k<n;k++) mNoise(t+k*MUS_ST/n,'highpass',8000,0.05+0.015*k,0.03); }
+  else if (s%2===0) mNoise(t,'highpass',8000,bar%4===0 ? 0.07 : 0.05,0.035);
+  if (bar===6 && Math.floor(s/16)%2===0) mNoise(t,'highpass',6500,0.05,0.22);                       // open hat
+  if (lead) MUS_LEAD.forEach(n=>{ if (n[0]===s){                                                    // synth lead
+    const a=mNote(t,mhz(n[1]),MUS_ST*n[2]*0.9,'sawtooth',0.05,0.01,0.3,3400,true,-6);
+    mNote(t,mhz(n[1]),MUS_ST*n[2]*0.9,'square',0.035,0.01,0.3,2800,true,6);
+    const lfo=actx.createOscillator(), lg=actx.createGain(); lfo.frequency.value=5.5; lg.gain.value=8;
+    lfo.connect(lg); lg.connect(a.o.detune); lfo.start(t+0.12); lfo.stop(t+MUS_ST*n[2]+0.4); } });
+}
+function musicTick(){
+  if (!MUS || !MUS.on) return;
+  while (MUS.next < actx.currentTime+0.25){ musicStep(MUS.step,MUS.next); MUS.step++; MUS.next+=MUS_ST; }
+}
+// the menu track file sits next to the page; it is decoded once and looped through Web Audio so the fades work on every phone.
+// While it loads nothing plays; if it cannot load, the built-in synth track above plays instead.
+const MUSIC_URL='tunetank-epic-warrior-music-413439.mp3', MUSIC_FILE_VOL=0.6;
+var MFILE={buf:null, loading:false, failed:false, src:null, g:null, on:false};
+function musicLoad(){
+  if (MFILE.buf || MFILE.loading || MFILE.failed) return;
+  MFILE.loading=true;
+  fetch(MUSIC_URL).then(r=>{ if (!r.ok) throw new Error('http '+r.status); return r.arrayBuffer(); })
+    .then(ab=>new Promise((res,rej)=>actx.decodeAudioData(ab,res,rej)))
+    .then(b=>{ MFILE.buf=b; MFILE.loading=false; musicSync(); })
+    .catch(()=>{ MFILE.failed=true; MFILE.loading=false; musicSync(); });
+}
+function musicFileSync(want){
+  const now=actx.currentTime;
+  if (!MFILE.g){ MFILE.g=actx.createGain(); MFILE.g.gain.value=0; MFILE.g.connect(actx.destination); }
+  const g=MFILE.g.gain; g.cancelScheduledValues(now); g.setValueAtTime(g.value,now);
+  if (want && !MFILE.on){
+    if (actx.state==='suspended') actx.resume();
+    const s=actx.createBufferSource(); s.buffer=MFILE.buf; s.loop=true; s.connect(MFILE.g); s.start(now+0.05);
+    MFILE.src=s; MFILE.on=true; g.linearRampToValueAtTime(MUSIC_FILE_VOL,now+2);
+  } else if (!want && MFILE.on){
+    const s=MFILE.src; MFILE.on=false; MFILE.src=null; g.linearRampToValueAtTime(0,now+1.2);
+    try { s.stop(now+1.3); } catch (e) {}
+  }
+}
+function musicSync(){
+  try {
+    if (!actx) return;
+    const want=musicWanted();
+    if (want) musicLoad();
+    if (MFILE.buf){ musicFileSync(want); if (!MUS || !MUS.on) return; }
+    else if (!MFILE.failed && !(MUS && MUS.on)) return;       // still loading: wait for the file rather than start the synth
+    if (MFILE.buf || !want){ if (MUS && MUS.on){ const g=MUS.out.gain, now=actx.currentTime; g.cancelScheduledValues(now); g.setValueAtTime(g.value,now); g.linearRampToValueAtTime(0,now+1.2); MUS.on=false; } return; }
+    if (want && !MUS) musicBuild();
+    if (!MUS) return;
+    const g=MUS.out.gain, now=actx.currentTime;
+    g.cancelScheduledValues(now); g.setValueAtTime(g.value,now);
+    if (want && !MUS.on){
+      if (actx.state==='suspended') actx.resume();
+      MUS.on=true; MUS.step=0; MUS.next=now+0.1; g.linearRampToValueAtTime(MUS_VOL,now+2.5);
+      if (!MUS.timer) MUS.timer=setInterval(musicTick,60); musicTick();
+    } else if (!want && MUS.on){
+      MUS.on=false; g.linearRampToValueAtTime(0,now+1.2);
+    }
+  } catch (e) {}
+}
+function musicUI(){ const on=$('musicOn').checked, b=$('openMusic');
+  b.setAttribute('aria-pressed',String(on)); b.querySelector('span').textContent=on ? 'Music on' : 'Music off'; b.classList.toggle('off',!on); }
+try { $('musicOn').checked = localStorage.getItem('thinair.music')!=='0'; } catch (e) {}
+musicUI();
+$('musicOn').addEventListener('change',()=>{ try { localStorage.setItem('thinair.music',$('musicOn').checked?'1':'0'); } catch (e) {} musicUI(); musicSync(); });
+$('openMusic').addEventListener('click',()=>{ $('musicOn').checked=!$('musicOn').checked; $('musicOn').dispatchEvent(new Event('change')); });
+// browsers only allow sound after the first tap or key press, so start the music then
+['pointerdown','keydown','touchend'].forEach(ev=>document.addEventListener(ev,function un(){
+  try { if (!actx) actx=new (window.AudioContext||window.webkitAudioContext)(); if (actx.state==='suspended') actx.resume(); } catch (e) {}
+  musicSync();
+},{capture:true}));
+document.addEventListener('visibilitychange',musicSync);
 function updateEngine(){
   if (!eng || !actx) return;
   const intro=state==='intro';
@@ -5006,6 +5448,193 @@ function buildHangar(){
     setStep(s==='play' ? 'mission' : s==='mission' ? (one ? 'brief' : 'plane') : 'brief'); });
   $('stepBack').addEventListener('click',()=>{ const s=HSTEP.step, one=planesShown().length<=1;
     setStep(s==='brief' ? (one ? 'mission' : 'plane') : s==='plane' ? 'mission' : 'play'); });
+  hangarUI();
+}
+// ---------- hangar look: drawn artwork on each mission card, and swipeable carousels
+// each mission's theatre (terrain), time of day and tags
+const MISSION_ART={
+  strike:['mount',0,['Ground attack','Kargil']], precision:['mount',0,['Laser weapons','Kargil']], dogfight:['desert',1,['Air combat','Night']],
+  raid:['mount',0,['Strike + air','Wingmen']], naval:['sea',0,['Carrier','Ground attack']], ladakh:['snow',0,['Stealth bandits','Ladakh']],
+  sead:['desert',1,['SAM hunt','Night']], escort:['snow',0,['Escort','Ladakh']], tanker:['desert',0,['Air refuel','Deep strike']],
+  bridge:['mount',1,['Ground attack','Night']], drones:['jungle',0,['Drones','Arunachal']], fleet:['sea',0,['Anti-ship','Carrier']],
+  csar:['plains',0,['Rescue','Punjab']], recon:['mount',0,['No weapons','Photo run']], tanks:['plains',0,['Armour','Punjab']],
+  swarm:['sea',1,['Drones','Night']], awacs:['plains',0,['Escort','Punjab']], training:['plains',0,['Lessons']],
+  versus:['city',0,['Live','Free for all']], coop:['mount',0,['Live','Co-op']],
+  _single:['mount',0,['17 missions']], _multi:['city',1,['Live','Voice']], _train:['plains',0,['Step by step']] };
+const ART_PAL={   // sky top, sky bottom, far, mid, near
+  mount:['#6fa3d0','#d8e7f2','#a5b6c8','#71859a','#3c4a58'], desert:['#e9a865','#f6dfb8','#dcab72','#c0844a','#8a5a30'],
+  sea:['#79b6e2','#dcedf9','#9db7c8','#2f6f99','#1d4e72'], snow:['#9cc4e6','#eef6fb','#e3ebf2','#b6c5d4','#7d8ea0'],
+  jungle:['#a9c9b4','#e6efe0','#86a888','#4c7a4e','#28502e'], plains:['#e9c78f','#f7ead0','#c3b77c','#9b9256','#6f6a3c'],
+  city:['#e2a575','#f5d9bb','#b49784','#806a5f','#4a3f3c'] };
+function artSVG(key,idx){
+  const a=MISSION_ART[key]||MISSION_ART.strike, th=a[0], night=!!a[1], P=ART_PAL[th].slice();
+  let seed=0; for (const ch of key) seed=(seed*31+ch.charCodeAt(0))>>>0;
+  const rnd=()=>((seed=(seed*1664525+1013904223)>>>0)/4294967296);
+  const dark=c=>{ const n=parseInt(c.slice(1),16), f=0.32; return `rgb(${Math.round((n>>16)*f)},${Math.round(((n>>8)&255)*f)},${Math.round((n&255)*f*1.25)})`; };
+  if (night){ P[0]='#070d22'; P[1]='#1d2d55'; for (let i=2;i<5;i++) P[i]=dark(P[i]); }
+  const ridge=(base,amp,n,smooth)=>{ let s='0,120 '; for (let i=0;i<=n;i++){ const x=i*300/n, y=base-amp*(smooth ? (0.5+0.5*Math.sin(i*1.3+rnd()*2)) : rnd()); s+=`${x.toFixed(1)},${y.toFixed(1)} `; } return s+'300,120'; };
+  const flat=th==='sea' || th==='plains' || th==='desert';
+  let land='';
+  if (th==='sea'){
+    land=`<polygon points="${ridge(70,10,6,true)}" fill="${P[2]}"/><rect x="0" y="74" width="300" height="46" fill="${P[3]}"/>`+
+      `<rect x="0" y="74" width="300" height="3" fill="${night?'#2b3e66':'#9fd0ee'}" opacity=".6"/>`+
+      `<path d="M150 86 h46 l6 -4 h-58 z" fill="${night?'#3a4352':'#8d969f'}"/><rect x="183" y="78" width="6" height="5" fill="${night?'#3a4352':'#7a838c'}"/>`;
+  } else if (th==='city'){
+    land=`<polygon points="${ridge(78,14,5,true)}" fill="${P[2]}"/>`;
+    let x=0; while (x<300){ const w=10+rnd()*16, h=16+rnd()*34; land+=`<rect x="${x.toFixed(1)}" y="${(104-h).toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="${P[3]}"/>`;
+      if (night) for (let k=0;k<3;k++) land+=`<rect x="${(x+2+rnd()*(w-4)).toFixed(1)}" y="${(104-h+4+rnd()*(h-8)).toFixed(1)}" width="1.6" height="1.6" fill="#ffd27a"/>`; x+=w+1; }
+    land+=`<rect x="0" y="103" width="300" height="17" fill="${P[4]}"/>`;
+  } else {
+    land=`<polygon points="${ridge(flat?78:56,flat?10:34,flat?5:9,flat)}" fill="${P[2]}"/>`+
+         `<polygon points="${ridge(flat?90:74,flat?8:26,flat?6:11,flat)}" fill="${P[3]}"/>`+
+         `<polygon points="${ridge(flat?104:96,flat?6:16,flat?7:13,flat)}" fill="${P[4]}"/>`;
+    if (th==='snow' || th==='mount') land=land.replace(`fill="${P[2]}"/>`, `fill="${P[2]}"/><polygon points="${ridge(56,34,9,false)}" fill="#fff" opacity="${night?0.08:0.28}" transform="translate(0,-3)"/>`);
+    if (th==='plains'){ for (let i=0;i<7;i++) land+=`<line x1="${i*48}" y1="120" x2="${150+i*8-24}" y2="96" stroke="${night?'#1b1d12':'#7d7744'}" stroke-width="1" opacity=".5"/>`; }
+  }
+  let sky=''; if (night){ for (let i=0;i<26;i++) sky+=`<circle cx="${(rnd()*300).toFixed(1)}" cy="${(rnd()*60).toFixed(1)}" r="${(0.4+rnd()*0.8).toFixed(2)}" fill="#fff" opacity="${(0.4+rnd()*0.6).toFixed(2)}"/>`;
+    sky+=`<circle cx="238" cy="22" r="9" fill="#f3efe0"/><circle cx="242" cy="19" r="8" fill="${P[0]}"/>`; }
+  else sky=`<circle cx="236" cy="26" r="13" fill="#fff6dc" opacity=".85"/><circle cx="236" cy="26" r="26" fill="#fff6dc" opacity=".18"/>`;
+  // a jet climbing across the sky with its contrail
+  const jx=70+rnd()*110, jy=28+rnd()*14, jc=night?'#9fb4cc':'#2a3542';
+  const jet=`<path d="M${(jx-90).toFixed(1)} ${(jy+16).toFixed(1)} L${(jx-14).toFixed(1)} ${(jy+2).toFixed(1)}" stroke="#fff" stroke-width="2" opacity="${night?0.25:0.55}" stroke-linecap="round"/>`+
+    `<g transform="translate(${jx.toFixed(1)} ${jy.toFixed(1)}) rotate(-11) scale(.8)" fill="${jc}"><path d="M14 0 L-6 -2 L-12 -10 L-16 -10 L-13 -2 L-20 -1.5 L-23 -6 L-26 -6 L-24 0 L-26 6 L-23 6 L-20 1.5 L-13 2 L-16 10 L-12 10 L-6 2 Z"/>`+
+    (night?`<circle cx="-26" cy="0" r="2.4" fill="#ffb25a"/>`:'')+`</g>`;
+  const id='g'+key.replace(/\W/g,'');
+  return `<svg viewBox="0 0 300 120" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${P[0]}"/><stop offset="1" stop-color="${P[1]}"/></linearGradient></defs>`+
+    `<rect width="300" height="120" fill="url(#${id})"/>${sky}${jet}${land}</svg>`;
+}
+// single-player missions ranked from easiest (1) to hardest (17); the cards are in this order in the hangar
+const MISSION_RANK=['strike','naval','drones','dogfight','precision','bridge','tanks','recon','tanker','fleet','csar','swarm','escort','sead','awacs','raid','ladakh'];
+const DIFF_TIERS=[{n:'Easy',c:'d1',to:3},{n:'Medium',c:'d2',to:8},{n:'Hard',c:'d3',to:13},{n:'Expert',c:'d4',to:17}];
+function missionDiff(key){ const r=MISSION_RANK.indexOf(key)+1; if (!r) return null;
+  const k=DIFF_TIERS.findIndex(t=>r<=t.to); return {rank:r, tier:k+1, name:DIFF_TIERS[k].n, cls:DIFF_TIERS[k].c}; }
+function diffBadge(key){ const d=missionDiff(key); if (!d) return '';
+  return `<span class="num">#${d.rank}</span><span class="diff ${d.cls}" title="Difficulty ${d.rank} of ${MISSION_RANK.length}">`+
+    `${[1,2,3,4].map(i=>`<i${i<=d.tier?' class="on"':''}></i>`).join('')}${d.name}</span>`; }
+function decorate(b,key,num){
+  if (b.querySelector('.art')) return;
+  const a=MISSION_ART[key]||[], d=document.createElement('div'); d.className='art';
+  d.innerHTML=artSVG(key)+(num?`<span class="num">${num}</span>`:'')+diffBadge(key)+`<div class="chips">${(a[2]||[]).map(t=>`<span class="chip">${t}</span>`).join('')}</div>`;
+  b.prepend(d);
+}
+// a carousel: swipe or drag sideways, or use the arrows; the card in the middle is in focus. Tapping a card picks it
+// and brings it to the middle. Next picks the card in the middle if you swiped to it without tapping.
+var CARS;   // var, not const: setStep/applyPrefs may run before this line on boot
+function makeCarousel(el,name){
+  CARS=CARS||{};
+  el.classList.add('carousel');
+  const nav=document.createElement('div'); nav.className='cnav '+[...el.classList].filter(k=>/^(st-|tr-only)/.test(k)).join(' ');
+  nav.innerHTML='<button type="button" class="cprev" aria-label="Previous">‹</button><div><div class="ccount"></div><div class="cdots"></div></div><button type="button" class="cnext" aria-label="Next">›</button>';
+  el.after(nav);
+  const cards=()=>[...el.children].filter(b=>b.classList.contains('opt') && !b.hidden);
+  const mid=()=>{ const r=el.getBoundingClientRect(), cx=r.left+r.width/2; let best=null, bd=1e9;
+    cards().forEach(b=>{ const q=b.getBoundingClientRect(), d=Math.abs(q.left+q.width/2-cx); if (d<bd){ bd=d; best=b; } }); return best; };
+  let raf=0, dotsN=-1;
+  const paint=()=>{ raf=0; const L=cards(), c=mid(), i=L.indexOf(c);
+    el.classList.toggle('empty',!L.length);
+    L.forEach(b=>b.classList.toggle('cur',b===c));
+    nav.hidden=L.length<=1;
+    nav.querySelector('.ccount').textContent = L.length ? `${i+1} / ${L.length}${isTouch?' · swipe':''}` : '';
+    const D=nav.querySelector('.cdots'); if (dotsN!==L.length){ dotsN=L.length; D.innerHTML=L.length<=24 ? L.map(()=>'<i></i>').join('') : ''; }
+    [...D.children].forEach((d,k)=>d.classList.toggle('on',k===i));
+    nav.querySelector('.cprev').disabled=i<=0; nav.querySelector('.cnext').disabled=i>=L.length-1; };
+  const tick=()=>{ if (!raf) raf=requestAnimationFrame(paint); };
+  el.addEventListener('scroll',tick,{passive:true});
+  window.addEventListener('resize',tick);
+  const toMid=(b,smooth)=>{ const r=el.getBoundingClientRect(), q=b.getBoundingClientRect();
+    el.scrollTo({left:el.scrollLeft+(q.left+q.width/2)-(r.left+r.width/2), behavior:smooth?'smooth':'auto'}); };
+  const go=k=>{ const L=cards(), i=L.indexOf(mid()), t=L[clamp(i+k,0,L.length-1)]; if (t) toMid(t,true); };
+  nav.querySelector('.cprev').addEventListener('click',()=>go(-1));
+  nav.querySelector('.cnext').addEventListener('click',()=>go(1));
+  el.addEventListener('click',e=>{ const b=e.target.closest('.opt'); if (b && b.parentElement===el) toMid(b,true); });
+  // desktop: drag with the mouse like a finger
+  let drag=null;
+  el.addEventListener('pointerdown',e=>{ if (e.pointerType!=='mouse' || e.button!==0) return; drag={x:e.clientX, s:el.scrollLeft, moved:false}; });
+  window.addEventListener('pointermove',e=>{ if (!drag) return; const dx=e.clientX-drag.x; if (Math.abs(dx)>6){ drag.moved=true; el.style.scrollSnapType='none'; } if (drag.moved) el.scrollLeft=drag.s-dx; });
+  window.addEventListener('pointerup',()=>{ if (!drag) return; const was=drag.moved; drag=null; el.style.scrollSnapType='';
+    if (was){ const c=mid(); if (c) toMid(c,true); el.addEventListener('click',e=>{ e.stopPropagation(); e.preventDefault(); },{capture:true, once:true}); } });
+  // mouse wheel / trackpad: vertical wheel moves the carousel
+  let wheelT=0;
+  el.addEventListener('wheel',e=>{ if (Math.abs(e.deltaX)>Math.abs(e.deltaY)) return; e.preventDefault();
+    const t=performance.now(); if (t-wheelT<280) return; wheelT=t; go(e.deltaY>0?1:-1); },{passive:false});
+  const C={el, paint:tick, go, mid,
+    center(){ const s=el.querySelector('.opt[aria-pressed="true"]:not([hidden])') || cards()[0]; if (s && el.offsetParent) toMid(s,false); paint(); },
+    pickMid(){ const c=mid(); if (c && c.getAttribute('aria-pressed')!=='true') c.click(); } };
+  CARS[name]=C; return C;
+}
+function carSync(){ if (CARS) Object.values(CARS).forEach(c=>c.center()); }
+function hangarUI(){
+  document.querySelectorAll('[data-mode-opt]').forEach((b,i)=>decorate(b,b.dataset.modeOpt));
+  document.querySelectorAll('[data-play]').forEach(b=>decorate(b,'_'+b.dataset.play));
+  makeCarousel($('modeOpts'),'mode'); makeCarousel($('planeOpts'),'plane'); makeCarousel($('lessonOpts'),'lesson');
+  // the Next button takes the card in the middle, even if it was only swiped to
+  $('stepNext').addEventListener('click',e=>{
+    const s=HSTEP.step, car = s==='mission' ? (playOf(prefs.mode)==='train' ? CARS.lesson : CARS.mode) : s==='plane' ? CARS.plane : null;
+    if (car){ const c=car.mid(); if (c && c.getAttribute('aria-pressed')!=='true'){ c.click(); } }
+  },{capture:true});
+  // keyboard: ← → move through the cards on the mission and aircraft steps, and the pages of the briefing
+  window.addEventListener('keydown',e=>{
+    if (state!=='brief' || $('brief').hidden || (e.target && e.target.tagName==='INPUT' && e.target.type!=='checkbox')) return;
+    const s=HSTEP.step, car = s==='mission' ? (playOf(prefs.mode)==='train' ? CARS.lesson : CARS.mode) : s==='plane' ? CARS.plane : s==='brief' ? BRF : null;
+    if (!car) return;
+    if (e.code==='ArrowLeft'){ e.preventDefault(); car.go(-1); } else if (e.code==='ArrowRight'){ e.preventDefault(); car.go(1); }
+  });
+  briefPager();
+  // first page: Settings and Controls. The panel borrows the briefing's own settings and controls (the same checkboxes,
+  // so a change made here is the change used in the air) and puts them back when it closes.
+  const SH={moved:[]};
+  const openSheet=kind=>{
+    closeSheet();
+    const nodes = kind==='set' ? [document.querySelector('#bPages .setlist')] : [document.querySelector('#bPages .keys.desk-only'), $('touchKeys')];
+    nodes.forEach(n=>{ if (!n) return; SH.moved.push({n, p:n.parentNode, nx:n.nextSibling}); $('sheetBody').appendChild(n); });
+    $('sheetTitle').textContent = kind==='set' ? 'Settings' : 'Controls';
+    $('sheet').hidden=false; $('sheetBody').scrollTop=0;
+    try { $('sheetClose').focus({preventScroll:true}); } catch (e) {}
+  };
+  const closeSheet=()=>{
+    SH.moved.forEach(m=>m.p.insertBefore(m.n,m.nx)); SH.moved=[];
+    $('sheet').hidden=true;
+  };
+  $('openSet').addEventListener('click',()=>openSheet('set'));
+  $('openCtl').addEventListener('click',()=>openSheet('ctl'));
+  { const de=document.documentElement, fb=$('openFull'), req=de.requestFullscreen||de.webkitRequestFullscreen;
+    if (req && fb){ fb.hidden=false;
+      const fsEl=()=>document.fullscreenElement||document.webkitFullscreenElement;
+      const lab=()=>{ fb.querySelector('span').textContent=fsEl() ? 'Exit full screen' : 'Full screen'; };
+      fb.addEventListener('click',()=>{ try{
+        if (fsEl()) (document.exitFullscreen||document.webkitExitFullscreen).call(document);
+        else { const p=req.call(de); if (p && p.catch) p.catch(()=>{}); }
+      }catch(e){} });
+      document.addEventListener('fullscreenchange',lab); document.addEventListener('webkitfullscreenchange',lab); } }
+  $('sheetClose').addEventListener('click',closeSheet);
+  $('sheet').addEventListener('click',e=>{ if (e.target===$('sheet')) closeSheet(); });   // tap outside the panel
+  window.addEventListener('keydown',e=>{ if (!$('sheet').hidden && (e.code==='Escape' || e.code==='Enter')){ e.preventDefault(); e.stopImmediatePropagation(); closeSheet(); } },{capture:true});
+}
+// ---------- the briefing's four pages: swipe, drag, the tabs or ← →
+var BRF=null;
+function briefPager(){
+  const box=$('bPages'), tabs=[...document.querySelectorAll('#bTabs button')], dots=[...document.querySelectorAll('#bDots i')];
+  const pages=()=>[...box.children], stride=()=>box.clientWidth+24;
+  const idx=()=>clamp(Math.round(box.scrollLeft/Math.max(1,stride())),0,pages().length-1);
+  let raf=0, last=-1;
+  const paint=()=>{ raf=0; const i=idx();
+    tabs.forEach((t,k)=>{ t.classList.toggle('on',k===i); t.setAttribute('aria-selected',String(k===i)); });
+    dots.forEach((d,k)=>d.classList.toggle('on',k===i));
+    const p=pages()[i]; if (p && p.offsetHeight) box.style.height=p.offsetHeight+'px';   // the box fits the page you are on
+    last=i; };
+  const tick=()=>{ if (!raf) raf=requestAnimationFrame(paint); };
+  box.addEventListener('scroll',tick,{passive:true}); window.addEventListener('resize',tick);
+  const to=(i,smooth)=>{ i=clamp(i,0,pages().length-1); box.scrollTo({left:i*stride(), behavior:smooth?'smooth':'auto'}); tick(); };
+  tabs.forEach((t,k)=>t.addEventListener('click',()=>to(k,true)));
+  // desktop: drag the page sideways with the mouse
+  let drag=null;
+  box.addEventListener('pointerdown',e=>{ if (e.pointerType!=='mouse' || e.button!==0 || e.target.closest('input,label,button,a')) return; drag={x:e.clientX, s:box.scrollLeft, moved:false}; });
+  window.addEventListener('pointermove',e=>{ if (!drag) return; const dx=e.clientX-drag.x; if (Math.abs(dx)>6){ drag.moved=true; box.style.scrollSnapType='none'; } if (drag.moved) box.scrollLeft=drag.s-dx; });
+  window.addEventListener('pointerup',()=>{ if (!drag) return; const d=drag; drag=null; box.style.scrollSnapType='';
+    if (d.moved){ const dx=d.s-box.scrollLeft, i0=Math.round(d.s/stride()); to(Math.abs(dx)>60 ? i0+(dx<0?1:-1) : i0, true); } });
+  BRF={ go:k=>to(idx()+k,true), open(){
+    const a=MISSION_ART[prefs.mode]||[]; $('bArt').innerHTML=artSVG(prefs.mode)+diffBadge(prefs.mode)+`<div class="chips">${(a[2]||[]).map(t=>`<span class="chip">${t}</span>`).join('')}</div>`;
+    box.style.height=''; to(0,false); requestAnimationFrame(paint); } };
 }
 // ---------- hangar steps: 1 single player / multiplayer / training, 2 the mission (or game, or lesson), 3 the aircraft
 // (skipped when the mission has only one jet), 4 the briefing and Start
@@ -5020,14 +5649,15 @@ function hangarSync(){   // called from applyPrefs: which missions belong to the
   const pd=document.querySelector('#stepDots [data-s="plane"]'); if (pd) pd.hidden = planesShown().length<=1;
 }
 function setStep(s){
-  HSTEP.step=s; $('briefCard').dataset.step=s; hangarSync();
+  HSTEP.step=s; $('briefCard').dataset.step=s; $('brief').dataset.step=s; hangarSync();
   const order=['play','mission','plane','brief'], k=order.indexOf(s), pl=playOf(prefs.mode);
   document.querySelectorAll('#stepDots span').forEach(sp=>{ const i=order.indexOf(sp.dataset.s); sp.classList.toggle('on',i===k); sp.classList.toggle('done',i<k); });
   $('briefEyebrow').textContent = s==='play' ? 'Thin Air · Hangar' : s==='mission' ? (pl==='train' ? 'Training · pick a lesson' : pl==='multi' ? 'Multiplayer · pick a game and a room' : 'Single player · pick a mission') : s==='plane' ? 'Pick your aircraft' : 'Briefing';
   if (s==='plane' || s==='brief') makeThumbs();
-  if (s==='brief') paintAcSum();
+  if (s==='brief'){ paintAcSum(); if (BRF) BRF.open(); }   // the briefing opens on its Overview page
   try { (s==='brief' ? $('start') : $('stepNext')).focus({preventScroll:true}); } catch (e) {}
   $('brief').scrollTop=0;
+  carSync(); requestAnimationFrame(carSync);   // bring the chosen card to the middle once the step is laid out
 }
 function paintAcSum(){
   const p=S.ac, am=AAM[p.aam], LO=loadout(), im=document.querySelector(`[data-plane="${prefs.plane}"] img.thumb`);
@@ -5152,6 +5782,7 @@ function applyPrefs(){
     b.addEventListener('click',()=>{ prefs.lesson=i; applyPrefs(); });
     lb.appendChild(b);
   });
+  if (CARS && CARS.lesson) CARS.lesson.center();   // the lesson cards were just rebuilt
   if (mode==='training'){
     const L=LESSONS[prefs.lesson];
     $('briefEyebrow').textContent='Thin Air · Flight training · Dras valley';
@@ -5169,8 +5800,8 @@ function applyPrefs(){
     const LO=loadout();
     $('briefEyebrow').textContent='Thin Air · Precision strike · Kargil, 1999';
     $('briefTitle').textContent='Three camps, laser-guided';
-    $('briefBody').textContent=`Intruders hold three positions spread across the ridges south of the Line of Control: Tiger Hill in the west, Tololing in the middle and Muntho Dhalo in the east, each a camp of stone sangars, tents, a supply hut and an ammunition dump, guarded by one AAA gun that opens fire inside 3.5 km. Destroy all three. You fly the ${p.name} with a targeting pod and ${LO.agm} laser-guided missiles: press T to pick a camp, L to fire from 1.5 to 10 km, and keep the camp in the pod until impact, so you can hit each one from outside the guns' reach. You also carry ${LO.bombs} × 250 kg bombs for a CCIP dive, ${LO.msl} × ${AAM[p.aam].name} air-to-air missiles, ${p.gun} gun rounds and ${FLARES} flares. One F-16 will cross the LoC at a moment nobody can predict and come straight for you; when BANDIT INBOUND flashes, deal with it first. Do not cross the LoC yourself: that ends the sortie.`;
-    setFacts('briefFacts',[['3','Camps'],[String(LO.agm),'Laser missiles'],['3','AAA guns'],['1','F-16, any time']]);
+    $('briefBody').textContent=`Intruders hold three positions spread across the ridges south of the Line of Control: Tiger Hill in the west, Tololing in the middle and Muntho Dhalo in the east, each a camp of stone sangars, tents, a supply hut and an ammunition dump, guarded by one AAA gun that opens fire inside 3.5 km. Destroy all three. You fly the ${p.name} with a targeting pod and ${LO.agm} laser-guided missiles: press T to pick a camp, L to fire from 1.5 to 10 km, and keep the camp in the pod until impact, so you can hit each one from outside the guns' reach. You also carry ${LO.bombs} × 250 kg bombs for a CCIP dive, ${LO.msl} × ${AAM[p.aam].name} air-to-air missiles, ${p.gun} gun rounds and ${FLARES} flares. Two F-16s will cross the LoC, one after the other, at moments nobody can predict and come straight for you; when BANDIT INBOUND flashes, deal with it first. You have ${Math.round(PREC_TIME/60)} minutes before the intruders pull out of the camps, so do not waste time. Do not cross the LoC yourself: that ends the sortie.`;
+    setFacts('briefFacts',[['3','Camps'],[String(LO.agm),'Laser missiles'],[`${Math.round(PREC_TIME/60)} min`,'Time limit'],['2','F-16s, any time']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. TGT picks a camp, LGM fires a laser missile (keep the camp in the pod), BOMB drops on the pipper, MSL once the F-16 reads LOCK, FLR the moment MISSILE flashes.';
   } else if (MP.coop){
     const LO=loadout();
@@ -5196,21 +5827,21 @@ function applyPrefs(){
     const LO=loadout();
     $('briefEyebrow').textContent='Thin Air · Combat search and rescue · Punjab plains · what-if scenario';
     $('briefTitle').textContent='Bring the pilot home';
-    $('briefBody').textContent=`An IAF pilot ejected over the farmland of Punjab, about 7 km across the international border, and is hiding by his parachute, marking his position with orange smoke. A Mi-17 helicopter, callsign VIPER, is going in to get him, and you are its cover. The plains are flat and open: there are no hills to hide behind, for VIPER or for you. VIPER flies to a holding point just across the border and waits up to ${CSAR_HOLD_T} seconds while you silence the three AAA guns around the pilot (red triangles); a gun within 2.2 km of the helicopter chews it up. The moment the last gun dies VIPER dashes straight in, even before it reaches the holding point, lands for ${CSAR_PICKUP} seconds and lifts off with the pilot. Two JF-17s come for the helicopter while it is on the ground, and an F-16 while it heads home. They want VIPER, not you: stay close and kill each one before it gets a missile off. VIPER pops flares and can take two missile hits. The mission is won when VIPER is 2 km back inside India with the pilot. You are cleared across the border today. Your ${p.name} carries ${LO.agm} laser-guided missiles and ${LO.bombs} × 250 kg bombs for the guns (T to pick one, L to fire), ${LO.msl} × ${AAM[p.aam].name} missiles, ${p.gun} gun rounds and ${FLARES} flares.`;
-    setFacts('briefFacts',[['3','AAA guns'],[`${CSAR_HOLD_T} s`,'VIPER holds'],['3','Jets, 2 waves'],['2','Hits VIPER can take']]);
+    $('briefBody').textContent=`An IAF pilot ejected over the farmland of Punjab, about 7 km across the international border, and is hiding by his parachute, marking his position with orange smoke. A Mi-17 helicopter, callsign VIPER, is going in to get him, and you are its cover. The plains are flat and open: there are no hills to hide behind, for VIPER or for you. VIPER flies to a holding point just across the border and waits up to ${CSAR_HOLD_T} seconds while you silence the three AAA guns around the pilot (red triangles); a gun within 2.2 km of the helicopter chews it up. The moment the last gun dies VIPER dashes straight in, even before it reaches the holding point, lands for ${CSAR_PICKUP} seconds and lifts off with the pilot. Two JF-17s come for the helicopter while it is on the ground, and an F-16 while it heads home. They want VIPER, not you: stay close and kill each one before it gets a missile off. Intelligence also reports a shoulder-fired SAM team hiding somewhere near the pilot: it will not show itself until VIPER comes in to land, then it fires heat-seekers at the helicopter every 15 seconds or so. The moment MANPADS LAUNCH flashes, its position is marked: kill it with a laser missile or a bomb. VIPER pops flares and can take two missile hits. The mission is won when VIPER is 2 km back inside India with the pilot. You are cleared across the border today. Your ${p.name} carries ${LO.agm} laser-guided missiles and ${LO.bombs} × 250 kg bombs for the guns (T to pick one, L to fire), ${LO.msl} × ${AAM[p.aam].name} missiles, ${p.gun} gun rounds and ${FLARES} flares.`;
+    setFacts('briefFacts',[['3 + 1','AAA + MANPADS'],[`${CSAR_HOLD_T} s`,'VIPER holds'],['3','Jets, 2 waves'],['2','Hits VIPER can take']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. TGT picks a gun, LGM fires a laser missile, BOMB drops on the pipper, MSL once a jet reads LOCK, FLR the moment MISSILE flashes. Stay near VIPER (the green circle).';
   } else if (BRIDGE){
     const LO=loadout(), dk=(Math.hypot(RAID_START.x-BRG_X,RAID_START.z-BRG_RZ)/1000).toFixed(0), ck=((RD_BN-360)/1000).toFixed(1);
     $('briefEyebrow').textContent='Thin Air · Night interdiction · north of the LoC · what-if scenario';
     $('briefTitle').textContent='Drop the bridge before the convoy crosses';
-    $('briefBody').textContent=`An enemy convoy of eight lorries is driving west along the north bank of the river, headlights on, to cross a steel bridge east of their air base and head for the LoC. You are cleared across the LoC tonight. Drop the bridge before the first lorry gets over it: the convoy starts ${ck} km from the bridge at about ${Math.round(CONVOY.v*3.6)} km/h, and the bridge is ${dk} km north of you. The two steel spans over the water are the targets (SPAN 1 and SPAN 2): one span down stops the convoy, both finish the bridge. It is dark, but when you come within 7.5 km a pathfinder drops parachute flares over the bridge that light it for about 80 seconds. An AAA gun guards each end of the bridge and a SAM sits 1 km north of it. Your ${p.name} carries ${LO.agm} laser-guided missiles (press T to pick a span, L to fire from 1.5 to 10 km, keep it in the pod), ${LO.bombs} × 250 kg bombs for a dive attack, ${LO.msl} × ${AAM[p.aam].name} missiles, ${p.gun} gun rounds and ${FLARES} flares. Bombs or missiles on the road wreck lorries too.`;
-    setFacts('briefFacts',[['2','Spans'],['8','Lorries'],[`${ck} km`,'Convoy to bridge'],[String(LO.agm),'Laser missiles']]);
+    $('briefBody').textContent=`An enemy convoy of eight lorries is driving west along the north bank of the river, headlights on, to cross a steel bridge east of their air base and head for the LoC. You are cleared across the LoC tonight. Drop the bridge before the first lorry gets over it: the convoy starts ${ck} km from the bridge at about ${Math.round(CONVOY.v*3.6)} km/h, and the bridge is ${dk} km north of you. The two steel spans over the water are the targets (SPAN 1 and SPAN 2): one span down stops the convoy, both finish the bridge. It is dark, but when you come within 7.5 km a pathfinder drops parachute flares over the bridge that light it for about 80 seconds. An AAA gun guards each end of the bridge and a SAM sits 1 km north of it, and a JF-17 on night patrol comes for you from the north a few seconds after the flares light up. Your ${p.name} carries ${LO.agm} laser-guided missiles (press T to pick a span, L to fire from 1.5 to 10 km, keep it in the pod), ${LO.bombs} × 250 kg bombs for a dive attack, ${LO.msl} × ${AAM[p.aam].name} missiles, ${p.gun} gun rounds and ${FLARES} flares. Bombs or missiles on the road wreck lorries too.`;
+    setFacts('briefFacts',[['2','Spans'],['8','Lorries'],[`${ck} km`,'Convoy to bridge'],['1','Night fighter']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. TGT picks a span, LGM fires a laser missile (keep the span in the pod), BOMB drops on the pipper, FLR the moment MISSILE flashes.';
   } else if (TANKER){
     const LO=loadout();
     $('briefEyebrow').textContent='Thin Air · Deep strike with air-to-air refuelling · Thar desert · what-if scenario';
     $('briefTitle').textContent='Refuel, strike, refuel';
-    $('briefBody').textContent=`A fuel depot with a railway yard sits deep in the desert, far beyond what your ${p.name} can reach on its own: you arrive in the area with only ${TANKER_FUEL0} kg of fuel left. An IL-78 tanker flies a racetrack just ahead of you. Catch it, fly up behind one of the two baskets trailing from its wing pods (the HUD rings the nearest one and shows the distance and your closing speed), and hold position just behind it: within about 35 m and closing slower than 20 m/s, the probe makes contact and fuel flows. Stay within 70 m to keep it flowing until the tanks are full. Then head north and destroy the three targets at the depot: the storage tanks, the pump station and the railway yard. A SAM covers the depot out to 9 km, two AAA guns open fire inside 3.5 km, and a JF-17 and an F-16 patrol overhead. Afterburner burns fuel four times faster, so use it only when you must. When the depot is burning, fly back and plug in to the tanker again to win. Run dry and the sortie is over. You carry ${LO.agm} laser-guided missiles, ${LO.bombs} × 250 kg bombs, ${LO.msl} × ${AAM[p.aam].name} missiles, ${p.gun} gun rounds and ${FLARES} flares.`;
+    $('briefBody').textContent=`A fuel depot with a railway yard sits deep in the desert, far beyond what your ${p.name} can reach on its own: you arrive in the area with only ${TANKER_FUEL0} kg of fuel left. An IL-78 tanker flies a racetrack just ahead of you. Catch it, fly up behind one of the two baskets trailing from its wing pods (the HUD rings the nearest one and shows the distance and your closing speed), and hold position just behind it: within about 35 m and closing slower than 20 m/s, the probe makes contact and fuel flows. Stay within 70 m to keep it flowing until the tanks are full. Then head north and destroy the three targets at the depot: the storage tanks, the pump station and the railway yard. A SAM covers the depot out to 9 km, two AAA guns open fire inside 3.5 km, and three fighters (two JF-17s and an F-16) patrol overhead. Afterburner burns fuel four times faster, so use it only when you must. When the depot is burning, fly back and plug in to the tanker again to win. Run dry and the sortie is over. You carry ${LO.agm} laser-guided missiles, ${LO.bombs} × 250 kg bombs, ${LO.msl} × ${AAM[p.aam].name} missiles, ${p.gun} gun rounds and ${FLARES} flares.`;
     setFacts('briefFacts',[[`${TANKER_FUEL0} kg`,'Fuel at the start'],['2','Refuels needed'],['3','Depot targets'],[`${((TNK_SITE.z-TANKER_START.z)/-1000).toFixed(0)} km`,'Start to depot']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle: match the tanker\'s speed and creep up to the ringed basket. TGT picks a target, LGM fires a laser missile, BOMB drops on the pipper, MSL once a fighter reads LOCK, FLR the moment MISSILE flashes.';
   } else if (SEAD){
@@ -5245,8 +5876,8 @@ function applyPrefs(){
     const Ra=lockRange(p)*FOES.asm.stealth, dk=(Math.hypot(FLEET_START.x-CARRIER.x,FLEET_START.z-CARRIER.z)/1000).toFixed(1);
     $('briefEyebrow').textContent='Thin Air · Fleet defence · Arabian Sea · what-if scenario';
     $('briefTitle').textContent='Protect the carrier';
-    $('briefBody').textContent=`You are on combat air patrol in a MiG-29K, ${dk} km north of INS Vikramaditya. Enemy strike jets are coming in from the north in three raids, low, each carrying two C-802 anti-ship missiles; the second raid has an F-16 escort that will come for you. A strike jet fires both missiles when it gets within ${FLEET_LAUNCH/1000} km of the carrier, then turns and runs north. Kill the jets before that if you can. Once VAMPIRE flashes, the missiles are on their way: they skim the waves at about 1,000 km/h, and you can lock one only inside about ${(Ra/1000).toFixed(1)} km, so dive on them from behind and use the missile or the gun. The ships' close-in guns stop some of the missiles that get through. If ${FLEET_HITS} missiles hit the carrier, she is out of action and the sortie fails. You carry ${mslTxt(p)}, ${p.gun} gun rounds and ${FLARES} flares, and you are rearmed between raids.`;
-    setFacts('briefFacts',[['3','Raids'],['2','Missiles per strike jet'],[`${FLEET_LAUNCH/1000} km`,'Launch range'],[`${FLEET_HITS}`,'Hits and the carrier is out']]);
+    $('briefBody').textContent=`You are on combat air patrol in a MiG-29K, ${dk} km north of INS Vikramaditya. Enemy strike jets are coming in from the north in three raids, low, each carrying two C-802 anti-ship missiles; the second raid has an F-16 escort that will come for you, and at the same time a missile boat races in low over the water from the west and fires two more C-802s when it is ${FLEET_LAUNCH/1000} km from the carrier. Sink it first if you can, with missiles or the gun: it is a small target on the waves, so missiles lock on it only at shorter range. A strike jet fires both missiles when it gets within ${FLEET_LAUNCH/1000} km of the carrier, then turns and runs north. Kill the jets before that if you can. Once VAMPIRE flashes, the missiles are on their way: they skim the waves at about 1,000 km/h, and you can lock one only inside about ${(Ra/1000).toFixed(1)} km, so dive on them from behind and use the missile or the gun. The ships' close-in guns stop some of the missiles that get through. If ${FLEET_HITS} missiles hit the carrier, she is out of action and the sortie fails. You carry ${mslTxt(p)}, ${p.gun} gun rounds and ${FLARES} flares, and you are rearmed between raids.`;
+    setFacts('briefFacts',[['3 + boat','Raids'],['2','Missiles per strike jet'],[`${FLEET_LAUNCH/1000} km`,'Launch range'],[`${FLEET_HITS}`,'Hits and the carrier is out']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. MSL fires once a jet or missile reads LOCK; hold GUN with the cross inside the lead circle; tap FLR when MISSILE flashes.';
   } else if (AWACS){
     const total=AW_WAVES.slice(1).reduce((a,w)=>a+w.length,0);
@@ -5259,7 +5890,7 @@ function applyPrefs(){
     const R=lockRange(p)*FOES.uav.stealth, total=DRONE_WAVES.reduce((a,b)=>a+b,0);
     $('briefEyebrow').textContent='Thin Air · Night air defence · Gujarat coast · what-if scenario';
     $('briefTitle').textContent='The swarm at night';
-    $('briefBody').textContent=`It is night on the Gujarat coast. Swarms of small attack drones are coming in off the sea from the west, skimming the water at 50 to 110 m, to dive into a coastal oil refinery (the lit-up site east of the port). There are three swarms of ${DRONE_WAVES.slice(1).join(', ')} drones, each flying as one loose group. They are small and dark: you see one only within ${DRONE_VIS/1000} km, and your missiles lock on one only inside about ${(R/1000).toFixed(1)} km, so the gun is the surest kill. A coastal radar station calls out where a swarm is (dashed amber circle and COASTAL RADAR arrow). Get down low over the water, meet them well out to sea and take them one by one; watch your height, because at night the sea is black. If ${DRONE_LEAKS} drones hit the refinery, the mission fails. Your ${p.name} carries ${mslTxt({...p, msl:loadout().msl})}, ${p.gun} gun rounds, and is rearmed between swarms.`;
+    $('briefBody').textContent=`It is night on the Gujarat coast. Swarms of small attack drones are coming in off the sea from the west, skimming the water at 50 to 110 m, to dive into a coastal oil refinery (the lit-up site east of the port). There are three swarms of ${DRONE_WAVES.slice(1).join(', ')} drones. The first flies as one loose group from the west; from the second on, each swarm splits in two, half from the west and half up from the south, so you cannot be everywhere at once: take the nearer group first, then race to the other. They are small and dark: you see one only within ${DRONE_VIS/1000} km, and your missiles lock on one only inside about ${(R/1000).toFixed(1)} km, so the gun is the surest kill. A coastal radar station calls out where a swarm is (dashed amber circle and COASTAL RADAR arrow). Get down low over the water, meet them well out to sea and take them one by one; watch your height, because at night the sea is black. If ${DRONE_LEAKS} drones hit the refinery, the mission fails. Your ${p.name} carries ${mslTxt({...p, msl:loadout().msl})}, ${p.gun} gun rounds, and is rearmed between swarms.`;
     setFacts('briefFacts',[[String(total),'Drones, 3 swarms'],['4','Refinery units'],[`${DRONE_VIS/1000} km`,'Seen within'],[`${DRONE_LEAKS}`,'Strikes and you fail']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. GUN is your best weapon on a drone; MSL once a drone reads LOCK. Follow the amber COASTAL RADAR arrow, and keep an eye on your height over the dark sea.';
   } else if (DRONES){
@@ -5272,7 +5903,7 @@ function applyPrefs(){
   } else if (ESCORT){
     $('briefEyebrow').textContent='Thin Air · Escort · eastern Ladakh · what-if scenario';
     $('briefTitle').textContent='Bring the Hercules in';
-    $('briefBody').textContent=`A C-130J Super Hercules is flying troops and supplies to a high-altitude airstrip close to the LAC (a stand-in for Daulat Beg Oldi). It flies a fixed route west along the valleys, then turns south for a steep tactical approach over Pangong Tso and lands on the strip. You are its escort, just behind it as the sortie starts. About 15 seconds in, two J-10Cs cross the LAC and go for the transport; a J-20 and another J-10C follow later. They want the Hercules, not you, so stay between it and the LAC and shoot them before they reach missile range of it. The C-130J pops flares against heat-seekers and can survive two missile hits; a third brings it down. The mission is won when it touches down. It shows on the HUD as a green circle, and the airstrip as an amber square marked DBO. Your ${p.name} carries ${mslTxt(p)}, ${p.gun} gun rounds and ${FLARES} flares. Do not cross the LAC (the red line to the north): that ends the sortie.`;
+    $('briefBody').textContent=`A C-130J Super Hercules is flying troops and supplies to a high-altitude airstrip close to the LAC (a stand-in for Daulat Beg Oldi). It flies a fixed route west along the valleys, then turns south for a steep tactical approach over Pangong Tso and lands on the strip. You are its escort, just behind it as the sortie starts. About 15 seconds in, two J-10Cs cross the LAC and go for the transport; two J-20 stealth fighters follow later, and your radar sees them only at short range. They want the Hercules, not you, so stay between it and the LAC and shoot them before they reach missile range of it. The C-130J pops flares against heat-seekers and can survive two missile hits; a third brings it down. The mission is won when it touches down. It shows on the HUD as a green circle, and the airstrip as an amber square marked DBO. Your ${p.name} carries ${mslTxt(p)}, ${p.gun} gun rounds and ${FLARES} flares. Do not cross the LAC (the red line to the north): that ends the sortie.`;
     setFacts('briefFacts',[['1','C-130J to protect'],['4','Bandits, 2 waves'],['3','Hits it can take'],[String(p.msl),'Missiles']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. Stay near the green circle (the Hercules). MSL fires once a bandit reads LOCK; hold GUN with the cross inside the lead circle; tap FLR when MISSILE flashes.';
   } else if (LADAKH){
@@ -5290,11 +5921,11 @@ function applyPrefs(){
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. MSL fires once a bandit reads LOCK; hold GUN with the cross inside the lead circle; tap FLR when MISSILE flashes.';
   } else {
     $('briefEyebrow').textContent='Thin Air · Dogfight · Dras sector · what-if scenario';
-    $('briefTitle').textContent = DOGN ? 'Night dogfight: two JF-17s' : 'Dogfight: two JF-17s';
+    $('briefTitle').textContent = DOGN ? 'Night dogfight: two JF-17s, then a J-10C' : 'Dogfight: two JF-17s, then a J-10C';
     $('briefBody').textContent = DOGN
-      ? `Night over the Thar desert in Rajasthan. Two PAF JF-17 Thunders are prowling over the dunes. Shoot down both. Your ${p.name} carries ${mslTxt(p)}, ${p.gun} gun rounds and ${FLARES} flares. In the dark, look for their red and green wingtip lights and the white tail strobe, and use the HUD boxes and the radar. Keep a bandit ahead until its box turns red and reads LOCK, and fire once it says IN RANGE. Finish close fights with the gun. The ground is low here, so watch your height.`
-      : `Two PAF JF-17 Thunders are pushing into the Dras sector. Shoot down both. Your ${p.name} carries ${mslTxt(p)}, ${p.gun} gun rounds and ${FLARES} flares. Keep a bandit ahead until its box turns red and reads LOCK, and fire once it says IN RANGE. Finish close fights with the gun. The Line of Control still applies: do not chase anyone north of it.`;
-    setFacts('briefFacts',[['2','Bandits'],[String(p.msl),'Missiles'],[String(p.gun),'Gun rounds'],[String(FLARES),'Flares']]);
+      ? `Night over the Thar desert in Rajasthan. Two PAF JF-17 Thunders are prowling over the dunes, and a J-10C is on standby: the moment the first JF-17 goes down, it joins the fight from another direction. Shoot down all three. Your ${p.name} carries ${mslTxt(p)}, ${p.gun} gun rounds and ${FLARES} flares. In the dark, look for their red and green wingtip lights and the white tail strobe, and use the HUD boxes and the radar. Keep a bandit ahead until its box turns red and reads LOCK, and fire once it says IN RANGE. Finish close fights with the gun. The ground is low here, so watch your height.`
+      : `Two PAF JF-17 Thunders are pushing into the Dras sector, and a J-10C joins the fight from another direction the moment the first one goes down. Shoot down all three. Your ${p.name} carries ${mslTxt(p)}, ${p.gun} gun rounds and ${FLARES} flares. Keep a bandit ahead until its box turns red and reads LOCK, and fire once it says IN RANGE. Finish close fights with the gun. The Line of Control still applies: do not chase anyone north of it.`;
+    setFacts('briefFacts',[['2 + 1','Bandits'],[String(p.msl),'Missiles'],[String(p.gun),'Gun rounds'],[String(FLARES),'Flares']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. MSL fires once a bandit reads LOCK; hold GUN with the cross inside the lead circle; tap FLR when MISSILE flashes.';
   }
   if (isTouch) touchHelp();
@@ -5937,7 +6568,7 @@ function drawThreats(dog){
     txt(RCP===1 ? `CHECKPOINT 1/2 · FIGHTERS ${enemies.filter(e=>!e.alive).length}/${enemies.length}` : RCP===2 ? `CHECKPOINT 2/2 · TARGETS ${raidN()-raidLeft()}/${raidN()}` : RECON ? `PHOTOS ${S.photos}/${REC_SITES.length}` : CSAR ? `GUNS DOWN ${RAID.ad.filter(a=>!a.alive).length}/${RAID.ad.length}` : `${NAVAL?'GODOWNS':PRECISE?'CAMPS':TANKS?'TANKS':'TARGETS'} ${raidN()-raidLeft()}/${raidN()}`,sx,safeT+38,'#e6ecf2','left',12,true);
     const flight = MP.coop ? `FLIGHT ${1+[...MP.ghosts.values()].filter(g=>g.alive).length}` : RECON ? (S.agl<REC_MASK ? 'LOW · SAM RADARS BLIND' : 'SAM RADARS CAN SEE YOU') : TANKS ? (()=>{ const L=tankLead(); return L ? `COLUMN ${(Math.max(0,TANK_TOWN.z-L.z)/1000).toFixed(1)} KM FROM TOWN` : 'COLUMN DESTROYED'; })() : CSAR && HELO ? (HELO.alive ? `VIPER ${Math.max(0,Math.round(HELO.hp/1.5))}% · ${CSAR_PH[HELO.ph]||'SAFE'}${HELO.ph==='hold'||HELO.ph==='pickup' ? ' '+Math.max(0,Math.ceil(HELO.t))+' S' : ''}` : 'VIPER LOST')
       : TANKER ? `FUEL ${Math.round(S.fuel)} KG${S.contact?' · CONTACT':S.bingo?' · BINGO':''}`
-      : BRIDGE ? (()=>{ const L=convoyLead(); return !L ? 'CONVOY DESTROYED' : BRG.targets.some(t=>!t.alive) ? 'CONVOY STOPPED AT THE GAP' : `CONVOY ${(Math.max(0,RD_BN-L.s)/1000).toFixed(1)} KM FROM BRIDGE`; })() : SEAD ? (S.agl<SEAD_MASK ? 'LOW · RADARS BLIND' : `RADARS CAN SEE YOU · ${RAID.targets.filter(t=>t.alive).length} UP`) : (NAVAL || PRECISE) ? `AAA ${RAID.ad.filter(a=>a.alive).length}/${RAID.ad.length}` : `WING ${wingmen.filter(w=>w.alive).length}/2`;
+      : BRIDGE ? (()=>{ const L=convoyLead(); return !L ? 'CONVOY DESTROYED' : BRG.targets.some(t=>!t.alive) ? 'CONVOY STOPPED AT THE GAP' : `CONVOY ${(Math.max(0,RD_BN-L.s)/1000).toFixed(1)} KM FROM BRIDGE`; })() : SEAD ? (S.agl<SEAD_MASK ? 'LOW · RADARS BLIND' : `RADARS CAN SEE YOU · ${RAID.targets.filter(t=>t.alive).length} UP`) : PRECISE ? `AAA ${RAID.ad.filter(a=>a.alive).length}/${RAID.ad.length} · ${Math.floor(Math.max(0,S.precT)/60)}:${String(Math.floor(Math.max(0,S.precT)%60)).padStart(2,'0')} LEFT` : NAVAL ? `AAA ${RAID.ad.filter(a=>a.alive).length}/${RAID.ad.length}` : `WING ${wingmen.filter(w=>w.alive).length}/2`;
     txt(`BANDITS ${enemies.filter(e=>e.alive).length}  ·  ${flight}`,sx,safeT+56,BANDIT,'left',12,true);
     by=safeT+68;
     if (MP.coop && !S.alive) txt(`RESPAWN IN ${Math.max(1,Math.ceil(MP.respawnT))}`,W/2,H/2+64,AMB,'center',16,true);
@@ -6186,13 +6817,13 @@ function drawHUD(now){
     else if (RCP!==1){ const [bx2,by2]=mp(BASE.x,BASE.z); c.beginPath(); c.rect(bx2-4,by2-4,8,8); c.fillStyle=raidLeft()?AMB:'#6b7480'; c.fill(); c.lineWidth=1; c.strokeStyle='#0b1320'; c.stroke(); }
     if (NAVAL){ const [kx,ky]=mp(CARRIER.x,CARRIER.z); c.fillStyle='#e6ecf2'; c.fillRect(kx-1.5,ky-5,3,10); }   // the carrier
     c.fillStyle=HUD; wingmen.forEach(w=>{ if (!w.alive) return; const [wx,wy]=mp(w.p.x,w.p.z); c.fillRect(wx-2,wy-2,4,4); });
-    if (MP.coop) MP.ghosts.forEach(g=>{ if (!g.alive) return; const [gx,gy]=mp(g.p.x,g.p.z); c.fillRect(gx-2.5,gy-2.5,5,5); txt(shortName(g.type.name),gx,gy-8,g.tk?'#ffffff':HUD,'center',isTouch?8:9,true); c.fillStyle=HUD; });
+    if (MP.coop) MP.ghosts.forEach(g=>{ if (!g.alive) return; const [gx,gy]=mp(g.p.x,g.p.z); c.fillRect(gx-2.5,gy-2.5,5,5); txt(shortName(g.type.name),gx,gy-8,g.tk?'#ffffff':HUD,'center',isTouch?8:9,true); hpBar(gx,gy+6,g.hp,14,2); c.fillStyle=HUD; });
     c.restore();
   }
   if (dog || raid){
     c.fillStyle=RED;
     for (const e of enemies){ if (!e.alive || (e.type.uav && e.p.distanceTo(S.pos)>DRONE_VIS) || !awSees(e)) continue; const [ex,ey]=mp(e.p.x,e.p.z); c.fillRect(ex-2.5,ey-2.5,5,5);
-      if (e.remote){ txt(shortName(e.type.name),ex,ey-8,e.tk?'#ffffff':BANDIT,'center',isTouch?8:9,true); c.fillStyle=RED; } }   // white while they talk   // multiplayer: each pilot's callsign, kept short
+      if (e.remote){ txt(shortName(e.type.name),ex,ey-8,e.tk?'#ffffff':BANDIT,'center',isTouch?8:9,true); hpBar(ex,ey+6,e.hp,14,2); c.fillStyle=RED; } }   // white while they talk; their health under the dot   // multiplayer: each pilot's callsign, kept short
     if (AWACS && NETRA){ const k2=MK, [ox,oy]=mp(AW.cx,AW.cz,true); c.beginPath(); c.arc(ox,oy,AW.R*k2,0,Math.PI*2); c.setLineDash([3,3]); c.lineWidth=1; c.strokeStyle='rgba(141,255,176,.5)'; c.stroke(); c.setLineDash([]);
       if (NETRA.alive){ const [nx,ny]=mp(NETRA.p.x,NETRA.p.z); c.beginPath(); c.arc(nx,ny,3.5,0,Math.PI*2); c.fillStyle=HUD; c.fill(); c.fillStyle=RED; } }
     if (FLEET){ const [kx,ky]=mp(CARRIER.x,CARRIER.z); c.fillStyle='#e6ecf2'; c.fillRect(kx-1.5,ky-5,3,10); const k2=MK, [fx,fy]=mp(CARRIER.x,CARRIER.z,true); c.beginPath(); c.arc(fx,fy,FLEET_LAUNCH*k2,0,Math.PI*2); c.setLineDash([3,3]); c.lineWidth=1; c.strokeStyle='rgba(255,90,79,.6)'; c.stroke(); c.setLineDash([]); }
@@ -7107,7 +7738,7 @@ function punjabHeight(x,z){
 }
 // tank column strike: an armoured column drives south down the Punjab road toward an Indian town
 const pbRoadX = z => 2500 + (z+20000)*0.0375;   // the north-south road laid in buildPunjab
-const TANK_TOWN={x:pbRoadX(7500)+450, z:7500}, TANK_FAIL_Z=6000, TANK_V=9, TANK_GAP=70, TANK_LEAD0=-3400, TANK_R=30;
+const TANK_TOWN={x:pbRoadX(7500)+450, z:7500}, TANK_FAIL_Z=6000, TANK_V=11.25, TANK_GAP=70, TANK_LEAD0=-3400, TANK_R=30;
 const TANK_START={x:2000, z:13500, y:2600}, TANK_BASE={x:3000, z:-7000};   // where you start; where the fighters orbit
 const TANK_PLANES=['jaguar','su30','m2k','tejas'];
 const TANK_ORDER=['T','T','A','T','T','S','T','T','A'];   // tanks, two self-propelled AAA guns and a SAM launcher in the middle
@@ -7646,7 +8277,7 @@ function updateTanker(dt){
     if (!was) S.msg={text:'CONTACT · FUEL FLOWING', col:HUD, t:2};
     if (S.rtb){
       S.score+=1000;
-      endMission(true,'Strike complete, plugged in for home',`The depot is burning and you are back on the IL-78's basket with ${Math.round(S.fuel)} kg on board, enough for the long trip home. Fighters shot down: ${S.kills} of 2. Air defences knocked out: ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length}. Flight time ${fmtTime(S.time)}.`,3);
+      endMission(true,'Strike complete, plugged in for home',`The depot is burning and you are back on the IL-78's basket with ${Math.round(S.fuel)} kg on board, enough for the long trip home. Fighters shot down: ${S.kills} of 3. Air defences knocked out: ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length}. Flight time ${fmtTime(S.time)}.`,3);
       return;
     }
     if (S.fuel>=S.ac.fuel && !K.fullMsg){ K.fullMsg=true; S.msg={text:'TANKS FULL · DISCONNECT AND HEAD NORTH TO THE DEPOT', col:HUD, t:3.5}; }
