@@ -3479,7 +3479,7 @@ function damagePlayer(d){
 // Each pilot shares their own jet's state through room presence (about 15 a second). Remote jets join the enemy list,
 // so lock, gun and HUD work on them. Hits are short events: the shooter reports gun hits; a missile is flown on the
 // TARGET's screen (so its flares work) and the target reports the outcome. Deaths are announced so the killer is credited.
-const MP={on:false, coop:false, rkind:'', ep:0, mask:[0,0,0], host:true, lobby:null, room:null, code:'', me:null, joining:false, err:'', ghosts:new Map(), protos:{}, offs:[],
+const MP={pend:new Map(), on:false, coop:false, rkind:'', ep:0, mask:[0,0,0], host:true, lobby:null, room:null, code:'', me:null, joining:false, err:'', ghosts:new Map(), protos:{}, offs:[],
   kills:0, deaths:0, lastBy:null, lastByT:-99, respawnT:0, sendT:0, hitAcc:new Map(), hitT:0, mslN:0,
   // combat events (missile launches, hits, kills) ride in presence, which every viewer may set, so Viewers can play too.
   // evOut: my recent events, each kept ~2.5 s; evIn: per peer, the highest event number already handled
@@ -3746,6 +3746,7 @@ function mpPresence(){
   if (d.st==='fly'){
     d.p=[r1(S.pos.x),r1(S.pos.y),r1(S.pos.z)]; d.v=[r1(S.vel.x),r1(S.vel.y),r1(S.vel.z)];
     d.q=[r4(S.q.x),r4(S.q.y),r4(S.q.z),r4(S.q.w)]; d.g=((keys.has('KeyX')||touchGun) && S.gun>0) ? 1 : 0;
+    d.hp=Math.round(S.hp);   // the others draw a health bar over this jet
   }
   if (VOX.on) d.tk=1;   // on the air: the others light up this callsign
   if (MP.coop){
@@ -3830,6 +3831,7 @@ function mpUpdate(dt){
     g.qT.set(num(d.q[0],0),num(d.q[1],0),num(d.q[2],0),num(d.q[3],1)).normalize();
     if (!g.alive || g.p.distanceTo(g.pT)>600){ g.p.copy(g.pT); g.q.copy(g.qT); }
     else { g.p.addScaledVector(g.vel,dt).lerp(g.pT,1-Math.exp(-8*dt)); g.q.slerp(g.qT,1-Math.exp(-10*dt)); }
+    g.hp=clamp(num(d.hp,100),0,100);
     g.alive=true; g.m.visible=true; g.m.position.copy(g.p); g.m.quaternion.copy(g.q);
     g.fwd.set(0,0,-1).applyQuaternion(g.q);
     if (d.g){ g.gunCd-=dt; while (g.gunCd<=0){ g.gunCd+=1/20;   // their tracers, for show; their own client reports any hits
@@ -3837,6 +3839,8 @@ function mpUpdate(dt){
     else g.gunCd=0;
   }
   if (MP.coop && flying) mpCoopSync(dt);
+  // a missile waiting for the other pilot's verdict that never came (their game never saw it): call it a miss
+  if (MP.pend.size){ const t=performance.now(); MP.pend.forEach((pd,id)=>{ if (t-pd.at>3500){ MP.pend.delete(id); pipImpact(pd.m,pd.m.p,pd.m.v,'MISSED',AMB); } }); }
   if (VOX.on && state!=='fly') voxUp();   // paused, landed or left: off the air
   if (VOX.room!==MP.room){ VOX.room=MP.room; voxVol(); }
   MP.sendT-=dt;
@@ -3916,6 +3920,13 @@ function drawComms(now){
 function commsUI(){   // phone buttons: RADIO in any room, TALK only where voice works
   const fly=state==='fly' && MP.on && !!MP.room, k=(fly?1:0)+(fly && voxApi()?2:0)+'';
   if (k!==VOX.show){ VOX.show=k; $('tRadio').hidden=!fly; $('tTalk').hidden=!(fly && voxApi()); if (!fly) rcPanel(false); }
+}
+// another pilot's health over their jet: a thin bar, green for what is left, red for the damage taken
+function hpBar(x,y,hp,w){
+  const k=clamp((hp==null?100:hp)/100,0,1), h=isTouch?3:4, x0=Math.round(x-w/2), y0=Math.round(y-h/2);
+  c.fillStyle='rgba(0,0,0,.55)'; c.fillRect(x0-1,y0-1,w+2,h+2);
+  c.fillStyle='#3ddc6a'; c.fillRect(x0,y0,w*k,h);
+  c.fillStyle='#ff4a3d'; c.fillRect(x0+w*k,y0,w*(1-k),h);
 }
 // a callsign short enough for the radar: up to 7 characters, longer ones cut with an ellipsis
 const shortName=n=>{ n=String(n||'PILOT').toUpperCase(); return n.length>7 ? n.slice(0,6)+'…' : n; };
@@ -4013,11 +4024,15 @@ function mpOnBoom(msg){
   const d=msg.data||{};
   if (msg.sameTab || d.to!==MP.me) return;
   const g=MP.ghosts.get(msg.peer), nm=g ? g.type.name : 'BANDIT';
-  const i=missiles.findIndex(m=>m.mpId===d.id && m.own==='p');
+  const i=missiles.findIndex(m=>m.mpId===d.id && m.own==='p'), pd=MP.pend.get(d.id);
   if (i>=0){
     const m=missiles[i]; missiles.splice(i,1); m.dead=true; scene.remove(m.mesh); m.trail.fade=2;
-    if (d.hit) spawnExplosion(m.p,false);
-    if (pip.o===m) pipImpact(m,m.p,m.v,d.hit?'HIT':'DEFEATED',d.hit?HUD:AMB);
+    if (d.hit) spawnExplosion(g && g.alive ? g.p : m.p,false);
+    pipImpact(m,m.p,m.v,d.hit?'HIT':'DEFEATED',d.hit?HUD:AMB);
+  } else if (pd){   // ours already reached them and was waiting for this answer
+    MP.pend.delete(d.id); const m=pd.m;
+    if (d.hit) spawnExplosion(g && g.alive ? g.p : m.p,false);
+    pipImpact(m,m.p,m.v,d.hit?'HIT':'DEFEATED',d.hit?HUD:AMB);
   }
   if (MP.coop) return;   // a bandit's missile on a teammate: nothing to report here
   if (state==='fly') S.msg = d.hit ? {text:`MISSILE HIT · ${nm}`, col:HUD, t:1.6} : {text:`${nm} DEFEATED YOUR MISSILE`, col:AMB, t:1.6};
@@ -4026,7 +4041,7 @@ function mpOnHit(msg){
   const d=msg.data||{};
   if (msg.sameTab || d.to!==MP.me || !MP.on || state!=='fly' || !S.alive) return;
   const g=MP.ghosts.get(msg.peer);
-  if (!g || !g.alive || g.p.distanceTo(S.pos)>2500) return;   // only someone close enough to be shooting can hit you
+  if (!g || !g.alive || g.p.distanceTo(S.pos)>MP_GUN_RANGE+700) return;   // only someone close enough to be shooting can hit you
   MP.lastBy=msg.peer; MP.lastByT=S.time;
   damagePlayer(clamp(num(d.dmg,0),0,24));
 }
@@ -4198,6 +4213,11 @@ function updateMissiles(dt){
   }
 }
 function detonate(m,how){
+  // multiplayer: our copy of the missile reached the other pilot's jet as we see it, but their game flies the real
+  // one and decides. Hide ours and wait for their answer (mpOnBoom) before showing a hit or a miss.
+  if (how==='hit' && m.target && m.target.remote && m.mpId && MP.room){
+    m.dead=true; scene.remove(m.mesh); m.trail.fade=2; MP.pend.set(m.mpId,{m, at:performance.now()}); return;
+  }
   m.dead=true; scene.remove(m.mesh); m.trail.fade=2;
   spawnExplosion(m.p,false);
   if (m.agm){ if (how!=='timeout') bombImpact({p:m.p.clone(), v:m.v.clone(), agm:true, pipMine:isTouch}); else if (isTouch) S.banner={text:'MISSED', col:AMB, t:2.2}; return; }   // scored like a bomb hit
@@ -5772,6 +5792,7 @@ function drawRaidHUD(fpm){
     if (!g.alive) continue;
     const s=proj(g.p.x,g.p.y,g.p.z); if (!onScreen(s)) continue;
     c.beginPath(); c.arc(s.x,s.y,isTouch?5:9,0,Math.PI*2); strokeP(HUD,1.3);
+    hpBar(s.x,s.y-(isTouch?11:16),g.hp,isTouch?18:26);   // teammate's health
     if (!isTouch) txt(`${g.type.name} ${(g.p.distanceTo(S.pos)/1000).toFixed(1)}`,s.x,s.y-18,HUD,'center',11,true);
   }
   let near=null, nd=1e9;
@@ -5844,10 +5865,11 @@ function drawCombatHUD(){
     const stl = e.type.stealth && d>lockRange(S.ac)*e.type.stealth;
     if (isTouch){   // phone: a small diamond; only the target you are locking shows its distance
       diamond(s.x,s.y,sz,col);
-      if (e.remote) txt(shortName(e.type.name),s.x,s.y-sz-8,col,'center',9,true);   // multiplayer: whose jet it is
+      if (e.remote){ txt(shortName(e.type.name),s.x,s.y-sz-15,col,'center',9,true); hpBar(s.x,s.y-sz-6,e.hp,22); }   // multiplayer: whose jet it is, and its health
       if (isT) txt((d/1000).toFixed(1),s.x,s.y+sz+10,col,'center',10,true);
     } else {
       c.beginPath(); c.rect(s.x-sz,s.y-sz,sz*2,sz*2); strokeP(col,1.5);
+      if (e.remote) hpBar(s.x,s.y-sz-7,e.hp,Math.max(28,sz*2));
       txt(`${e.remote ? shortName(e.type.name) : e.type.name} ${(d/1000).toFixed(1)}${stl ? (e.type.uav ? ' · TOO SMALL TO LOCK' : ' · STEALTH') : ''}`,s.x,s.y+sz+11,col,'center',11,true);
     }
     if (isT){
