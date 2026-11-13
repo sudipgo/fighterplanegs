@@ -2089,7 +2089,7 @@ const BUILD = {m2k:detailed('m2k',buildMirage2), rafale:detailed('rafale',buildR
 
 // ---------- jets from model files (Settings: "Aircraft from model files", on by default). Each is the user's Blender
 // model converted to plain glTF with its geometry embedded and only its paint texture kept: tejas.json (+ tejas_paint.png)
-// and models/<key>.json (+ the shared models/tex_*.png). They load in the background, the jet you picked first, then
+// and <key>.json (+ <key>_paint.png or the shared tex_*.png), all next to index.html. They load in the background, the jet you picked first, then
 // the enemy types, then the rest; until one arrives, or if it is missing (or the page is opened straight from disk),
 // the code-built jet flies instead. Each file's parts are merged into one mesh per material, turned so the nose points
 // -z, and mirrored so the refuelling probe and the red light end up on the correct sides. A pilot in each seat, the
@@ -2149,14 +2149,14 @@ const GLB_PILOT=(()=>{ const g=new T.Group(), S=(c)=>new T.MeshStandardMaterial(
   return g; })();
 // which jets have a model file (MiG-27: none, it stays code-built). Tejas: its own file, with its anchors written here.
 // Model files: the Tejas Mk1A (glb\Tejas), the Su-30MKI and the Rafale (Su-30MKI\Su-30MKI_flight.glb and
-// Rafale\Rafale_flight.glb, detailed rebuilds: models/<key>.json with the anchors in extras.thinAir, paint in
-// models/<key>_paint.png) and three support aircraft from
+// Rafale\Rafale_flight.glb, detailed rebuilds: <key>.json with the anchors in extras.thinAir, paint in
+// <key>_paint.png) and three support aircraft from
 // glb\allplanes: the C-130J (escort), the IL-78 tanker and the Netra AEW&C. The allplanes fighters were tried in
 // v147-148 and rolled back; the other fighters are code-built. To bring a model back, add its key here and put its file
-// in models/<key>.json (keys the code understands: rafale su30 m2k mig29 mig21 jaguar amca jf17 f16 j10 j20 f35,
+// next to index.html as <key>.json (keys the code understands: rafale su30 m2k mig29 mig21 jaguar amca jf17 f16 j10 j20 f35,
 // mig29k for the naval jet and carrier deck, c130 for the escort, il78 for the tanker, netra for the AWACS).
 const MODEL_KEYS=['tejas','su30','rafale','c130','il78','netra'];
-const MODEL_URL=k=>k==='tejas' ? 'tejas.json' : 'models/'+k+'.json';
+const MODEL_URL=k=>k+'.json';   // every model file (and its paint PNG) sits next to index.html: GitHub's upload page cannot make folders
 const TEJAS_EX={nozzles:[[0,0,6.55,0.46]], pilots:[[0,0.82,-2.22]], navL:[-4.12,-0.12,3.85], navR:[4.12,-0.12,3.85], fin:[0,2.72,5.85], beacon:[0,0.8,1.2],
   hp:[[-1.45,-0.7,2.15],[1.45,-0.7,2.15],[-2.7,-0.7,2.15],[2.7,-0.7,2.15]]};
 const MODELS={}, MODEL_FAIL=new Set(), MODEL_Q=[];   // loaded models {parts, ex}; files that failed; the load queue
@@ -3338,6 +3338,7 @@ function turnToward(dir, aim, maxAng){
 function setPlaneMesh(){
   if (plane) scene.remove(plane);
   plane = carrierJet() ? buildModelJet('mig29k') : BUILD[prefs.plane](); scene.add(plane);
+  plane.userData.fromModel = carrierJet() || useModel(prefs.plane);   // built from its model file (or the code-built stand-in)
   // find the starboard wingtip (furthest +x vertex) for the vapour trails; port is its mirror
   { plane.updateMatrixWorld(true); const tip=new T.Vector3(), _p=new T.Vector3();
     plane.traverse(o=>{ if (!o.isMesh || !o.geometry.attributes.position) return; const a=o.geometry.attributes.position;
@@ -3371,6 +3372,15 @@ function updateSwing(dt,v){
   const a=plane.userData.sweep=approach(plane.userData.sweep,target,0.35*dt);
   sw.forEach(({pv,s})=>{ pv.rotation.y=-s*a; });
   if (plane.userData.tip) plane.userData.tip.set(2.0+4*Math.cos(a)-0.25*Math.sin(a), 0.55, -0.4+4*Math.sin(a)+0.25*Math.cos(a));
+}
+// your jet's model file arrived after you left the briefing (slow phone networks): swap it in on the next flying frame,
+// keeping the gear and the stores you have left. Otherwise the code-built stand-in would stay for the whole sortie.
+function planeModelCatchUp(){
+  if (state!=='fly' || !plane || plane.userData.fromModel || carrierJet() || !useModel(prefs.plane)) return;
+  const gearV=!!(plane.userData.gear && plane.userData.gear.visible);
+  setPlaneMesh(); plane.position.copy(S.pos); plane.quaternion.copy(S.q);
+  if (plane.userData.gear) plane.userData.gear.visible=gearV;
+  updateStores();
 }
 function updateStores(){
   if (!plane) return;
@@ -10092,6 +10102,7 @@ function frame(now){
   updateTrails(dt); updateVapour(dt);
   drawTracers();
 
+  planeModelCatchUp();
   plane.position.copy(S.pos); plane.quaternion.copy(S.q); updateSwing(dt,S.vel.length());
   plane.userData.flames.forEach((fl,i)=>{ fl.visible=S.thr>1.0; if (fl.visible) fl.scale.set(1,0.93+0.07*Math.sin(now*0.031+i*1.7)+0.05*Math.random(),1); });   // the plume breathes a little
   if (isTouch && !$('touch').hidden){ $('thrFill').style.height=$('thrKnob').style.bottom=(S.thr/1.15*100)+'%'; $('thrLabel').textContent=S.thr>1?'AB':Math.round(S.thr*100)+'%'; wpnLabel(); }
