@@ -2148,14 +2148,14 @@ const GLB_PILOT=(()=>{ const g=new T.Group(), S=(c)=>new T.MeshStandardMaterial(
   const s=new T.Mesh(new T.BoxGeometry(0.44,0.22,0.26),S(0x56604b)); s.position.set(0,-0.24,0.02); g.add(s);
   return g; })();
 // which jets have a model file (MiG-27: none, it stays code-built). Tejas: its own file, with its anchors written here.
-// Model files: the Tejas Mk1A (glb\Tejas), the Su-30MKI and the Rafale (Su-30MKI\Su-30MKI_flight.glb and
-// Rafale\Rafale_flight.glb, detailed rebuilds: <key>.json with the anchors in extras.thinAir, paint in
+// Model files: the Tejas Mk1A (glb\Tejas), the Su-30MKI, the Rafale and the Mirage 2000 Vajra (m2k)
+// (Su-30MKI\Su-30MKI_flight.glb, Rafale\Rafale_flight.glb, Mirage_2000_Vajra\...\Mirage_2000_Vajra_flight.glb, detailed rebuilds: <key>.json with the anchors in extras.thinAir, paint in
 // <key>_paint.png) and three support aircraft from
 // glb\allplanes: the C-130J (escort), the IL-78 tanker and the Netra AEW&C. The allplanes fighters were tried in
 // v147-148 and rolled back; the other fighters are code-built. To bring a model back, add its key here and put its file
 // next to index.html as <key>.json (keys the code understands: rafale su30 m2k mig29 mig21 jaguar amca jf17 f16 j10 j20 f35,
 // mig29k for the naval jet and carrier deck, c130 for the escort, il78 for the tanker, netra for the AWACS).
-const MODEL_KEYS=['tejas','su30','rafale','c130','il78','netra'];
+const MODEL_KEYS=['tejas','su30','rafale','m2k','c130','il78','netra'];
 const MODEL_URL=k=>k+'.json';   // every model file (and its paint PNG) sits next to index.html: GitHub's upload page cannot make folders
 const TEJAS_EX={nozzles:[[0,0,6.55,0.46]], pilots:[[0,0.82,-2.22]], navL:[-4.12,-0.12,3.85], navR:[4.12,-0.12,3.85], fin:[0,2.72,5.85], beacon:[0,0.8,1.2],
   hp:[[-1.45,-0.7,2.15],[1.45,-0.7,2.15],[-2.7,-0.7,2.15],[2.7,-0.7,2.15]]};
@@ -2166,7 +2166,7 @@ function buildModelJet(k){
   const M=MODELS[k], ex=M.ex, g=newPlane();
   M.parts.forEach(p=>{ const m=new T.Mesh(p.geo,p.mat); if (p.mat===glassMat) m.renderOrder=1; g.add(m); });
   // a pilot in each seat: the helmet a little above and ahead of the seat's centre
-  (ex.pilots || (ex.seats||[]).map(s=>[s[0],s[1]+0.18,s[2]-0.2])).forEach(h=>{ const pl=GLB_PILOT.clone(); pl.position.set(h[0],h[1],h[2]); g.add(pl); });
+  (ex.pilots || (ex.seats||[]).map(s=>[s[0],s[1]+0.18,s[2]-0.2])).forEach((h,i)=>{ const pl=GLB_PILOT.clone(); pl.position.set(h[0],h[1],h[2]); pl.userData.pilotSeat=i; g.add(pl); });   // seat 0 is you: hidden in the cockpit view
   (ex.nozzles||[]).forEach(([x,y,z,r])=>plume(g,x,y,z-0.05,r));   // an afterburner plume at each nozzle exit
   // lights: red on the left wingtip, green on the right, white strobe on the fin tip, red beacon on the spine (Tejas)
   const lamp=(mt,p,s,dx,dy)=>{ if (!p) return; const sp=new T.Sprite(mt); sp.scale.setScalar(s); sp.position.set(p[0]+(dx||0),p[1]+(dy||0),p[2]); g.add(sp); };
@@ -7782,6 +7782,79 @@ function drawHUD(now){
   }
 }
 
+// ---------- cockpit view: you sit in the jet. The world is drawn as usual, then the depth buffer is cleared and the
+// cockpit drawn on top by a second camera that can see things 3 cm away (the main camera's near plane is 0.5 m, which
+// would cut the cockpit away). Jets built from a model file (Tejas, Su-30MKI, Rafale) show their own cockpit from the
+// pilot's eye: panel, displays, HUD glass, canopy frame, nose and wings, with your own pilot figure hidden and the canopy
+// glass made clearer. The code-built jets get PIT, a fighter cockpit with three live displays. Both are on layer 1,
+// which only the cockpit camera draws.
+const PIT_L=1, pitCam=new T.PerspectiveCamera(60,1,0.03,80);
+pitCam.layers.set(PIT_L); [hemi, sun, ILLUM].forEach(l=>l.layers.enable(PIT_L));
+const PIT=(()=>{
+  const g=new T.Group(), M=c=>new T.MeshStandardMaterial({color:c, metalness:0.3, roughness:0.72});
+  const dark=M(0x1b1f23), frame=M(0x2c3137), panel=M(0x252a2f);
+  const box=(w,h,d,m,x,y,z,rx)=>{ const o=new T.Mesh(new T.BoxGeometry(w,h,d),m); o.position.set(x,y,z); if (rx) o.rotation.x=rx; g.add(o); return o; };
+  // eye at the origin, looking down -z
+  box(0.96,0.05,0.34,dark, 0,-0.13,-0.79);                                         // glareshield
+  box(0.98,0.36,0.04,panel, 0,-0.31,-0.75,-0.26);                                  // instrument panel, leaning back
+  box(0.28,0.14,0.7,dark,-0.37,-0.46,-0.22); box(0.28,0.14,0.7,dark,0.37,-0.46,-0.22);   // side consoles
+  box(0.05,0.05,1.6,frame,-0.45,-0.22,-0.35); box(0.05,0.05,1.6,frame,0.45,-0.22,-0.35);   // canopy sills
+  const arch=new T.Mesh(new T.TorusGeometry(0.52,0.024,6,28,Math.PI),frame); arch.position.set(0,-0.22,-1.02); g.add(arch);   // windscreen arch
+  const bow=new T.Mesh(new T.TorusGeometry(0.56,0.03,6,28,Math.PI),frame); bow.position.set(0,-0.22,0.12); g.add(bow);         // canopy bow over your head
+  box(0.012,0.15,0.012,frame,-0.088,-0.06,-0.64); box(0.012,0.15,0.012,frame,0.088,-0.06,-0.64);   // HUD combiner posts
+  const hg=new T.Mesh(new T.PlaneGeometry(0.17,0.13), new T.MeshBasicMaterial({color:0x9fffc8, transparent:true, opacity:0.07, depthWrite:false, side:T.DoubleSide}));
+  hg.position.set(0,-0.02,-0.64); hg.rotation.x=-0.18; g.add(hg);
+  const scr=[-0.28,0,0.28].map(x=>{ const cv=document.createElement('canvas'); cv.width=cv.height=128; const tx=new T.CanvasTexture(cv);
+    const o=new T.Mesh(new T.PlaneGeometry(0.2,0.2), new T.MeshBasicMaterial({map:tx})); o.position.set(x,-0.31,-0.725); o.rotation.x=-0.26; g.add(o);
+    return {cv, c:cv.getContext('2d'), tx}; });
+  g.userData.scr=scr; g.userData.t=0; g.visible=false; g.traverse(o=>o.layers.set(PIT_L)); scene.add(g); return g;
+})();
+// the three displays: stores on the left, attitude in the middle, a radar plot of the bandits on the right (5 times a second)
+function pitScreens(dt){
+  PIT.userData.t-=dt; if (PIT.userData.t>0) return; PIT.userData.t=0.2;
+  const [L,C,R]=PIT.userData.scr, G='#7dffa8', bg=s=>{ s.c.fillStyle='#04100a'; s.c.fillRect(0,0,128,128); s.c.strokeStyle='#1d3a28'; s.c.lineWidth=2; s.c.strokeRect(2,2,124,124); };
+  bg(L); L.c.fillStyle=G; L.c.font='bold 15px '+NUMFONT; L.c.textAlign='left';
+  [['MSL',S.msl],['BOMB',S.bombs],['LGM',S.agm],['FLR',S.flares],['GUN',Math.max(0,Math.round(S.gun))]].forEach(([k,v],i)=>{ L.c.fillText(k,10,24+i*22); L.c.textAlign='right'; L.c.fillText(String(v),118,24+i*22); L.c.textAlign='left'; });
+  bg(C); axes(); const pitch=Math.asin(clamp(vF.y,-1,1)), roll=Math.atan2(-vR.y,vU.y);
+  C.c.save(); C.c.beginPath(); C.c.arc(64,64,54,0,Math.PI*2); C.c.clip(); C.c.translate(64,64); C.c.rotate(roll);
+  const py=pitch*R2D*1.6; C.c.fillStyle='#2b5f8a'; C.c.fillRect(-90,-180+py,180,180); C.c.fillStyle='#6b4a2a'; C.c.fillRect(-90,py,180,180);
+  C.c.strokeStyle='#fff'; C.c.lineWidth=1.5; C.c.beginPath(); C.c.moveTo(-90,py); C.c.lineTo(90,py); C.c.stroke(); C.c.restore();
+  C.c.strokeStyle='#ffd23a'; C.c.lineWidth=3; C.c.beginPath(); C.c.moveTo(34,64); C.c.lineTo(54,64); C.c.lineTo(58,70); C.c.moveTo(94,64); C.c.lineTo(74,64); C.c.lineTo(70,70); C.c.stroke();
+  bg(R); const hd=Math.atan2(vF.x,-vF.z), cs=Math.cos(hd), sn=Math.sin(hd), RG=20000;
+  R.c.strokeStyle='#1d5a36'; R.c.lineWidth=1; [20,40,60].forEach(r=>{ R.c.beginPath(); R.c.arc(64,112,r*1.6,Math.PI,2*Math.PI); R.c.stroke(); });
+  R.c.fillStyle=G; R.c.beginPath(); R.c.moveTo(64,106); R.c.lineTo(59,116); R.c.lineTo(69,116); R.c.fill();
+  R.c.fillStyle='#ff6a5a'; enemies.forEach(e=>{ if (!e.alive) return; const dx=e.p.x-S.pos.x, dz=e.p.z-S.pos.z; if (Math.hypot(dx,dz)>RG) return;
+    const along=dx*sn-dz*cs, right=dx*cs+dz*sn;   // ahead of you and to your right (heading up)
+    const x=64+right/RG*96, y=112-along/RG*96; if (y<4 || y>124 || x<4 || x>124) return; R.c.fillRect(x-3,y-3,6,6); });
+  R.c.fillStyle=G; R.c.font='bold 11px '+NUMFONT; R.c.fillText('20 KM',8,16);
+  [L,C,R].forEach(s=>{ s.tx.needsUpdate=true; });
+}
+function pitActive(){ return view==='cockpit' && S.alive && !!plane && (state==='fly' || state==='paused' || state==='ending'); }
+const _pe=new T.Vector3(), camShake=new T.Vector3();
+function pitEye(){   // the pilot's eye, in the jet's own frame: just ahead of the helmet's centre on model jets
+  const M=plane && plane.userData.fromModel && !carrierJet() && MODELS[prefs.plane], p=M && M.ex && M.ex.pilots && M.ex.pilots[0];
+  return p ? _pe.set(p[0], p[1]+0.03, p[2]-0.1) : _pe.set(0,1.05,-3.6);
+}
+// before each frame's render: model jets go on layer 1 (drawn only by the cockpit camera) with the front pilot hidden;
+// code-built jets stay hidden and PIT follows the camera. Returns whether the cockpit pass is needed.
+function pitSync(dt){
+  const on=pitActive(), mdl=on && !!plane.userData.fromModel, L=mdl ? PIT_L : 0;
+  if ((plane.userData.pitL||0)!==L){ plane.traverse(o=>{ o.layers.set(L); if (o.userData.pilotSeat===0) o.visible=!mdl; }); plane.userData.pitL=L; }
+  if (mdl) plane.position.add(camShake);   // buffet: the cockpit moves with your head, only the world shakes
+  PIT.visible=on && !mdl;
+  if (PIT.visible){ PIT.position.copy(camera.position); PIT.quaternion.copy(camera.quaternion); pitScreens(dt); }
+  return on;
+}
+function renderPit(){
+  pitCam.position.copy(camera.position); pitCam.quaternion.copy(camera.quaternion);
+  if (pitCam.fov!==camera.fov || pitCam.aspect!==camera.aspect){ pitCam.fov=camera.fov; pitCam.aspect=camera.aspect; pitCam.updateProjectionMatrix(); }
+  const bg=scene.background, go=glassMat.opacity;
+  if (plane.userData.fromModel) glassMat.opacity=0.12;   // from inside, a clearer canopy
+  scene.background=null;   // a colour background would clear the world away (three.js always clears for one)
+  renderer.autoClear=false; renderer.clearDepth(); renderer.shadowMap.autoUpdate=false;
+  renderer.render(scene,pitCam);
+  renderer.shadowMap.autoUpdate=true; renderer.autoClear=true; scene.background=bg; glassMat.opacity=go;
+}
 // ---------- camera
 function updateCamera(dt){
   if (state==='brief'){
@@ -7792,7 +7865,7 @@ function updateCamera(dt){
     if (camera.view && camera.view.enabled) camera.clearViewOffset();
     const sp=clamp((S.vel.length()-180)/320,0,1), ab=S.thr>1 ? 1 : 0;
     if (view==='cockpit' && S.alive){
-      camOff.set(0,1.05,-3.6).applyQuaternion(S.q); camera.position.copy(S.pos).add(camOff); camera.quaternion.copy(S.q);
+      camOff.copy(pitEye()).applyQuaternion(S.q); camera.position.copy(S.pos).add(camOff); camera.quaternion.copy(S.q);   // at the pilot's eye
     } else {
       camQ.slerp(S.q,1-Math.exp(-dt*5));
       // chase camera drops back as speed builds
@@ -7802,7 +7875,8 @@ function updateCamera(dt){
     }
     // buffet: a slight shake that grows with speed and afterburner
     const sh=S.alive && state!=='paused' ? sp*0.12+ab*0.08 : 0;
-    if (sh>0){ camera.position.x+=(Math.random()-0.5)*sh; camera.position.y+=(Math.random()-0.5)*sh; camera.position.z+=(Math.random()-0.5)*sh; }
+    camShake.set(0,0,0);
+    if (sh>0){ camShake.set((Math.random()-0.5)*sh,(Math.random()-0.5)*sh,(Math.random()-0.5)*sh); camera.position.add(camShake); }   // in the cockpit the jet shakes with you (pitSync)
     // the view widens a little at high speed
     const fv=baseFov+sp*10+ab*2;
     if (Math.abs(camera.fov-fv)>0.05){ camera.fov=lerp(camera.fov,fv,1-Math.exp(-dt*3)); camera.updateProjectionMatrix(); }
@@ -7810,7 +7884,7 @@ function updateCamera(dt){
   const gc=groundAt(camera.position.x,camera.position.z)+4; if (camera.position.y<gc) camera.position.y=gc;
   camera.updateMatrixWorld();
   sky.position.copy(camera.position);
-  plane.visible = S.alive && !(view==='cockpit' && state!=='brief');
+  plane.visible = S.alive && !(view==='cockpit' && state!=='brief' && !plane.userData.fromModel);   // a model jet stays: the cockpit pass draws it around you
 }
 
 // ---------- second map: Pune. The city sits on the Mula-Mutha on flat Deccan ground; the Sahyadri ghats rise to the
@@ -10110,17 +10184,19 @@ function frame(now){
   updateCamera(dt);
   updateStreaks(); updateEngine();
   aimSun(sun, SUN_DIR, S.pos);
+  const pit=pitSync(dt);
   renderer.render(scene,camera);
+  if (pit) renderPit();   // the cockpit, drawn over the world
   if (pipOn()){
     const r=pipRect(), vy=H-r.y-r.h;
     pipCam.fov=50; pipCam.aspect=r.w/r.h; pipCam.updateProjectionMatrix();
-    const pvis=plane.visible; plane.visible=S.alive; sky.position.copy(pipCam.position);
+    const pvis=plane.visible, pitV=PIT.visible; plane.visible=S.alive; PIT.visible=false; pipCam.layers.enable(PIT_L); sky.position.copy(pipCam.position);   // a model jet on the cockpit layer still shows in the inset
     renderer.setScissorTest(true); renderer.setViewport(r.x,vy,r.w,r.h); renderer.setScissor(r.x,vy,r.w,r.h);
     renderer.shadowMap.autoUpdate=false;            // reuse this frame's shadow map for the inset
     renderer.render(scene,pipCam);
     renderer.shadowMap.autoUpdate=true;
     renderer.setScissorTest(false); renderer.setViewport(0,0,W,H);
-    plane.visible=pvis; sky.position.copy(camera.position);
+    pipCam.layers.disable(PIT_L); plane.visible=pvis; PIT.visible=pitV; sky.position.copy(camera.position);
   }
   else if (tgpOn()) renderTGP();
   drawHUD(now);
