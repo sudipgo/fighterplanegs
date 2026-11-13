@@ -1128,8 +1128,117 @@ const FACADE_GLSL=`{
 }`;
 const BLD_MAT=surfaceShader(new T.MeshLambertMaterial({vertexColors:true}),FACADE_GLSL);   // houses and town blocks
 
-const terrain = new T.Mesh(tGeo, surfaceShader(new T.MeshLambertMaterial({vertexColors:true}),TERRAIN_GLSL));
+// the terrain is lit per pixel (Phong with no shine) rather than per vertex (Lambert), so the 156 m triangles do not show
+// as facets on the ridges; shininess 1 rather than 0, which would make pow(0,0) undefined in the specular term
+const terrainPhong=()=>new T.MeshPhongMaterial({vertexColors:true, specular:0x000000, shininess:1});
+const TERRAIN_PLAIN=surfaceShader(terrainPhong(),TERRAIN_GLSL);   // the hangar ground and the multiplayer outer ring: vertex colours only
+// ---------- ground colour texture: each map's colours painted on a canvas (2048 px, about 20 m a texel; 1024 on a phone)
+// instead of only at the 156 m vertex grid, with the crisp things drawn on top: Punjab's fields and tree lines, Pune's
+// roads and runway, the beach. Only the current map's texture is kept. The vertex colours stay as the fallback, and they
+// are what the near-ground scatter reads (ndColour).
+const GTEX_S = isTouch ? 1024 : 2048;
+const GROUND={tex:{value:null}, on:{value:0}, key:'', t:null};
+const terrainMat=surfaceShader(terrainPhong(),TERRAIN_GLSL);
+{ const sb=terrainMat.onBeforeCompile;
+  terrainMat.onBeforeCompile=sh=>{ sb(sh); sh.uniforms.gTex=GROUND.tex; sh.uniforms.gOn=GROUND.on;
+    sh.fragmentShader='uniform sampler2D gTex; uniform float gOn;\n'+sh.fragmentShader.replace('#include <color_fragment>\n',
+      `#include <color_fragment>\nif (gOn>0.5) diffuseColor.rgb=texture2D(gTex,(vWP.xz+${HALF.toFixed(1)})/${MAP.toFixed(1)}).rgb;\n`); };
+  terrainMat.customProgramCacheKey=()=>'gtex'+TERRAIN_GLSL; }
+const rgbOf=(c,k)=>`rgb(${Math.round(clamp(c[0]*(k||1),0,1)*255)},${Math.round(clamp(c[1]*(k||1),0,1)*255)},${Math.round(clamp(c[2]*(k||1),0,1)*255)})`;
+// paint the current map: its base colours (map.gBase, or the mesh's own), then map.gPaint(ctx, P(x,z)->[px,py], px per metre),
+// then map.gOver ({col, a}: a colour layer with alpha, at vertex resolution, e.g. sandy river banks over the fields)
+function groundTexRefresh(key){
+  if (key===GROUND.key) return;
+  GROUND.key=key;
+  try {
+    const m=({pune:PUNE, sea:SEA, ladakh:LAD, desert:DES, jungle:JUN, punjab:PUN})[WORLD]||{};
+    const S=GTEX_S, cv=document.createElement('canvas'); cv.width=cv.height=S; const x=cv.getContext('2d');
+    const sm=document.createElement('canvas'); sm.width=sm.height=N; const sx=sm.getContext('2d'), img=sx.createImageData(N,N), D=img.data;
+    const layer=(col,alpha)=>{
+      for (let k=0;k<N*N;k++){ const o=k*4; D[o]=col[k*3]*255; D[o+1]=col[k*3+1]*255; D[o+2]=col[k*3+2]*255; D[o+3]=alpha ? alpha[k]*255 : 255; }
+      sx.putImageData(img,0,0); x.imageSmoothingEnabled=true;
+      x.drawImage(sm,-S/(2*SEG),-S/(2*SEG),S*N/SEG,S*N/SEG);   // vertex i lands on texel i*S/SEG, where the shader samples world x
+    };
+    layer(m.gBase || terrain.geometry.attributes.color.array);
+    const k=S/MAP, P=(wx,wz)=>[(wx+HALF)*k,(wz+HALF)*k];
+    if (m.gPaint) m.gPaint(x,P,k);
+    if (m.gOver) layer(m.gOver.col, m.gOver.a);
+    const t=new T.CanvasTexture(cv); t.flipY=false; t.anisotropy=Math.min(8,renderer.capabilities.getMaxAnisotropy());
+    if (GROUND.t) GROUND.t.dispose();
+    GROUND.t=t; GROUND.tex.value=t; GROUND.on.value=1;
+  } catch (e) { console.error('ground texture', e); GROUND.on.value=0; }   // the vertex colours still draw the map
+}
+const terrain = new T.Mesh(tGeo, terrainMat);
 scene.add(terrain); terrain.receiveShadow=true;
+
+// ---------- water: one material for the sea, the lakes and the rivers. Moving ripples bend the normal (so the sun
+// glints and the sky reflection breaks up), and, where a depth map is given, shallow water turns lighter and a band
+// of foam laps the shore. The depth map is read from the map's own terrain mesh, so the shoreline matches the ground.
+const WATER_T={value:0};   // seconds; advanced in frame()
+// depth below `level` at every terrain grid point, packed in a byte: (depth+8)*4, so -8 m (dry) to 55.75 m deep
+function waterDepthTex(geo, level){
+  const p=geo.attributes.position, d=new Uint8Array(N*N*4);
+  for (let k=0;k<N*N;k++){ const b=Math.round((clamp(level-p.getY(k),-8,55.75)+8)*4); d[k*4]=d[k*4+1]=d[k*4+2]=b; d[k*4+3]=255; }
+  const t=new T.DataTexture(d,N,N,T.RGBAFormat); t.magFilter=t.minFilter=T.LinearFilter; t.needsUpdate=true; return t;
+}
+// o: {color, shallow (colour), depth (texture from waterDepthTex), shallowM (depth at which the shallow tint is gone),
+//     wave (ripple strength), foam (true for a surf line), flow ([x,z] drift in m/s, for rivers), mat (extra material options)}
+function waterMat(o){
+  const m=new T.MeshStandardMaterial(Object.assign({color:o.color, roughness:0.1, envMapIntensity:1.0}, o.mat||{}));
+  m.metalness=0;   // water is not a metal: looking straight down you see its colour, and it only mirrors the sky at a glancing angle
+  const sh3=new T.Color(o.shallow!==undefined ? o.shallow : o.color), fl=o.flow||[0,0];
+  const f=v=>Number(v).toFixed(4);
+  m.defines=Object.assign({}, m.defines, o.depth ? {W_DEPTH:''} : {}, o.foam ? {W_FOAM:''} : {});   // keep three.js's own STANDARD define
+  m.onBeforeCompile=sh=>{
+    sh.uniforms.dMap={value:DETAIL_TEX}; sh.uniforms.wT=WATER_T; sh.uniforms.wDepth={value:o.depth||null};
+    sh.uniforms.wShallow={value:sh3};
+    sh.vertexShader='varying vec3 vWP; varying vec3 vWN;\n'+sh.vertexShader.replace('#include <begin_vertex>',WP_VERT);
+    sh.fragmentShader=`uniform sampler2D dMap; uniform float wT; uniform vec3 wShallow; varying vec3 vWP; varying vec3 vWN;
+#ifdef W_DEPTH
+uniform sampler2D wDepth;
+#endif
+float wFoamK=0.0;
+vec2 wFlow(){ return vec2(${f(fl[0])},${f(fl[1])})*wT; }
+float wH(vec2 p){
+  p-=wFlow();
+  // three layers of the smooth G channel drifting different ways: swell, chop and ripples (slopes of about 0.1)
+  return texture2D(dMap,p/260.0+vec2(wT*0.0040,wT*0.0023)).g
+       +0.5*texture2D(dMap,p/90.0-vec2(wT*0.0090,-wT*0.0050)).g
+       +0.25*texture2D(dMap,p/30.0+vec2(-wT*0.020,wT*0.015)).g;
+}
+`+sh.fragmentShader
+      .replace('#include <color_fragment>',`#include <color_fragment>
+{
+  float wd=1000.0;
+#ifdef W_DEPTH
+  vec2 duv=((vWP.xz+${f(HALF)})/${f(STEP)}+0.5)/${f(N)};
+  wd=texture2D(wDepth,duv).r*63.75-8.0;
+#endif
+  float shal=1.0-smoothstep(0.0,${f(o.shallowM||20)},wd);
+  diffuseColor.rgb=mix(diffuseColor.rgb,wShallow,shal*0.85);
+#ifdef W_FOAM
+  float fn=texture2D(dMap,vWP.xz/31.0+vec2(wT*0.012,-wT*0.008)).r;
+  float swell=1.4*sin(wT*1.1+vWP.x*0.013+vWP.z*0.021);
+  float band=1.0-smoothstep(0.0,3.0,wd+swell);
+  wFoamK=band*smoothstep(0.30,0.62,fn)*step(-1.0,wd);
+  diffuseColor.rgb=mix(diffuseColor.rgb,vec3(0.92,0.95,0.96),wFoamK*0.85);
+#endif
+}`)
+      .replace('#include <normal_fragment_maps>',`#include <normal_fragment_maps>
+{
+  float dist=length(vWP-cameraPosition);
+  float amp=${f(o.wave||1)}*(0.35+0.65*(1.0-smoothstep(800.0,12000.0,dist)));   // calmer far away, so it does not shimmer
+  float e=2.0, h0=wH(vWP.xz);
+  vec2 g=vec2(wH(vWP.xz+vec2(e,0.0))-h0, wH(vWP.xz+vec2(0.0,e))-h0)/e*amp;
+  vec3 nw=normalize(vec3(-g.x,1.0,-g.y));
+  normal=normalize((viewMatrix*vec4(nw,0.0)).xyz);
+}`)
+      .replace('#include <roughnessmap_fragment>','#include <roughnessmap_fragment>\nroughnessFactor=mix(roughnessFactor,0.85,wFoamK);')
+      .replace('#include <metalnessmap_fragment>','#include <metalnessmap_fragment>\nmetalnessFactor=mix(metalnessFactor,0.0,wFoamK);');
+  };
+  m.customProgramCacheKey=()=>'water'+(o.depth?'D':'')+(o.foam?'F':'')+f(o.wave||1)+f(o.shallowM||20)+f(fl[0])+f(fl[1]);
+  return m;
+}
 
 // sky dome
 const sky = (() => {
@@ -1148,8 +1257,9 @@ const STARS=(()=>{
   const m=new T.Points(g,new T.PointsMaterial({color:0xdfe8ff, size:1.7, sizeAttenuation:false, fog:false, depthWrite:false}));
   m.visible=false; sky.add(m); return m;
 })();
-const CLOUDS=[];
-// clouds around cruise height, so there is something to fly past (kept clear of the two targets)
+const CLOUDS=[], CLOUD_SETS=[];   // every cloud sprite; and the clusters, each {u (0..1 up its map's cloud band), okK, parts:[{s, dy}]}
+// clouds around cruise height, so there is something to fly past. A pool of 40 clusters; each map shows as many as its
+// sky asks for, at its own height band (applySky). On Kargil only the ones clear of the two targets are used.
 {
   const cv=document.createElement('canvas'); cv.width=cv.height=128; const x=cv.getContext('2d');
   const gr=x.createRadialGradient(64,64,4,64,64,62);
@@ -1157,15 +1267,41 @@ const CLOUDS=[];
   x.fillStyle=gr; x.fillRect(0,0,128,128);
   const cmat=new T.SpriteMaterial({map:new T.CanvasTexture(cv), transparent:true, opacity:0.78, depthWrite:false});
   let r=777; const rnd=()=>{ r=(r*16807)%2147483647; return r/2147483647; };
-  for (let i=0, made=0; i<60 && made<22; i++){
-    const cx=(rnd()-0.5)*32000, cz=(rnd()-0.5)*32000, cy=5300+rnd()*2800;
-    if (Math.hypot(cx-TARGET.x,cz-TARGET.z)<3500 || Math.hypot(cx+1500,cz-1630)<3500 || Math.hypot(cx-BASE.x,cz-BASE.z)<3500) continue;
-    made++;
+  for (let i=0; i<40; i++){
+    const cx=(rnd()-0.5)*32000, cz=(rnd()-0.5)*32000, u=rnd();
+    const okK=!(Math.hypot(cx-TARGET.x,cz-TARGET.z)<3500 || Math.hypot(cx+1500,cz-1630)<3500 || Math.hypot(cx-BASE.x,cz-BASE.z)<3500);
+    const set={u, okK, parts:[]};
     for (let j=0;j<3;j++){
       const s=new T.Sprite(cmat); s.scale.set(500+rnd()*700, 220+rnd()*260, 1);
-      s.position.set(cx+(rnd()-0.5)*900, cy+(rnd()-0.5)*160, cz+(rnd()-0.5)*900); scene.add(s); CLOUDS.push(s);
+      const dy=(rnd()-0.5)*160; s.position.set(cx+(rnd()-0.5)*900, 5300+u*2800+dy, cz+(rnd()-0.5)*900); scene.add(s); CLOUDS.push(s); set.parts.push({s, dy});
     }
+    CLOUD_SETS.push(set);
   }
+}
+// each map's own sky: the horizon colour (also the haze and the background), the colour overhead, how near the haze
+// starts and where it hides everything, and the clouds (how many clusters, between which heights)
+const SKY={
+  kargil:{hor:0xb4cbe0, zen:0x3a6aa3, near:4500, far:30000, clouds:22, lo:5300, hi:8100},   // crisp mountain blue, scattered cumulus
+  ladakh:{hor:0xb3cbe8, zen:0x1d4c9a, near:9000, far:33000, clouds:7,  lo:7300, hi:9600},   // high and thin: deep blue, little haze
+  desert:{hor:0xd8cfba, zen:0x7092b6, near:3500, far:23000, clouds:5,  lo:3600, hi:5200},   // the Thar: warm dust, a paler sky
+  sea:   {hor:0xc3d1d8, zen:0x4777a8, near:3500, far:25000, clouds:34, lo:1300, hi:2900},   // humid coastal haze, more and lower cloud
+  jungle:{hor:0xaebdb4, zen:0x557f9e, near:3000, far:23000, clouds:26, lo:3500, hi:5200},   // Arunachal: soft morning haze
+  punjab:{hor:0xcdc8b6, zen:0x5f86b2, near:3500, far:22000, clouds:10, lo:1800, hi:3200},   // warm dusty haze over the plains
+  pune:  {hor:0xbccad3, zen:0x4777aa, near:4000, far:27000, clouds:18, lo:1900, hi:3400},
+};
+function paintSky(hor, zen){
+  const p=sky.geometry.attributes.position, c=sky.geometry.attributes.color, H=new T.Color(hor), Z=new T.Color(zen), tc=new T.Color();
+  for (let k=0;k<p.count;k++){ const t=clamp(p.getY(k)/30000,0,1); tc.copy(H).lerp(Z,Math.pow(t,0.55)); c.setXYZ(k,tc.r,tc.g,tc.b); }
+  c.needsUpdate=true;
+}
+// put this map's sky up (by day; at night setNight's dark sky stays, only the haze distances follow the map)
+function applySky(){
+  const s=SKY[WORLD]||SKY.kargil;
+  scene.fog.near=s.near; scene.fog.far=s.far;
+  if (NIGHT) return;
+  scene.fog.color.setHex(s.hor); scene.background.setHex(s.hor); paintSky(s.hor,s.zen);
+  const use=new Set(CLOUD_SETS.filter(c=>WORLD!=='kargil' || c.okK).slice(0,s.clouds));
+  CLOUD_SETS.forEach(c=>{ const on=use.has(c), y=s.lo+c.u*(s.hi-s.lo); c.parts.forEach(p=>{ p.s.visible=on; p.s.position.y=y+p.dy; }); });
 }
 // air streaks: short lines fixed in the air around the camera; they rush past faster the faster you fly
 const STREAKS=200, HS=120, stArr=new Float32Array(STREAKS*6), stPts=[], stGeo=new T.BufferGeometry();
@@ -1201,7 +1337,7 @@ const LOC_OBJS=[];
 
 // rivers: water ribbons laid along the river valleys, flat water just above the bed
 {
-  const mat=new T.MeshStandardMaterial({color:0x3b6f8e, metalness:0.25, roughness:0.12, envMapIntensity:1.3, side:T.DoubleSide, polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2});
+  const mat=waterMat({color:0x1b4a5e, wave:0.7, flow:[0.9,0.4], mat:{metalness:0.25, roughness:0.12, side:T.DoubleSide, polygonOffset:true, polygonOffsetFactor:-2, polygonOffsetUnits:-2}});   // glacial rivers: a steady drift downstream
   const ribbon=(pts,dy)=>{
     const pos=[], idx=[], nor=[], wy=RIV_BED+14+dy;
     pts.forEach(([x,z],i)=>{
@@ -1232,8 +1368,10 @@ const trees=(()=>{
   }
   im.count=made; im.visible=false; scene.add(im); return im;
 })();
+let KGREEN=false;   // Kargil in its green raid palette
 function setTerrainLook(green){
   const a=tGeo.attributes.color; a.array.set(green ? colGreen : colKargil); a.needsUpdate=true; trees.visible=green;
+  KGREEN=green; if (WORLD==='kargil') groundTexRefresh('kargil'+(green?'-green':''));
 }
 // night: dark sky and fog, a cold moon instead of the sun, stars, no clouds
 let NIGHT=false;
@@ -2155,7 +2293,8 @@ const GLB_PILOT=(()=>{ const g=new T.Group(), S=(c)=>new T.MeshStandardMaterial(
 // v147-148 and rolled back; the other fighters are code-built. To bring a model back, add its key here and put its file
 // next to index.html as <key>.json (keys the code understands: rafale su30 m2k mig29 mig21 jaguar amca jf17 f16 j10 j20 f35,
 // mig29k for the naval jet and carrier deck, c130 for the escort, il78 for the tanker, netra for the AWACS).
-const MODEL_KEYS=['tejas','su30','rafale','m2k','c130','il78','netra'];
+const MODEL_KEYS=['tejas','su30','rafale','m2k','mig29','mig29k','c130','il78','netra'];   // mig29: the IAF Baaz (MiG-29\MiG-29_flight.glb); mig29k: the naval jet (MiG-29K\MiG-29K_flight.glb)
+const MODEL_ONDEMAND=['mig29kp'];   // loaded only by the missions that need them: mig29kp is the MiG-29K parked, gear down (MiG-29K\MiG-29K_parked.glb), for the carrier deck; it shares mig29k_paint.png
 const MODEL_URL=k=>k+'.json';   // every model file (and its paint PNG) sits next to index.html: GitHub's upload page cannot make folders
 const TEJAS_EX={nozzles:[[0,0,6.55,0.46]], pilots:[[0,0.82,-2.22]], navL:[-4.12,-0.12,3.85], navR:[4.12,-0.12,3.85], fin:[0,2.72,5.85], beacon:[0,0.8,1.2],
   hp:[[-1.45,-0.7,2.15],[1.45,-0.7,2.15],[-2.7,-0.7,2.15],[2.7,-0.7,2.15]]};
@@ -2179,17 +2318,24 @@ const useModel=k=>modelsOn() && !!MODELS[k];
 function modelBody(k){ const g=new T.Group(); MODELS[k].parts.forEach(p=>{ const m=new T.Mesh(p.geo,p.mat); if (p.mat===glassMat) m.renderOrder=1; g.add(m); }); castAll(g); return g; }
 // the naval strike and fleet defence fly the MiG-29K (the game's 'mig29' jet), from its own file
 const carrierJet=()=>(NAVAL || FLEET) && prefs.plane==='mig29' && useModel('mig29k');
-// the MiG-29Ks parked on the carrier deck: their code-built parts are hidden (the landing gear stays) and the model shown
+// the MiG-29Ks parked on the carrier deck: their code-built parts are hidden and the model shown. Best is the parked model
+// (mig29kp, its own landing gear, so the drawn gear goes too); until that is in, the flight model on the drawn gear.
 const DECK_JETS=[];
+const deckKey=()=>useModel('mig29kp') ? 'mig29kp' : useModel('mig29k') ? 'mig29k' : null;
+const DECK_TYRE=1.75;   // the parked model's tyres touch the ground this far below its origin (the deck jets sit GEAR_H above the deck)
 function deckRefresh(){
+  const k=deckKey();
   DECK_JETS.forEach(m=>{
-    const on=useModel('mig29k'), gear=m.userData.gearObj;
-    if (on && !m.userData.model){
-      m.children.forEach(c=>{ if (c!==gear && c.visible){ c.visible=false; c.userData.deckHid=true; } });
-      const b=modelBody('mig29k'); m.add(b); m.userData.model=b;
-    } else if (!on && m.userData.model){
-      m.remove(m.userData.model); m.userData.model=null;
+    const gear=m.userData.gearObj;
+    if (m.userData.model && m.userData.modelKey!==k){   // swap (flight model -> parked model), or back to the drawn jet
+      m.remove(m.userData.model); m.userData.model=null; m.userData.modelKey=null;
       m.children.forEach(c=>{ if (c.userData.deckHid){ c.visible=true; c.userData.deckHid=false; } });
+    }
+    if (k && !m.userData.model){
+      const own=k==='mig29kp';
+      m.children.forEach(c=>{ if ((own || c!==gear) && c.visible){ c.visible=false; c.userData.deckHid=true; } });
+      const b=modelBody(k); if (own) b.position.y=DECK_TYRE-GEAR_H;
+      m.add(b); m.userData.model=b; m.userData.modelKey=k;
     }
   });
 }
@@ -2204,7 +2350,7 @@ function modelRefresh(keys){
     if (k==='c130') C130_PROTO=null;    // the escort's C-130J and the AWACS's Netra rebuild at the next sortie
     if (k==='netra') NETRA_PROTO=null;
     if (k==='il78' && state!=='fly'){ if (TK_MESH && TK_MESH.parent) TK_MESH.parent.remove(TK_MESH); TK_MESH=null; }
-    if (k==='mig29k') deckRefresh();
+    if (k==='mig29k' || k==='mig29kp') deckRefresh();
   });
   if (THUMBS && keys.some(k=>BUILD_CODE[k])){ THUMBS=false; makeThumbs(); }   // the hangar pictures
   if (state==='brief'){   // in the hangar: put the new model in place now (your jet, or this mission's support aircraft)
@@ -2224,7 +2370,7 @@ function buildIL78Model(){   // the model's own hoses and drogues are drawn; inv
 // background loading, one file at a time; while you are flying, the rest wait (parsing a model can stall a frame)
 function loadModel(k,front){
   if (location.protocol==='file:' || typeof fetch!=='function' || !modelsOn()) return;
-  if (!MODEL_KEYS.includes(k) || MODELS[k] || MODEL_FAIL.has(k) || MODEL_Q.includes(k) || MODEL_Q.busy===k) return;
+  if (!(MODEL_KEYS.includes(k) || MODEL_ONDEMAND.includes(k)) || MODELS[k] || MODEL_FAIL.has(k) || MODEL_Q.includes(k) || MODEL_Q.busy===k) return;
   if (front) MODEL_Q.unshift(k); else MODEL_Q.push(k);
   pumpModels();
 }
@@ -3169,7 +3315,7 @@ const baseSun=new T.DirectionalLight(0xfff0d8,0.9); baseSun.position.set(-0.4,0.
 const BASE_SUN_DIR=baseSun.position.clone().normalize();
 setupShadow(baseSun,70); baseScene.add(baseSun.target);
 baseScene.environment=envTex;
-const baseSky=sky.clone(); baseScene.add(baseSky);
+const baseSky=sky.clone(); baseSky.geometry=sky.geometry.clone(); baseScene.add(baseSky);   // its own colours: the mission sky is repainted for each map
 { // valley floor of fields, ringed by snow-capped ranges
   const g=new T.PlaneGeometry(36000,36000,120,120); g.rotateX(-Math.PI/2);
   const p=g.attributes.position, col=new Float32Array(p.count*3), cc=new T.Color(), SNOWC=new T.Color(0.93,0.95,0.98);
@@ -3184,7 +3330,7 @@ const baseSky=sky.clone(); baseScene.add(baseSky);
     col[k*3]=cc.r; col[k*3+1]=cc.g; col[k*3+2]=cc.b;
   }
   g.setAttribute('color',new T.BufferAttribute(col,3)); g.computeVertexNormals();
-  const gm=new T.Mesh(g,terrain.material); gm.receiveShadow=true; baseScene.add(gm);   // same detailed ground shader as the mission maps
+  const gm=new T.Mesh(g,TERRAIN_PLAIN); gm.receiveShadow=true; baseScene.add(gm);   // same detailed ground shader as the mission maps (without a map's colour texture)
 }
 { // runway 13, taxiway, apron, shelters, tower and station buildings: merged into one mesh
   const parts=[], Qb=new T.Quaternion(), Eb=new T.Euler(), Pb=new T.Vector3(), Sb=new T.Vector3();
@@ -5468,15 +5614,17 @@ const MP_GUN_LIFE=3.0, MP_GUN_RANGE=3500, MP_GUN_HIT=12;   // shells live 3 s (a
 function loadout(){ const L=loadout0(); if (MP.on) L.msl=MP_MSL; return L; }
 function loadout0(){ const A=S.ac, agm=(mode==='raid'||(mode==='training' && LESSONS[prefs.lesson].weapon==='precision')) ? 2 : 0;   // the Kargil strike: plain bombs only
   if (RAIL){ const L=irCfg().loadouts[prefs.plane]; if (L) return {bombs:L.bombs, msl:L.msl, agm:L.agm}; }   // Iron Rail: from the config
-  if (LADAKH) return {bombs:A.bombs, msl:6, agm};   // the Ladakh intercept: the Tejas Mk1A gets six Astras for four J-20s
-  if (TANKER) return {bombs:4, msl:2, agm:4};    // the deep strike
+  if (LADAKH) return {bombs:A.bombs, msl:8, agm};   // the Ladakh intercept: the Tejas Mk1A gets eight Astras for four J-20s (they flare well: about one shot in three is decoyed)
+  if (TANKER) return {bombs:4, msl:4, agm:4};    // the deep strike: four air-to-air missiles for the three fighters over the depot
   if (BRIDGE) return {bombs:4, msl:2, agm:4};
   if (RECON) return {bombs:0, msl:0, agm:0};
   if (TANKS) return {bombs:4, msl:2, agm:8};     // tank column: laser missiles for moving tanks, bombs for the ones that stop     // recon: cameras instead of weapons
   if (CSAR) return {bombs:4, msl:4, agm:4};      // rescue cover: something for the guns and something for the jets    // the bridge: laser-guided missiles first, bombs as a back-up
   if (SEAD) return {bombs:6, msl:4, agm:8};      // SEAD: eight laser-guided missiles for nine targets, plus bombs
-  if (PRECISE) return {bombs:2, msl:2, agm:4};   // the Mirage: four laser-guided missiles, two bombs, two air-to-air missiles
+  if (PRECISE) return {bombs:3, msl:2, agm:4};   // the Mirage: four laser-guided missiles, three bombs (the camps take two hits each: room for one miss), two air-to-air missiles
   if (mode==='strike') return {bombs:Math.max(4,A.bombs), msl:A.msl, agm};   // Point 4875 takes two direct hits: at least four bombs, so a miss or two is allowed
+  if (NAVAL) return {bombs:Math.max(6,A.bombs), msl:Math.max(2,Math.min(4,A.msl)), agm:4};   // naval: 4 godowns (two hits each) and the moving SAM boat (two hits): four laser missiles
+  if ((ESCORT || SWARM || DRONES) && prefs.plane==='tejas') return {bombs:A.bombs, msl:Math.max(6,A.msl), agm};   // the Tejas carries six for the escort and the drone hunts
   return mode==='raid' ? {bombs:Math.max(6,A.bombs), msl:Math.max(2,Math.min(4,A.msl)), agm} : {bombs:A.bombs, msl:A.msl, agm}; }
 function reset(){
   const st = RAIL ? IR_START : AWACS ? AW_START : SWARM ? SWARM_START : TANKS ? TANK_START : RECON ? REC_START : CSAR ? CSAR_START : FLEET ? FLEET_START : TANKER ? TANKER_START : ESCORT ? ESCORT_START : SEAD ? SEAD_START : DOGN ? DOGN_START : plainRaid() ? BASE_RAID_START : mode==='raid' ? RAID_START : WORLD==='pune' ? PUNE_START : WORLD==='ladakh' ? LADAKH_START : WORLD==='jungle' ? JUN_START : START;
@@ -6393,7 +6541,7 @@ function artSVG(key,idx){
     `<rect width="300" height="120" fill="url(#${id})"/>${sky}${jet}${land}</svg>`;
 }
 // single-player missions ranked from easiest (1) to hardest (17); the cards are in this order in the hangar
-const MISSION_RANK=['strike','naval','drones','dogfight','precision','bridge','tanks','recon','tanker','fleet','csar','swarm','escort','sead','awacs','raid','ladakh','ironrail'];
+const MISSION_RANK=['strike','drones','dogfight','precision','bridge','naval','tanks','recon','tanker','fleet','csar','swarm','escort','sead','awacs','raid','ladakh','ironrail'];
 const DIFF_TIERS=[{n:'Easy',c:'d1',to:3},{n:'Medium',c:'d2',to:8},{n:'Hard',c:'d3',to:13},{n:'Expert',c:'d4',to:18}];
 function missionDiff(key){ const r=MISSION_RANK.indexOf(key)+1; if (!r) return null;
   const k=DIFF_TIERS.findIndex(t=>r<=t.to); return {rank:r, tier:k+1, name:DIFF_TIERS[k].n, cls:DIFF_TIERS[k].c}; }
@@ -6642,9 +6790,7 @@ function applyPrefs(){
     if (AWACS) hideRaidSet(PUN.tank);   // AWACS defence: the plain farmland, no rescue guns, no column
   }
   setNight(SEAD || BRIDGE || SWARM || DOGN);
-  { const j=WORLD==='jungle', pb=WORLD==='punjab';   // Arunachal: a softer, nearer morning haze over the jungle; Punjab: warm dusty haze over the plains
-    scene.fog.near = j ? 3000 : pb ? 4000 : 4500; scene.fog.far = j ? 23000 : pb ? 26000 : 30000;   // nearer haze: far ridges fade into the sky for depth
-    if (!NIGHT){ const fc = j ? 0xaebdb4 : pb ? 0xcdc8b6 : HORIZON; scene.fog.color.set(fc); scene.background.set(fc); } }
+  applySky();   // this map's sky, haze and clouds (SKY); setWorld does it too when the map changes below
   if ((LADAKH || ESCORT) && WORLD!=='ladakh'){ LADAKH=ESCORT=false; prefs.mode='dogfight'; setWorld(prefs.map==='pune' ? 'pune' : 'kargil'); }
   if (WORLD==='kargil'){ const src = PRECISE ? PREC : BRIDGE ? BRG : RECON ? {targets:[], ad:RAID_K.ad.concat(REC.extra)} : RAID_K; RAID.targets=src.targets; RAID.ad=src.ad;
     const trim=plainRaid() && !MP.coop;   // solo base raid: the extra SAM and gun are not there
@@ -6773,7 +6919,7 @@ function applyPrefs(){
     const LO=loadout(), dk=((CARRIER.z-PORT.z)/1000).toFixed(0);
     $('briefEyebrow').textContent='Thin Air · Naval strike · from the carrier · what-if scenario';
     $('briefTitle').textContent='Destroy the port godowns';
-    $('briefBody').textContent=`You fly a single MiG-29K off the carrier INS Vikramaditya, ${dk} km south of an enemy port. The launch is automatic: the jet holds on the deck in full afterburner, runs up the ski-jump, and you take control as it leaves the bow. Fly north over the sea and destroy all four godowns (warehouses), spread 3.5 to 4 km apart along the coast: one behind the quay at the port, two to the west and one to the east (the refinery further east is not a target). Each godown has an AAA gun beside it and there is one more on the quay; they open fire inside 3.5 km, so keep each pass short, then turn back out to sea. A JF-17 and an F-16 patrol between the carrier and the coast and come for you once you are within 12 km. Once both are down, an enemy fast attack craft comes out about 8 km from you: a SAM launcher on its stern (out to 9 km) and a close-in gun on its bow (inside 3 km). It has to be sunk too. It shows as a red diamond, T designates it, and it is armoured: it takes half damage, so it needs two direct hits, a laser missile, or a long burst from the gun. (If you finish the godowns first, it comes out then.) Every target has a health bar over it. You are on your own: no wingmen. Your jet carries ${LO.bombs} × 250 kg bombs, ${LO.msl} × ${AAM[p.aam].name} missiles, ${p.gun} gun rounds and ${FLARES} flares, plus 2 laser-guided missiles (L key, up to 10 km; keep the target in the pod until impact). A bomb or missile on an AAA gun knocks it out too. Over the sea, the radar altitude is your height above the water.`;
+    $('briefBody').textContent=`You fly a single MiG-29K off the carrier INS Vikramaditya, ${dk} km south of an enemy port. The launch is automatic: the jet holds on the deck in full afterburner, runs up the ski-jump, and you take control as it leaves the bow. Fly north over the sea and destroy all four godowns (warehouses), spread 3.5 to 4 km apart along the coast: one behind the quay at the port, two to the west and one to the east (the refinery further east is not a target). Each godown has an AAA gun beside it and there is one more on the quay; they open fire inside 3.5 km, so keep each pass short, then turn back out to sea. A JF-17 and an F-16 patrol between the carrier and the coast and come for you once you are within 12 km. Once both are down, an enemy fast attack craft comes out about 8 km from you: a SAM launcher on its stern (out to 9 km) and a close-in gun on its bow (inside 3 km). It has to be sunk too. It shows as a red diamond, T designates it, and it is armoured: it takes half damage, so it needs two direct hits, a laser missile, or a long burst from the gun. (If you finish the godowns first, it comes out then.) Every target has a health bar over it. You are on your own: no wingmen. Your jet carries ${LO.bombs} × 250 kg bombs, ${LO.msl} × ${AAM[p.aam].name} missiles, ${p.gun} gun rounds and ${FLARES} flares, plus ${LO.agm} laser-guided missiles (L key, up to 10 km; keep the target in the pod until impact). A bomb or missile on an AAA gun knocks it out too. Over the sea, the radar altitude is your height above the water.`;
     setFacts('briefFacts',[[`${dk} km`,'Carrier to port'],['4 + 1','Godowns + SAM boat'],['5','AAA guns'],['2','Bandits']]);
     $('touchNote').textContent='The launch is automatic. Then: left stick flies the jet (drag down to pull up), right slider is the throttle. BOMB when the pipper sits on a godown diamond, MSL once a fighter reads LOCK, hold GUN for close fights, and tap FLR the moment MISSILE flashes.';
   } else if (mode==='raid'){
@@ -6815,14 +6961,14 @@ function applyPrefs(){
     const R=lockRange(p)*FOES.uav.stealth, total=DRONE_WAVES.reduce((a,b)=>a+b,0);
     $('briefEyebrow').textContent='Thin Air · Drone hunt · Arunachal Pradesh · what-if scenario';
     $('briefTitle').textContent='Drones over the jungle';
-    $('briefBody').textContent=`Small attack drones are slipping across the Line of Actual Control into Arunachal Pradesh, skimming low over the jungle canopy and along the river valleys towards four Indian posts: Tawang with its monastery, Jang, Lumla and Sela Pass (green squares on the minimap). The hills are thick with forest and the morning haze is heavy, so a grey drone over the trees is very hard to pick out. Each one dives on its post when it gets there. ${total} drones come in three waves; if ${DRONE_LEAKS} of them get through, the sortie fails. They are slow, but hard to find: you only see one within ${DRONE_VIS/1000} km, and your ${p.name} can lock one only inside about ${(R/1000).toFixed(1)} km, because it is so small. Ground observers radio a rough position every few seconds: follow the amber OBSERVER REPORT arrow and the dashed circle on the minimap, then look low, against the hillsides. Close in, lock and fire, or use the gun (it takes a few hits). A missile fired at a drone hugging the ground can hit the hill instead. You carry ${mslTxt(p)}, ${p.gun} gun rounds, and you are rearmed between waves. Do not cross the LAC (the red line to the north) yourself: that ends the sortie.`;
+    $('briefBody').textContent=`Small attack drones are slipping across the Line of Actual Control into Arunachal Pradesh, skimming low over the jungle canopy and along the river valleys towards four Indian posts: Tawang with its monastery, Jang, Lumla and Sela Pass (green squares on the minimap). The hills are thick with forest and the morning haze is heavy, so a grey drone over the trees is very hard to pick out. Each one dives on its post when it gets there. ${total} drones come in three waves; if ${DRONE_LEAKS} of them get through, the sortie fails. They are slow, but hard to find: you only see one within ${DRONE_VIS/1000} km, and your ${p.name} can lock one only inside about ${(R/1000).toFixed(1)} km, because it is so small. Ground observers radio a rough position every few seconds: follow the amber OBSERVER REPORT arrow and the dashed circle on the minimap, then look low, against the hillsides. Close in, lock and fire, or use the gun (it takes a few hits). A missile fired at a drone hugging the ground can hit the hill instead. You carry ${mslTxt({...p, msl:loadout().msl})}, ${p.gun} gun rounds, and you are rearmed between waves. Do not cross the LAC (the red line to the north) yourself: that ends the sortie.`;
     setFacts('briefFacts',[[String(total),'Drones, 3 waves'],['4','Posts to protect'],[`${DRONE_VIS/1000} km`,'Seen within'],[`${DRONE_LEAKS}`,'Strikes and you fail']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. Follow the amber OBSERVER REPORT arrow. MSL fires once a drone reads LOCK; hold GUN with the cross inside the lead circle.';
   } else if (ESCORT){
     $('briefEyebrow').textContent='Thin Air · Escort · eastern Ladakh · what-if scenario';
     $('briefTitle').textContent='Bring the Hercules in';
-    $('briefBody').textContent=`A C-130J Super Hercules is flying troops and supplies to a high-altitude airstrip close to the LAC (a stand-in for Daulat Beg Oldi). It flies a fixed route west along the valleys, then turns south for a steep tactical approach over Pangong Tso and lands on the strip. You are its escort, just behind it as the sortie starts. About 15 seconds in, two J-10Cs cross the LAC and go for the transport; two J-20 stealth fighters follow later, and your radar sees them only at short range. They want the Hercules, not you, so stay between it and the LAC and shoot them before they reach missile range of it. The C-130J pops flares against heat-seekers and can survive two missile hits; a third brings it down. The mission is won when it touches down. It shows on the HUD as a green circle, and the airstrip as an amber square marked DBO. Your ${p.name} carries ${mslTxt(p)}, ${p.gun} gun rounds and ${FLARES} flares. Do not cross the LAC (the red line to the north): that ends the sortie.`;
-    setFacts('briefFacts',[['1','C-130J to protect'],['4','Bandits, 2 waves'],['3','Hits it can take'],[String(p.msl),'Missiles']]);
+    $('briefBody').textContent=`A C-130J Super Hercules is flying troops and supplies to a high-altitude airstrip close to the LAC (a stand-in for Daulat Beg Oldi). It flies a fixed route west along the valleys, then turns south for a steep tactical approach over Pangong Tso and lands on the strip. You are its escort, just behind it as the sortie starts. About 15 seconds in, two J-10Cs cross the LAC and go for the transport; two J-20 stealth fighters follow later, and your radar sees them only at short range. They want the Hercules, not you, so stay between it and the LAC and shoot them before they reach missile range of it. The C-130J pops flares against heat-seekers and can survive two missile hits; a third brings it down. The mission is won when it touches down. It shows on the HUD as a green circle, and the airstrip as an amber square marked DBO. Your ${p.name} carries ${mslTxt({...p, msl:loadout().msl})}, ${p.gun} gun rounds and ${FLARES} flares. Do not cross the LAC (the red line to the north): that ends the sortie.`;
+    setFacts('briefFacts',[['1','C-130J to protect'],['4','Bandits, 2 waves'],['3','Hits it can take'],[String(loadout().msl),'Missiles']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. Stay near the green circle (the Hercules). MSL fires once a bandit reads LOCK; hold GUN with the cross inside the lead circle; tap FLR when MISSILE flashes.';
   } else if (LADAKH){
     const R=lockRange(p), Rs=R*FOES.j20.stealth;
@@ -6848,7 +6994,7 @@ function applyPrefs(){
   }
   if (isTouch) touchHelp();
   briefFormat();
-  [(NAVAL || FLEET) && 'mig29k', ESCORT && 'c130', TANKER && 'il78', AWACS && 'netra'].forEach(k=>{ if (k) loadModel(k,true); });   // this mission's own aircraft
+  [(NAVAL || FLEET) && 'mig29kp', (NAVAL || FLEET) && 'mig29k', ESCORT && 'c130', TANKER && 'il78', AWACS && 'netra'].forEach(k=>{ if (k) loadModel(k,true); });   // this mission's own aircraft
   loadModel(prefs.plane,true);   // the model file of the jet you picked, first in the queue
   setPlaneMesh(); reset();
   mpUI();
@@ -8191,7 +8337,7 @@ function buildPune(){
   geo.computeVertexNormals();
   const prev=hgt; hgt=h;   // groundAt reads Pune while the city and trees are placed
   const segD=(x,z,ax,az,bx,bz)=>{ const dx=bx-ax, dz=bz-az, t=clamp(((x-ax)*dx+(z-az)*dz)/(dx*dx+dz*dz),0,1); return Math.hypot(x-ax-dx*t, z-az-dz*t); };
-  const nrm=geo.attributes.normal, col=new Float32Array(pos.count*3);
+  const nrm=geo.attributes.normal, col=new Float32Array(pos.count*3), colB=new Float32Array(pos.count*3);   // colB: without the roads and runway (the texture draws those sharp)
   for (let k=0;k<pos.count;k++){
     const x=pos.getX(k), z=pos.getZ(k), y=pos.getY(k), slope=1-nrm.getY(k), n1=vnoise(x/700+3,z/700-2);
     // hills after the monsoon: green lower slopes, golden grass on the flat tops, dark basalt on the scarps
@@ -8203,10 +8349,12 @@ function buildPune(){
     r=lerp(r,lerp(ur,0.34,park),cy); g=lerp(g,lerp(ug,0.47,park),cy); b=lerp(b,lerp(ub,0.25,park),cy);
     const it=Math.max(1-smooth(500,1600,Math.hypot(x+9200,z+6200)), 1-smooth(300,800,Math.hypot(x-5000,z-2500)));   // Hinjewadi, Magarpatta
     r=lerp(r,0.62,it); g=lerp(g,0.60,it); b=lerp(b,0.57,it);
+    const rv=1-smooth(90,260,Math.abs(z-puneRiverZ(x)));
+    colB[k*3]=lerp(r,0.30,rv*0.7); colB[k*3+1]=lerp(g,0.45,rv*0.7); colB[k*3+2]=lerp(b,0.24,rv*0.7);
     const road=puneHwD(x,z);
     if (road<28){ const k2=1-road/28; r=lerp(r,0.30,k2*0.9); g=lerp(g,0.30,k2*0.9); b=lerp(b,0.31,k2*0.9); }   // ring road and highways
     if (Math.abs(x-7600)<1700 && Math.abs(z+6400)<70){ const rw=Math.abs(z+6400)<24; r=rw?0.24:0.48; g=rw?0.24:0.50; b=rw?0.25:0.44; }  // runway
-    const rv=1-smooth(90,260,Math.abs(z-puneRiverZ(x))); r=lerp(r,0.30,rv*0.7); g=lerp(g,0.45,rv*0.7); b=lerp(b,0.24,rv*0.7);
+    r=lerp(r,0.30,rv*0.7); g=lerp(g,0.45,rv*0.7); b=lerp(b,0.24,rv*0.7);
     col[k*3]=r; col[k*3+1]=g; col[k*3+2]=b;
   }
   geo.setAttribute('color',new T.BufferAttribute(col,3));
@@ -8298,7 +8446,20 @@ function buildPune(){
   roadLines.filter(L=>L.w>15).forEach(L=>{ x2.beginPath(); for (let i=0;i<L.X.length;i+=3){ const [a,b]=MP2(L.X[i],L.Z[i]); if (i) x2.lineTo(a,b); else x2.moveTo(a,b); } x2.stroke(); });
   [['PUNE',0,-900],['SINHAGAD',-13000,12600],['AIRPORT',7600,-7500]].forEach(([l,wx,wz])=>{ const [a,b]=MP2(wx,wz); x2.fillText(l,a,b); });
   hgt=prev;
-  return {h, geo, objs, map:cv, traffic};
+  // the colour texture: the roads as clean lines (highways and the ring darker and wider than the city streets), and the
+  // airport's apron and runway as sharp rectangles with a dashed centre line
+  const gPaint=(x,P,k)=>{
+    x.lineCap='round'; x.lineJoin='round';
+    lines.slice().sort((a,b)=>a.w-b.w).forEach(L=>{
+      const hw=L.w>=18; x.strokeStyle=hw ? 'rgb(77,77,80)' : 'rgb(112,110,106)'; x.lineWidth=Math.max(1,(L.w+(hw?10:3))*k);
+      x.beginPath(); L.pts.forEach(([a,b],i)=>{ const [u,v]=P(a,b); if (i) x.lineTo(u,v); else x.moveTo(u,v); }); if (L.loop) x.closePath(); x.stroke();
+    });
+    { const [a,b]=P(7600-1700,-6400-70); x.fillStyle='rgb(122,128,112)'; x.fillRect(a,b,3400*k,140*k);
+      const [c,d]=P(7600-1650,-6400-24); x.fillStyle='rgb(61,61,64)'; x.fillRect(c,d,3300*k,48*k);
+      const [e,f]=P(7600-1600,-6400), [g]=P(7600+1600,-6400); x.strokeStyle='rgba(235,235,228,0.55)'; x.lineWidth=Math.max(1,1.5*k);
+      x.setLineDash([30*k,30*k]); x.beginPath(); x.moveTo(e,f); x.lineTo(g,f); x.stroke(); x.setLineDash([]); }
+  };
+  return {h, geo, objs, map:cv, traffic, gBase:colB, gPaint};
 }
 // ---------- mission 4, naval strike: a coast with an enemy port to the north, and the carrier out at sea to the south.
 // The mission runs on the base-raid code: while the sea map is loaded, RAID holds the port's godowns and AAA sites
@@ -8337,17 +8498,19 @@ function buildSea(){
   }
   geo.computeVertexNormals();
   const prev=hgt; hgt=h;
-  const nrm=geo.attributes.normal, col=new Float32Array(pos.count*3);
+  const nrm=geo.attributes.normal, col=new Float32Array(pos.count*3), colB=new Float32Array(pos.count*3);   // colB: without the beach (the texture draws it as a clean strip)
   for (let k=0;k<pos.count;k++){
     const x=pos.getX(k), z=pos.getZ(k), y=pos.getY(k), d=coastZ(x)-z, slope=1-nrm.getY(k), n1=vnoise(x/600+4,z/600-3);
     let r=lerp(0.40,0.30,smooth(60,450,y)), g=lerp(0.55,0.44,smooth(60,450,y)), b=lerp(0.27,0.22,smooth(60,450,y));   // coastal green, darker forest on the hills
     r=lerp(r,0.45,smooth(0.15,0.4,slope)); g=lerp(g,0.42,smooth(0.15,0.4,slope)); b=lerp(b,0.36,smooth(0.15,0.4,slope));
     const fw=(1-smooth(0.03,0.08,slope))*smooth(300,600,d)*(1-smooth(150,300,y))*smooth(0.45,0.6,n1);   // paddy fields on the plain
     r=lerp(r,0.52,fw); g=lerp(g,0.62,fw); b=lerp(b,0.30,fw);
+    const pw=(1-smooth(1300,1700,Math.abs(x-PORT.x)))*(1-smooth(1600,1900,d))*smooth(-10,10,d);
+    let br=lerp(r,0.55,pw), bg=lerp(g,0.55,pw), bb=lerp(b,0.53,pw);
     const beach=1-smooth(40,140,d); r=lerp(r,0.80,beach); g=lerp(g,0.74,beach); b=lerp(b,0.58,beach);
-    const pw=(1-smooth(1300,1700,Math.abs(x-PORT.x)))*(1-smooth(1600,1900,d))*smooth(-10,10,d); r=lerp(r,0.55,pw); g=lerp(g,0.55,pw); b=lerp(b,0.53,pw);
-    if (y<0){ r=0.55; g=0.52; b=0.42; }
-    col[k*3]=r; col[k*3+1]=g; col[k*3+2]=b;
+    r=lerp(r,0.55,pw); g=lerp(g,0.55,pw); b=lerp(b,0.53,pw);
+    if (y<0){ r=br=0.55; g=bg=0.52; b=bb=0.42; }
+    col[k*3]=r; col[k*3+1]=g; col[k*3+2]=b; colB[k*3]=br; colB[k*3+1]=bg; colB[k*3+2]=bb;
   }
   geo.setAttribute('color',new T.BufferAttribute(col,3));
   const objs=[];
@@ -8356,7 +8519,7 @@ function buildSea(){
   let rs=7717; const rnd=()=>{ rs=(rs*16807)%2147483647; return rs/2147483647; };
   // the sea
   { const g=new T.PlaneGeometry(MAP*1.6,MAP*1.6); g.rotateX(-Math.PI/2);
-    const m=new T.Mesh(g,new T.MeshStandardMaterial({color:0x2a5d7c, metalness:0.35, roughness:0.2, envMapIntensity:1.2}));
+    const m=new T.Mesh(g,waterMat({color:0x0c2c44, shallow:0x1f7376, depth:waterDepthTex(geo,0), shallowM:30, wave:2.2, foam:true, mat:{metalness:0.35, roughness:0.16, envMapIntensity:1.2}}));   // deep blue offshore, turquoise over the shelf, surf on the beach
     m.receiveShadow=true; objs.push(m); }
   // the port: quay wall, apron, cranes, container stacks, oil tanks, moored cargo ships
   { const P=[];
@@ -8510,7 +8673,7 @@ function buildSea(){
       const dn=tx('33',18,9,'#e8e8e2'); dn.rotation.x=-Math.PI/2; dn.position.set(cx-6,D+0.06,cz+133); objs.push(dn); }
     for (const [px,pz] of [[18,70],[18,96],[-14,118]]){      // MiG-29Ks parked aft
       const m=detailPlane(buildMig292(),{serial:'IN 3'+(17+objs.length%40), pitot:1, parked:1, deckY:GEAR_H}), gr=makeGear(); m.add(gr); m.userData.gearObj=gr; castAll(m); m.position.set(cx+px,D+GEAR_H,cz+pz); objs.push(m);
-      DECK_JETS.push(m); if (useModel('mig29k')) deckRefresh();   // the model file, once it is in
+      DECK_JETS.push(m); if (deckKey()) deckRefresh();   // the model file, once it is in
     }
     const wm=new T.MeshBasicMaterial({color:0xf2f6f8, transparent:true, opacity:0.5, depthWrite:false});
     const wake=new T.Mesh(new T.PlaneGeometry(1,1),wm); wake.rotation.x=-Math.PI/2; wake.scale.set(30,700,1); wake.position.set(cx,0.2,cz+135+350); objs.push(wake);
@@ -8572,7 +8735,19 @@ function buildSea(){
   { const [a,b]=MP2(PORT.x,PORT.z-1600); x2.fillText('PORT',a,b); }
   { const [a,b]=MP2(REFY.x,REFY.z-1100); x2.fillText('REFINERY',a,b); }
   hgt=prev;
-  return {h, geo, objs, map:cv, targets, ad, ref, lights};
+  // the colour texture: a clean strip of sand along the whole coast, from 60 m out (under the water's edge, wherever the
+  // coarse ground crosses sea level) to 90 m inland, with a darker wet line at the water; none at the port's quay
+  const gPaint=(x,P,k)=>{
+    const run=(x0,x1)=>{ if (x1-x0<200) return;
+      const band=(dIn,dOut,fill)=>{ x.fillStyle=fill; x.beginPath();
+        for (let wx=x0; wx<=x1; wx+=40){ const [u,v]=P(wx,coastZ(wx)+dOut); if (wx===x0) x.moveTo(u,v); else x.lineTo(u,v); }
+        for (let wx=x1; wx>=x0; wx-=40){ const [u,v]=P(wx,coastZ(wx)-dIn); x.lineTo(u,v); }
+        x.closePath(); x.fill(); };
+      band(90,60,'rgb(204,189,148)'); band(12,60,'rgb(160,146,112)'); };
+    const pa=PORT.x-1500, pb=PORT.x+1500;
+    run(-HALF,Math.min(HALF,pa)); run(Math.max(-HALF,pb),HALF);
+  };
+  return {h, geo, objs, map:cv, targets, ad, ref, lights, gBase:colB, gPaint};
 }
 // the ski-jump launch: hold on the deck in full afterburner, then run up the ramp; control passes over at the top
 function navalStart(){
@@ -8635,8 +8810,9 @@ function buildLadakh(){
   for (let k=0;k<pos.count;k++){
     const x=pos.getX(k), z=pos.getZ(k), y=pos.getY(k), slope=1-nrm.getY(k), n1=vnoise(x/800+2,z/800+6);
     // cold desert: sandy valley floors, ochre and rust slopes, grey scree, snow on the high tops
-    let r=lerp(0.70,0.58,smooth(4300,4900,y)), g=lerp(0.62,0.47,smooth(4300,4900,y)), b=lerp(0.49,0.38,smooth(4300,4900,y));
-    r=lerp(r,0.62+(n1-0.5)*0.12,smooth(0.12,0.3,slope)); g=lerp(g,0.44+(n1-0.5)*0.08,smooth(0.12,0.3,slope)); b=lerp(b,0.36,smooth(0.12,0.3,slope));
+    // (the slopes toned from orange-rust toward the real grey-brown and ochre, about 18% less saturated)
+    let r=lerp(0.70,0.57,smooth(4300,4900,y)), g=lerp(0.62,0.48,smooth(4300,4900,y)), b=lerp(0.49,0.40,smooth(4300,4900,y));
+    r=lerp(r,0.59+(n1-0.5)*0.10,smooth(0.12,0.3,slope)); g=lerp(g,0.47+(n1-0.5)*0.07,smooth(0.12,0.3,slope)); b=lerp(b,0.39,smooth(0.12,0.3,slope));
     const scree=smooth(0.35,0.6,slope); r=lerp(r,0.48,scree); g=lerp(g,0.46,scree); b=lerp(b,0.45,scree);
     const sn=smooth(5650,5950,y+(n1-0.5)*300)*(1-smooth(0.4,0.65,slope)); r=lerp(r,0.95,sn); g=lerp(g,0.96,sn); b=lerp(b,0.98,sn);
     const Ld=lakeD(x,z), salt=(1-smooth(0,500,Ld.d-lerp(550,1100,0.5+0.5*Math.sin(Ld.t*17))))*(y>=LAKE_Y?1:0)*0.6;   // white salt along the shore r=lerp(r,0.86,salt); g=lerp(g,0.84,salt); b=lerp(b,0.78,salt);
@@ -8645,7 +8821,7 @@ function buildLadakh(){
   geo.setAttribute('color',new T.BufferAttribute(col,3));
   const objs=[];
   { const g=new T.PlaneGeometry(MAP*1.2,MAP*1.2); g.rotateX(-Math.PI/2);   // Pangong's famous blue; terrain only dips below it in the lake
-    const m=new T.Mesh(g,new T.MeshStandardMaterial({color:0x1f78a8, metalness:0.3, roughness:0.15, envMapIntensity:1.3}));
+    const m=new T.Mesh(g,waterMat({color:0x0a3756, shallow:0x2a8088, depth:waterDepthTex(geo,LAKE_Y), shallowM:18, wave:0.9, foam:true}));   // deep blue in the middle, turquoise shallows
     m.position.y=LAKE_Y; m.receiveShadow=true; objs.push(m); }
   objs.push(...groundBand(lacZ));   // the LAC: a red band on the ground
   try { buildLadCamp(objs); } catch (e) { console.error('Ladakh camp', e); }   // the enemy camp the intercept goes on to film
@@ -8828,7 +9004,7 @@ function buildJungle(){
   const nrm=geo.attributes.normal, col=new Float32Array(pos.count*3);
   for (let k=0;k<pos.count;k++){
     const x=pos.getX(k), z=pos.getZ(k), y=pos.getY(k), slope=1-nrm.getY(k), n1=vnoise(x/600+7,z/600-3);
-    let r=lerp(0.40,0.15,smooth(0.04,0.2,slope))+(n1-0.5)*0.05, g=lerp(0.56,0.32,smooth(0.04,0.2,slope))+(n1-0.5)*0.07, b=lerp(0.24,0.13,smooth(0.04,0.2,slope));   // clearings and fields, dense forest on the slopes
+    let r=lerp(0.41,0.15,smooth(0.04,0.2,slope))+(n1-0.5)*0.05, g=lerp(0.53,0.32,smooth(0.04,0.2,slope))+(n1-0.5)*0.06, b=lerp(0.29,0.14,smooth(0.04,0.2,slope));   // clearings and fields (the lime toned down about 18%), dense forest on the slopes
     const rk=smooth(2900,3300,y); r=lerp(r,0.46,rk); g=lerp(g,0.44,rk); b=lerp(b,0.40,rk);                     // bare rock on the highest ridges
     const sand=1-smooth(JUN_WATER+2,JUN_WATER+25,y); r=lerp(r,0.62,sand); g=lerp(g,0.58,sand); b=lerp(b,0.46,sand);   // river banks
     col[k*3]=r; col[k*3+1]=g; col[k*3+2]=b;
@@ -8838,7 +9014,18 @@ function buildJungle(){
   try {
     const objs=[], posts=JUN_POSTS.map(P=>({...P, y:groundAt(P.x,P.z)}));
     { const g=new T.PlaneGeometry(MAP*1.2,MAP*1.2); g.rotateX(-Math.PI/2);   // the river: terrain only dips below this in the valley
-      const m=new T.Mesh(g,new T.MeshStandardMaterial({color:0x3f6f6a, metalness:0.25, roughness:0.2, envMapIntensity:1.2})); m.position.y=JUN_WATER; m.receiveShadow=true; objs.push(m); }
+      const m=new T.Mesh(g,waterMat({color:0x1e3a37, shallow:0x4f5a40, depth:waterDepthTex(geo,JUN_WATER), shallowM:8, wave:0.8, mat:{metalness:0.25, roughness:0.2, envMapIntensity:1.2}})); m.position.y=JUN_WATER; m.receiveShadow=true; objs.push(m); }   // silty green-brown at the banks
+    { // morning mist lying in the valley: soft white patches a little above the river, following its bends
+      const cv=document.createElement('canvas'); cv.width=cv.height=128; const x2=cv.getContext('2d'), gr=x2.createRadialGradient(64,64,6,64,64,62);
+      gr.addColorStop(0,'rgba(236,241,238,0.9)'); gr.addColorStop(0.6,'rgba(236,241,238,0.35)'); gr.addColorStop(1,'rgba(236,241,238,0)'); x2.fillStyle=gr; x2.fillRect(0,0,128,128);
+      const mm=new T.MeshBasicMaterial({map:new T.CanvasTexture(cv), transparent:true, opacity:0.5, depthWrite:false}), mg=new T.PlaneGeometry(1,1); mg.rotateX(-Math.PI/2);
+      let r=6113; const rnd=()=>{ r=(r*16807)%2147483647; return r/2147483647; };
+      for (let wx=-18500; wx<=18500; wx+=2300){
+        const wz=junRiverZ(wx)+(rnd()-0.5)*500, m=new T.Mesh(mg,mm);
+        m.scale.set(2600+rnd()*1400,1,1300+rnd()*700); m.rotation.y=-Math.atan2(junRiverZ(wx+500)-junRiverZ(wx-500),1000);
+        m.position.set(wx, JUN_WATER+80+rnd()*90, wz); m.renderOrder=1; objs.push(m);
+      }
+    }
     objs.push(...groundBand(junLacZ));   // the LAC: a red band on the ground
     // roads: one along the river valley (on the bank, crossing side valleys on bridges) and a branch up to each post;
     // villages of Monpa houses with coloured tin roofs along the valley road
@@ -8915,19 +9102,20 @@ function tankMesh(wreck){   // nose (and gun) toward -z
   else { add(UBOX,mH,2.5,0.85,3.0,1.6,0.9,1.8,0.3,0.7); add(UCYL,mT,0.22,5.2,0.22,2.5,0.4,-1.2,Math.PI/2,0.9); }   // turret blown off
   return g;
 }
-const PB_FIELDS=[[0.40,0.55,0.22],[0.76,0.69,0.24],[0.52,0.43,0.30],[0.68,0.61,0.36],[0.33,0.50,0.23],[0.46,0.58,0.27]];   // young wheat, mustard, ploughed, ripe wheat, paddy, fodder
+const PB_FIELDS=[[0.41,0.54,0.24],[0.73,0.67,0.33],[0.52,0.43,0.30],[0.66,0.61,0.41],[0.34,0.49,0.24],[0.46,0.57,0.28]];   // young wheat, mustard, ploughed, ripe wheat, paddy, fodder (mustard and wheat toned down about 18%)
 function buildPunjab(){
   const h=new Float32Array(N*N), geo=new T.PlaneGeometry(MAP,MAP,SEG,SEG); geo.rotateX(-Math.PI/2);
   const pos=geo.attributes.position;
   for (let k=0;k<pos.count;k++){ const x=pos.getX(k), z=pos.getZ(k), y=punjabHeight(x,z); pos.setY(k,y); h[Math.round((z+HALF)/STEP)*N+Math.round((x+HALF)/STEP)]=Math.max(PB_WATER,y); }
   geo.computeVertexNormals();
-  const col=new Float32Array(pos.count*3);
+  const col=new Float32Array(pos.count*3), sandC=new Float32Array(pos.count*3), sandA=new Float32Array(pos.count);   // sandC/sandA: the river banks, laid over the texture's fields
   for (let k=0;k<pos.count;k++){
     const x=pos.getX(k), z=pos.getZ(k), y=pos.getY(k), n1=vnoise(x/500+3,z/500-9);
     const f=PB_FIELDS[Math.floor(hash(Math.floor(x/520), Math.floor(z/460))*PB_FIELDS.length)];   // a patchwork of fields
     let r=f[0]+(n1-0.5)*0.06, g=f[1]+(n1-0.5)*0.06, b=f[2]+(n1-0.5)*0.04;
     const sand=1-smooth(PB_WATER+1,PB_WATER+5,y); r=lerp(r,0.66,sand); g=lerp(g,0.62,sand); b=lerp(b,0.50,sand);   // sandy river banks
     col[k*3]=r; col[k*3+1]=g; col[k*3+2]=b;
+    sandC[k*3]=0.66; sandC[k*3+1]=0.62; sandC[k*3+2]=0.50; sandA[k]=sand;
   }
   geo.setAttribute('color',new T.BufferAttribute(col,3));
   const prev=hgt; hgt=h;
@@ -8991,9 +9179,10 @@ function buildPunjab(){
         const kind=rnd();
         if (kind<0.5){ if (rnd()<0.5) x=Math.round(x/520)*520+(rnd()-0.5)*8; else z=Math.round(z/460)*460+(rnd()-0.5)*8; }   // along a field boundary
         else if (kind<0.8){ const v=villages[Math.floor(rnd()*villages.length)]; if (!v) continue; const a=rnd()*Math.PI*2, d=200+rnd()*250; x=v.x+Math.cos(a)*d; z=v.z+Math.sin(a)*d; }
+        else continue;   // no lone trees out in the fields: from a distance they read as dark specks hanging over the haze
         const y=groundAt(x,z);
         if (y<PB_WATER+2 || Math.abs(z-pbBorderZ(x))<120 || Math.hypot(x-CSAR_PILOT.x,z-CSAR_PILOT.z)<150 || (pnet && pnet.dist(x,z)<12)) continue;
-        const k=4+rnd()*4; m4.compose(p.set(x,y+k*1.1,z),q,s.set(k,k*0.9,k)); tr.setMatrixAt(nt,m4); cc.setRGB(0.14+rnd()*0.08,0.30+rnd()*0.10,0.10+rnd()*0.05); tr.setColorAt(nt,cc); nt++;
+        const k=4+rnd()*4; m4.compose(p.set(x,y+k*0.8,z),q,s.set(k,k*0.9,k)); tr.setMatrixAt(nt,m4); cc.setRGB(0.18+rnd()*0.08,0.32+rnd()*0.09,0.13+rnd()*0.05); tr.setColorAt(nt,cc); nt++;   // crowns sit on the ground (they used to hover a metre or two), a softer olive
       }
       tr.count=nt; tr.castShadow=false; scene.add(tr); }
     { // the town the tank column is driving for: a dense market town beside the road
@@ -9051,7 +9240,22 @@ function buildPunjab(){
     x2.font='bold 10px '+NUMFONT; x2.fillStyle='#ffdddb'; x2.fillText('BORDER',6,P2(-MAPV,pbBorderZ(-MAPV))[1]-6);
     x2.fillStyle='#e6ecf2'; x2.textAlign='center'; { const [a,b]=P2(pbRiverX(4000)+900,4000); x2.fillText('RAVI',a,b); }
     { const [a,b]=P2(TANK_TOWN.x,TANK_TOWN.z); x2.fillStyle='#ffd27a'; x2.beginPath(); x2.arc(a,b,3,0,Math.PI*2); x2.fill(); x2.fillText('TOWN',a+22,b+4); }
-    return {h, geo, objs, map:cv, targets:[], ad, tank, chute};
+    // the colour texture: every field a crisp rectangle (a touch lighter or darker each), tree lines and bunds along about
+    // half the field edges, then the sandy river banks laid back over the top
+    const gPaint=(x,P,k)=>{
+      const FW=520, FH=460, i0=Math.floor(-HALF/FW), i1=Math.ceil(HALF/FW), j0=Math.floor(-HALF/FH), j1=Math.ceil(HALF/FH);
+      for (let j=j0;j<j1;j++) for (let i=i0;i<i1;i++){
+        const f=PB_FIELDS[Math.floor(hash(i,j)*PB_FIELDS.length)], [a,b]=P(i*FW,j*FH);
+        x.fillStyle=rgbOf(f,0.94+0.12*hash(i+517,j-211)); x.fillRect(a,b,FW*k+0.6,FH*k+0.6);
+      }
+      x.strokeStyle='rgba(46,68,34,0.62)'; x.lineWidth=Math.max(1,10*k); x.beginPath();
+      for (let j=j0;j<j1;j++) for (let i=i0;i<i1;i++){
+        if (hash(i+91,j+37)<0.45){ const [a,b]=P(i*FW,j*FH), [c]=P((i+1)*FW,j*FH); x.moveTo(a,b); x.lineTo(c,b); }
+        if (hash(i-53,j+19)<0.45){ const [a,b]=P(i*FW,j*FH), [,d]=P(i*FW,(j+1)*FH); x.moveTo(a,b); x.lineTo(a,d); }
+      }
+      x.stroke();
+    };
+    return {h, geo, objs, map:cv, targets:[], ad, tank, chute, gPaint, gOver:{col:sandC, a:sandA}};
   } catch (e) { scene.children.filter(o=>!before.has(o)).forEach(o=>scene.remove(o)); throw e; }
   finally { hgt=prev; }
 }
@@ -9141,6 +9345,7 @@ function desertHeight(x,z){
   return h;
 }
 const BEACON_MAT=new T.MeshBasicMaterial({color:0xff3b30});
+const DES_LSUN=(()=>{ const a=Math.atan2(SUN_DIR.z,SUN_DIR.x), e=25*Math.PI/180; return new T.Vector3(Math.cos(e)*Math.cos(a), Math.sin(e), Math.cos(e)*Math.sin(a)); })();   // the desert's painted low sun
 function seadPlace(a,ang){
   a.ang=ang; const x=a.cx+Math.cos(ang)*a.R, z=a.cz+Math.sin(ang)*a.R;
   a.g.position.set(x,groundAt(x,z),z); a.g.rotation.y=Math.atan2(Math.sin(ang),-Math.cos(ang));   // nose along the direction of travel
@@ -9158,6 +9363,9 @@ function buildDesert(){
     const sc=smooth(0.55,0.75,vnoise(x/1800-6,z/1800+3))*(1-smooth(0.05,0.15,slope))*0.55; r=lerp(r,0.56,sc); g=lerp(g,0.55,sc); b=lerp(b,0.36,sc);   // scrub
     const rk=smooth(0.1,0.25,slope); r=lerp(r,0.55,rk); g=lerp(g,0.44,rk); b=lerp(b,0.35,rk);   // rock
     const pd=Math.min(...DES_FLAT.map(s=>Math.hypot(x-s.x,z-s.z))), pf=(1-smooth(700,1000,pd))*0.5; r=lerp(r,0.70,pf); g=lerp(g,0.62,pf); b=lerp(b,0.50,pf);   // packed earth at the sites
+    // hillshade from a low sun (25 degrees up, from the game sun's side): the dunes are only 28 m high, too gentle for the
+    // real sun to model, so their lit and shaded flanks are painted in; flat ground keeps its colour
+    const hs=clamp(1+1.7*(nrm.getX(k)*DES_LSUN.x+nrm.getY(k)*DES_LSUN.y+nrm.getZ(k)*DES_LSUN.z-DES_LSUN.y),0.72,1.2); r*=hs; g*=hs; b*=hs;
     col[k*3]=r; col[k*3+1]=g; col[k*3+2]=b;
   }
   geo.setAttribute('color',new T.BufferAttribute(col,3));
@@ -9987,7 +10195,7 @@ function buildOuter(w,green){
   const nrm=g.attributes.normal, col=new Float32Array(ON*ON*3);
   for (let k=0;k<ON*ON;k++){ const c3=outerColor(w,green,h[k],1-nrm.getY(k)); col[k*3]=c3[0]; col[k*3+1]=c3[1]; col[k*3+2]=c3[2]; }
   g.setAttribute('color',new T.BufferAttribute(col,3));
-  const m=new T.Mesh(g,terrain.material); m.receiveShadow=true;
+  const m=new T.Mesh(g,TERRAIN_PLAIN); m.receiveShadow=true;   // vertex colours: the map texture covers only the inner 40 km
   return {h, mesh:m};
 }
 function outerAt(x,z){
@@ -10073,6 +10281,8 @@ function setWorld(w){
   else if (w==='punjab'){ RAID.targets=PUN.targets; RAID.ad=PUN.ad; Object.assign(BASE,BASE_K); BASE.x=CSAR_PILOT.x; BASE.z=CSAR_PILOT.z; }
   else if (w==='desert'){ RAID.targets=DES.targets; RAID.ad=DES.ad; Object.assign(BASE,BASE_K); BASE.x=DES_BASE.x; BASE.z=DES_BASE.z; }
   else { RAID.targets=RAID_K.targets; RAID.ad=RAID_K.ad; Object.assign(BASE,BASE_K); }
+  groundTexRefresh(w==='kargil' ? 'kargil'+(KGREEN?'-green':'') : w);   // this map's colour texture
+  applySky();
 }
 
 // ---------- near-ground detail: a finer terrain patch (crags and gullies on the slopes) and scattered trees, bushes and
@@ -10211,7 +10421,7 @@ let last=performance.now();
 function frame(now){
   requestAnimationFrame(frame);
   const dt=Math.min(0.05,(now-last)/1000); last=now;
-  navBlink(now/1000); FLAME_T.value=now/1000;
+  navBlink(now/1000); FLAME_T.value=now/1000; WATER_T.value=(now/1000)%3600;   // wrapped, so the ripple maths keeps its precision
   fpsFrames++;
   if (now-fpsT>=500){ fps=fpsFrames*1000/(now-fpsT); fpsFrames=0; fpsT=now; if (state==='fly'){ fpsSum+=fps; fpsN++; } }
 
@@ -10295,6 +10505,7 @@ function frame(now){
 
 addParkedJets();
 initWorlds();
+groundTexRefresh('kargil'); applySky();   // the first map's colour texture and sky
 buildHangar();
 applyPrefs();
 setStep('play');   // the hangar opens on step 1: single player, multiplayer or training
