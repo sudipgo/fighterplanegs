@@ -4061,7 +4061,9 @@ function hitGround(o,dmg){   // true when this hit destroys it
 }
 // a gun shell hitting the ground: it hurts the ground object it landed on
 function groundGunHit(p){
-  if (RAIL || mode!=='raid' || (plainRaid() && RCP===1)) return;
+  if (mode!=='raid' || (plainRaid() && RCP===1)) return;
+  if (RAIL){ railGunHit(p); return; }   // Iron Rail: the train's wagons
+  if (CSAR && CMP && CMP.alive && !CMP.hid && Math.hypot(p.x-CMP.x,p.z-CMP.z)<=24){ killCmp(); raidAfter(['MANPADS']); return; }
   for (const t of RAID.targets){ if (t.alive && Math.hypot(p.x-t.x,p.z-t.z)<=t.r*0.8){ const k=hitGround(t,t.conv ? GROUND_DMG.gun.light : GROUND_DMG.gun.structure); if (k){ S.msg=null; raidAfter([t.name]); } return; } }
   for (const a of RAID.ad){ if (a.alive && !(a.mob && !a.seen) && Math.hypot(p.x-a.x,p.z-a.z)<=adR(a)*0.8){ if (hitGround(a,GROUND_DMG.gun.light)) raidAfter([a.kind]); return; } }
 }
@@ -5346,7 +5348,7 @@ function fireGun(dt){
   const firing=(keys.has('KeyX')||touchGun) && S.alive && state==='fly';
   if (firing && S.gun>0) GUNSND.want=true;   // the cannon sound runs while this is set (see updateEngine)
   if (!firing){ if (S.gunCd<0) S.gunCd=0; return; }
-  if (S.gun<=0){ if (!S.gunEmptyMsg){ S.gunEmptyMsg=true; S.msg={text:'GUN EMPTY', col:AMB, t:1.2}; if (mode==='raid' && !RAIL) setTimeout(()=>raidOutCheck(),2500); } return; }   // the last shells are still in the air
+  if (S.gun<=0){ if (!S.gunEmptyMsg){ S.gunEmptyMsg=true; S.msg={text:'GUN EMPTY', col:AMB, t:1.2}; if (mode==='raid') setTimeout(()=>RAIL ? irOutCheck() : raidOutCheck(),2500); } return; }   // the last shells are still in the air
   axes();
   let aim=vF;
   if (isTouch){ const gt=gunTarget(); if (gt){ const ld=gunLeadDir(gt); if (ld.dot(vF)>GUN_ASSIST) aim=ld; } }   // phone: ring on the bandit and the shells lead it
@@ -5398,10 +5400,10 @@ function gunTarget(){
   }
   return best;
 }
-// ---------- strafing: the gun against ground targets (raid missions and the Point 4875 strike; not Iron Rail)
+// ---------- strafing: the gun against ground targets (all the strike missions, Iron Rail's train included)
 const GGUN_R=2200, GGUN_ASSIST=Math.cos((isTouch ? 7 : 3.5)*D2R), GGUN_CONE=Math.cos(25*D2R);
 const _gg={p:new T.Vector3(), vel:new T.Vector3(), o:null, d:0}, _ggp=new T.Vector3();
-const gunGroundOn=()=>!RAIL && (mode==='raid' || mode==='strike');
+const gunGroundOn=()=>mode==='raid' || mode==='strike';
 // the ground target nearest the nose, within gun range (null if none)
 function gunGroundTarget(){
   if (!gunGroundOn() || !S.alive) return null;
@@ -5412,7 +5414,8 @@ function gunGroundTarget(){
     const k=(dx*vF.x+dy*vF.y+dz*vF.z)/d; if (k>bk){ bk=k; best=o; }
   }
   if (!best) return null;
-  _gg.o=best; _gg.p.set(best.x,best.y+2,best.z); _gg.vel.set(0,0,0); _gg.d=_gg.p.distanceTo(S.pos);
+  const r=best.ref, mv=r && typeof r==='object' && typeof r.vx==='number';   // a moving train wagon: lead it
+  _gg.o=best; _gg.p.set(best.x,best.y+2,best.z); _gg.vel.set(mv ? r.vx : 0, 0, mv ? r.vz||0 : 0); _gg.d=_gg.p.distanceTo(S.pos);
   return _gg;
 }
 // did the shell's last step pass through ground target o (a squat cylinder over it)? returns the target or null
@@ -9847,8 +9850,29 @@ function railImpact(b){
   if (killed.length){ if (mine) pipImpact(b,b.p,b.v,`${killed.join(' + ')} DESTROYED`,HUD); S.msg={text:`${by}${killed.join(' · ')} DESTROYED`, col:HUD, t:3}; }
   else if (dmgd.length){ if (mine) pipImpact(b,b.p,b.v,'HIT',AMB); S.msg={text:`${by}HIT · ${dmgd.join(' · ')}`, col:AMB, t:3}; }
   else { if (mine) pipImpact(b,b.p,b.v,`MISS ${Math.round(nd)} M`,AMB); S.msg={text:`${by}MISS ${Math.round(nd)} M FROM THE ${nn}`, col:AMB, t:3}; }
-  if (IR.nuke && IR.nuke.ref.alive && mine && S.bombs===0 && bombs.length===0 && S.agm===0 && !missiles.some(x=>x.agm && x.own==='p'))
-    endMission(false,'Out of air-to-ground weapons',`The launcher wagon is still on the line at ${Math.max(0,Math.round(100*IR.nuke.hp/IR.nuke.hp0))}% strength. It takes about two laser-missile hits or two direct bomb hits. Laser missiles follow the moving train (T to designate, L to fire from 6 to 10 km); bombs land where the wagon was, so lead it or wait for the train to stop.`,3.4);
+  if (mine) irOutCheck();
+}
+// out of bombs, laser missiles and gun rounds with the launcher still on the line
+function irOutCheck(){
+  if (state!=='fly' || !IR.nuke || !IR.nuke.ref.alive) return;
+  if (S.bombs===0 && bombs.length===0 && S.agm===0 && !missiles.some(x=>x.agm && x.own==='p') && S.gun<=0)
+    endMission(false,'Out of air-to-ground weapons',`The launcher wagon is still on the line at ${Math.max(0,Math.round(100*IR.nuke.hp/IR.nuke.hp0))}% strength. It takes about two laser-missile hits or two direct bomb hits, and the gun can finish it off. Laser missiles follow the moving train (T to designate, L to fire from 6 to 10 km); bombs land where the wagon was, so lead it or wait for the train to stop.`,3.4);
+}
+// a gun shell on the train: the wagon it lands on loses a little (SAM wagons more, they are lightly built)
+const RAIL_GUN={light:0.04, heavy:0.008};   // per shell, as a share of the wagon's hit points: about 25 shells for a SAM wagon, 125 for the launcher
+function railGunHit(p){
+  if (!IR.built) return;
+  let best=null, bd=3;
+  for (const w of IR.wag){
+    const r=w.ref; if (!r.alive) continue;
+    const dx=p.x-r.x, dz=p.z-r.z, al=dx*w.hx+dz*w.hz, sd=-dx*w.hz+dz*w.hx;
+    const d=Math.hypot(Math.max(0,Math.abs(al)-w.len/2), Math.max(0,Math.abs(sd)-(w.hw||1.6)));
+    if (d<bd){ bd=d; best=w; }
+  }
+  if (!best) return;
+  const r=best.ref;
+  if (irHit(best, best.hp0*(best.ad ? RAIL_GUN.light : RAIL_GUN.heavy), 'p')) S.msg={text:`${r.name} DESTROYED`, col:HUD, t:3};
+  else S.msg={text:`GUN HITS · ${r.name} ${Math.max(0,Math.round(100*best.hp/best.hp0))}%`, col:AMB, t:0.8};
 }
 // wingman orders (keys 1-4, or the WING button on a phone)
 const WING_CMDS=[null,['engage','ENGAGE MY TARGET'],['cover','COVER ME'],['sams','ATTACK THE SAMS'],['form','REJOIN']];
