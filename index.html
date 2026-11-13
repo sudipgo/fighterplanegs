@@ -2104,8 +2104,11 @@ function glbParts(j,base){
     const st=bin+(v.byteOffset||0)+(a.byteOffset||0), stride=v.byteStride||n*bs, out=new Float64Array(a.count*n);
     for (let e=0;e<a.count;e++) for (let c=0;c<n;c++) out[e*n+c]=dv[g](st+e*stride+c*bs,true);
     return out; };
-  // glTF (nose +x, y up, +z right) to the game (nose -z, y up, +x right), mirrored left to right: (x,y,z) -> (-z, y, -x)
-  const F=new T.Matrix4().set(0,0,-1,0, 0,1,0,0, -1,0,0,0, 0,0,0,1);
+  // glTF (nose +x, y up) to the game (nose -z, y up, +x right). Most files have +z on the left (port), so the game
+  // mirrors them: (x,y,z) -> (-z, y, -x). A file whose +z is the right side (starboard; the Rafale's) says
+  // extras.thinAir.mirror:false and is only turned: (x,y,z) -> (z, y, -x).
+  const noMirror=!!(j.extras && j.extras.thinAir && j.extras.thinAir.mirror===false);
+  const F=noMirror ? new T.Matrix4().set(0,0,1,0, 0,1,0,0, -1,0,0,0, 0,0,0,1) : new T.Matrix4().set(0,0,-1,0, 0,1,0,0, -1,0,0,0, 0,0,0,1);
   const B=j.materials.map(()=>({pos:[], nrm:[], uv:[], idx:[]}));
   const p=new T.Vector3(), nm=new T.Matrix3();
   const walk=(ni,parent)=>{ const n=j.nodes[ni], L=new T.Matrix4();
@@ -2145,13 +2148,14 @@ const GLB_PILOT=(()=>{ const g=new T.Group(), S=(c)=>new T.MeshStandardMaterial(
   const s=new T.Mesh(new T.BoxGeometry(0.44,0.22,0.26),S(0x56604b)); s.position.set(0,-0.24,0.02); g.add(s);
   return g; })();
 // which jets have a model file (MiG-27: none, it stays code-built). Tejas: its own file, with its anchors written here.
-// Model files: the Tejas Mk1A (glb\Tejas), the Su-30MKI (Su-30MKI\Su-30MKI_flight.glb, its own detailed rebuild:
-// models/su30.json with its anchors in extras.thinAir, paint in models/su30_paint.png) and three support aircraft from
+// Model files: the Tejas Mk1A (glb\Tejas), the Su-30MKI and the Rafale (Su-30MKI\Su-30MKI_flight.glb and
+// Rafale\Rafale_flight.glb, detailed rebuilds: models/<key>.json with the anchors in extras.thinAir, paint in
+// models/<key>_paint.png) and three support aircraft from
 // glb\allplanes: the C-130J (escort), the IL-78 tanker and the Netra AEW&C. The allplanes fighters were tried in
 // v147-148 and rolled back; the other fighters are code-built. To bring a model back, add its key here and put its file
 // in models/<key>.json (keys the code understands: rafale su30 m2k mig29 mig21 jaguar amca jf17 f16 j10 j20 f35,
 // mig29k for the naval jet and carrier deck, c130 for the escort, il78 for the tanker, netra for the AWACS).
-const MODEL_KEYS=['tejas','su30','c130','il78','netra'];
+const MODEL_KEYS=['tejas','su30','rafale','c130','il78','netra'];
 const MODEL_URL=k=>k==='tejas' ? 'tejas.json' : 'models/'+k+'.json';
 const TEJAS_EX={nozzles:[[0,0,6.55,0.46]], pilots:[[0,0.82,-2.22]], navL:[-4.12,-0.12,3.85], navR:[4.12,-0.12,3.85], fin:[0,2.72,5.85], beacon:[0,0.8,1.2],
   hp:[[-1.45,-0.7,2.15],[1.45,-0.7,2.15],[-2.7,-0.7,2.15],[2.7,-0.7,2.15]]};
