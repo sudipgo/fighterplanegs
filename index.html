@@ -3625,12 +3625,22 @@ const MAXB=260, trArr=new Float32Array(MAXB*6), trGeo=new T.BufferGeometry();
 trGeo.setAttribute('position', new T.BufferAttribute(trArr,3)); trGeo.setDrawRange(0,0);
 const tracers=new T.LineSegments(trGeo, new T.LineBasicMaterial({color:0xffd27a, transparent:true, opacity:0.9}));
 tracers.frustumCulled=false; scene.add(tracers);
+// a glowing dot on the head of each shell (lines are only 1 pixel wide); bigger on a phone so the shells can be followed
+const TR_DOT=isTouch ? 9 : 5, TR_LEN=isTouch ? 0.05 : 0.03;
+const thArr=new Float32Array(MAXB*3), thGeo=new T.BufferGeometry();
+thGeo.setAttribute('position', new T.BufferAttribute(thArr,3)); thGeo.setDrawRange(0,0);
+const trDotTex=(()=>{ const cv=document.createElement('canvas'); cv.width=cv.height=32; const g=cv.getContext('2d'), gr=g.createRadialGradient(16,16,0,16,16,16);
+  gr.addColorStop(0,'rgba(255,250,220,1)'); gr.addColorStop(0.35,'rgba(255,210,120,0.9)'); gr.addColorStop(1,'rgba(255,160,60,0)'); g.fillStyle=gr; g.fillRect(0,0,32,32); return new T.CanvasTexture(cv); })();
+const tracerHeads=new T.Points(thGeo, new T.PointsMaterial({size:TR_DOT, sizeAttenuation:false, map:trDotTex, transparent:true, depthWrite:false, blending:T.AdditiveBlending}));
+tracerHeads.frustumCulled=false; scene.add(tracerHeads);
 function drawTracers(){
   const n=Math.min(MAXB,bullets.length);
-  for (let i=0;i<n;i++){ const b=bullets[i], o=i*6;
+  for (let i=0;i<n;i++){ const b=bullets[i], o=i*6, h=i*3;
     trArr[o]=b.p.x; trArr[o+1]=b.p.y; trArr[o+2]=b.p.z;
-    trArr[o+3]=b.p.x-b.v.x*0.03; trArr[o+4]=b.p.y-b.v.y*0.03; trArr[o+5]=b.p.z-b.v.z*0.03; }
+    trArr[o+3]=b.p.x-b.v.x*TR_LEN; trArr[o+4]=b.p.y-b.v.y*TR_LEN; trArr[o+5]=b.p.z-b.v.z*TR_LEN;
+    thArr[h]=b.p.x; thArr[h+1]=b.p.y; thArr[h+2]=b.p.z; }
   trGeo.setDrawRange(0,n*2); trGeo.attributes.position.needsUpdate=true;
+  thGeo.setDrawRange(0,n); thGeo.attributes.position.needsUpdate=true;
 }
 
 // ---------- picture-in-picture weapon camera (bomb or missile)
@@ -5272,6 +5282,7 @@ function segDist(ax,ay,az,b,p){
   return Math.sqrt(ex*ex+ey*ey+ez*ez);
 }
 function updateBullets(dt){
+  const GGL = gunGroundOn() && bullets.some(b=>b.own==='p') ? tdList() : null;
   for (let i=bullets.length-1;i>=0;i--){
     const b=bullets[i], ox=b.p.x, oy=b.p.y, oz=b.p.z;
     b.p.addScaledVector(b.v,dt); b.v.y-=G*dt; b.life+=dt;
@@ -5279,6 +5290,11 @@ function updateBullets(dt){
     let dead = b.life>(b.own==='aa'?3.6:MP.on?MP_GUN_LIFE:1.8) || gnd;   // multiplayer: shells fly about twice as far
     if (gnd && b.own==='p' && mode==='raid') groundGunHit(b.p);   // strafing: shells hurt what they land on
     if (gnd && b.own==='p' && mode==='strike') strikeGunHit(b.p);
+    if (!dead && b.own==='p' && GGL){   // strafing: a shell that flies into a ground target hits it (not only where it lands)
+      const o=gunShellOn(GGL,ox,oy,oz,b.p);
+      if (o){ dead=true; effects.push(makeFx(b.p.clone(),0xffc070,true,0.25,1,6,1,0));
+        if (mode==='raid') groundGunHit(_ggp.set(o.x,o.y,o.z)); else strikeGunHit(_ggp.set(o.x,o.y,o.z)); }
+    }
     if (!dead){
       if (b.own==='p'){
         for (const e of enemies){
@@ -5334,6 +5350,7 @@ function fireGun(dt){
   axes();
   let aim=vF;
   if (isTouch){ const gt=gunTarget(); if (gt){ const ld=gunLeadDir(gt); if (ld.dot(vF)>GUN_ASSIST) aim=ld; } }   // phone: ring on the bandit and the shells lead it
+  if (aim===vF){ const gg=gunGroundTarget(); if (gg){ const ld=gunLeadDir(gg); if (ld.dot(vF)>GGUN_ASSIST) aim=ld; } }   // strafing: near enough on the marked ground target, the shells go to it
   while (S.gunCd<=0 && S.gun>0){
     S.gunCd+=1/25; S.gun--;
     _t.copy(aim).addScaledVector(vR,(Math.random()-0.5)*0.008).addScaledVector(vU,(Math.random()-0.5)*0.008).normalize();
@@ -5380,6 +5397,55 @@ function gunTarget(){
     if (d<bd){ _a.copy(e.p).sub(S.pos); if (_a.dot(vF)>0){ bd=d; best=e; } }
   }
   return best;
+}
+// ---------- strafing: the gun against ground targets (raid missions and the Point 4875 strike; not Iron Rail)
+const GGUN_R=2200, GGUN_ASSIST=Math.cos((isTouch ? 7 : 3.5)*D2R), GGUN_CONE=Math.cos(25*D2R);
+const _gg={p:new T.Vector3(), vel:new T.Vector3(), o:null, d:0}, _ggp=new T.Vector3();
+const gunGroundOn=()=>!RAIL && (mode==='raid' || mode==='strike');
+// the ground target nearest the nose, within gun range (null if none)
+function gunGroundTarget(){
+  if (!gunGroundOn() || !S.alive) return null;
+  let best=null, bk=GGUN_CONE;
+  for (const o of tdList()){
+    const dx=o.x-S.pos.x, dy=o.y+2-S.pos.y, dz=o.z-S.pos.z, d=Math.hypot(dx,dy,dz);
+    if (d>GGUN_R || d<40) continue;
+    const k=(dx*vF.x+dy*vF.y+dz*vF.z)/d; if (k>bk){ bk=k; best=o; }
+  }
+  if (!best) return null;
+  _gg.o=best; _gg.p.set(best.x,best.y+2,best.z); _gg.vel.set(0,0,0); _gg.d=_gg.p.distanceTo(S.pos);
+  return _gg;
+}
+// did the shell's last step pass through ground target o (a squat cylinder over it)? returns the target or null
+function gunShellOn(L,ox,oy,oz,p){
+  for (const o of L){
+    const R=o.r*0.8, top=o.y+Math.max(6,o.r*0.45);
+    for (let k=0;k<=2;k++){ const f=k/2, x=ox+(p.x-ox)*f, y=oy+(p.y-oy)*f, z=oz+(p.z-oz)*f;
+      if (y<=top && Math.hypot(x-o.x,z-o.z)<=R) return o; }
+  }
+  return null;
+}
+// HUD: brackets on the ground target the gun will go for, its range, and the aim circle (put the gun cross on it)
+function drawGunGround(){
+  if (!S.alive || S.gun<=0 || (isTouch && TW.sel!=='GUN')) return;
+  const gg=gunGroundTarget(); if (!gg) return;
+  const ld=gunLeadDir(gg), hot=ld.dot(vF)>GGUN_ASSIST, col=hot?RED:HUD;
+  const s=proj(gg.p.x,gg.p.y,gg.p.z);
+  if (onScreen(s)){
+    const b=isTouch?18:15, k=7; c.beginPath();
+    for (const [sx,sy] of [[-1,-1],[1,-1],[1,1],[-1,1]]){ c.moveTo(s.x+sx*b,s.y+sy*(b-k)); c.lineTo(s.x+sx*b,s.y+sy*b); c.lineTo(s.x+sx*(b-k),s.y+sy*b); }
+    strokeP(col,1.8);
+    txt(`GUN ${gg.d>=1000 ? (gg.d/1000).toFixed(1)+' KM' : Math.round(gg.d)+' M'}`, s.x, s.y-b-8, col, 'center', isTouch?10:11, true);
+  }
+  const lp=proj(S.pos.x+ld.x*800,S.pos.y+ld.y*800,S.pos.z+ld.z*800);
+  if (lp.ok){
+    c.beginPath(); c.arc(lp.x,lp.y,isTouch?20:16,0,Math.PI*2); strokeP(col,1.5);
+    c.beginPath(); c.arc(lp.x,lp.y,2,0,Math.PI*2); c.fillStyle=col; c.fill();
+    if (hot) txt('SHOOT',lp.x,lp.y+(isTouch?34:30),RED,'center',12,true);
+  }
+  if (mode==='strike' && !isTouch){   // the strike HUD has no gun cross of its own
+    const gc=proj(S.pos.x+vF.x*800,S.pos.y+vF.y*800,S.pos.z+vF.z*800);
+    if (gc.ok){ c.beginPath(); c.moveTo(gc.x-9,gc.y); c.lineTo(gc.x+9,gc.y); c.moveTo(gc.x,gc.y-9); c.lineTo(gc.x,gc.y+9); strokeP(col,1.4); }
+  }
 }
 function updateDogfight(dt){
   updateLock(dt);
@@ -7523,6 +7589,7 @@ function drawHUD(now){
   else if (dog){ drawCombatHUD(); if (LADAKH) drawLadRecon(); if (ESCORT) drawEscortHUD(); if (AWACS) drawAwacsHUD(); if (DRONES) drawDroneHUD(); if (FLEET) drawFleetHUD(flash); } else if (mode!=='training' || carriesBombs()) drawStrikeHUD(fpm);
   if (mode==='training') drawTrainingHUD();
   drawObjectives();
+  drawGunGround();
   if (isTouch && S.alive && !raid && !dog && TW.sel==='GUN'){   // phone: the gun pointer in the other missions too, when GUN is picked
     const gc=proj(S.pos.x+vF.x*800,S.pos.y+vF.y*800,S.pos.z+vF.z*800); if (gc.ok) gunPointer(gc,false,null);
   }
