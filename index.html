@@ -635,9 +635,7 @@ html.short .mfilter button{padding:3px 8px;font-size:9px;}
         <label class="check"><input type="checkbox" id="soundOn" checked> Engine sound</label>
         <label class="check"><input type="checkbox" id="musicOn" checked> Menu music</label>
         <label class="check"><input type="checkbox" id="stallProt" checked> Stall protection</label>
-        <label class="check"><input type="checkbox" id="lowGfx"> Low graphics</label>
-        <label class="check"><input type="checkbox" id="newModels" checked> New aircraft models</label>
-        <label class="check"><input type="checkbox" id="invert"> Invert pitch</label>
+        <label class="check"><input type="checkbox" id="lowGfx"> Low graphics</label>        <label class="check"><input type="checkbox" id="invert"> Invert pitch</label>
       </div>
     </section>
     </div>
@@ -894,6 +892,8 @@ const PLANES = {
           thrustDry:125000, thrustAB:191000, gMax:9, roll:4.2, bombs:4, msl:4, gun:180,
           stats:{Speed:0.88, Turn:0.86, Climb:0.9, Arms:0.88} },
 };
+// single player carries five times the real gun load (multiplayer uses MP_GUN instead), so strafing ground targets is practical
+const GUN_K=5; Object.values(PLANES).forEach(p=>{ p.gun*=GUN_K; });
 if (!PLANES[prefs.plane]) prefs.plane = 'm2k';
 // Air-to-air missiles, one per jet: what each type carries in IAF service. Real ranges (R-60 about 8 km up to Meteor
 // beyond 100 km) are scaled down to fit a 38 km arena while keeping their order. lock: seeker or radar lock range (m);
@@ -1174,20 +1174,28 @@ const streaks=new T.LineSegments(stGeo,stMat); streaks.frustumCulled=false; scen
 for (let i=0;i<STREAKS;i++) stPts.push(new T.Vector3((Math.random()-0.5)*2*HS,(Math.random()-0.5)*2*HS,(Math.random()-0.5)*2*HS));
 const wrapA=(v,c)=>c+((((v-c+HS)%(2*HS))+2*HS)%(2*HS))-HS;
 
-// Line of Control: line on the ground plus a faint curtain
+// a border line (LoC, LAC, international border) drawn as a red band lying on the ground: 60 m wide, following every
+// rise and fall of the terrain (it replaced the tall see-through red curtain), plus a thin line just above it that stays
+// visible from far away. zOf(x) is the line's z at x; it uses the height grid that is current when it is called.
+function groundBand(zOf, lift){
+  const P=[], idx=[], step=40, w=60; let i=0;
+  for (let x=-HALF; x<=HALF; x+=step, i++){
+    const z=zOf(x), tz=zOf(x+step/2)-zOf(x-step/2), l=Math.hypot(step,tz), nx=-tz/l, nz=step/l;
+    for (const s of [-1,1]){ const vx=x+nx*s*w/2, vz=z+nz*s*w/2; P.push(vx, groundAt(vx,vz)+(lift||6), vz); }
+    if (i>0){ const a=(i-1)*2; idx.push(a,a+2,a+1, a+1,a+2,a+3); }
+  }
+  const g=new T.BufferGeometry(); g.setAttribute('position', new T.Float32BufferAttribute(P,3)); g.setIndex(idx); g.computeBoundingSphere();
+  const m=new T.Mesh(g, new T.MeshBasicMaterial({color:0xff5a4f, transparent:true, opacity:0.75, side:T.DoubleSide, depthWrite:false, polygonOffset:true, polygonOffsetFactor:-4, polygonOffsetUnits:-4}));
+  m.renderOrder=2;
+  const pts=[]; for (let x=-HALF; x<=HALF; x+=100){ const z=zOf(x); pts.push(new T.Vector3(x,groundAt(x,z)+12,z)); }
+  const ln=new T.Line(new T.BufferGeometry().setFromPoints(pts), new T.LineBasicMaterial({color:0xff5a4f}));
+  return [m, ln];
+}
+// Line of Control
 const LOC_OBJS=[];
 {
-  const pts=[], wall=[], idx=[];
-  let i=0;
-  for (let x=-HALF; x<=HALF; x+=100, i++){
-    const z=locZ(x), g=groundAt(x,z);
-    pts.push(new T.Vector3(x,g+12,z)); wall.push(x,g,z, x,g+2500,z);
-    if (i>0){ const a=(i-1)*2, b=a+1, c=a+2, d=a+3; idx.push(a,c,b, b,c,d); }
-  }
-  const ln=new T.Line(new T.BufferGeometry().setFromPoints(pts), new T.LineBasicMaterial({color:0xff5a4f})); scene.add(ln);
-  const wg=new T.BufferGeometry(); wg.setAttribute('position', new T.Float32BufferAttribute(wall,3)); wg.setIndex(idx);
-  const wm=new T.Mesh(wg, new T.MeshBasicMaterial({color:0xff5a4f, transparent:true, opacity:0.13, side:T.DoubleSide, depthWrite:false})); scene.add(wm);
-  LOC_OBJS.push(ln,wm);   // hidden in multiplayer: an open field
+  const [band, ln]=groundBand(locZ); scene.add(band); scene.add(ln);
+  LOC_OBJS.push(ln,band);   // hidden in multiplayer: an open field
 }
 
 // rivers: water ribbons laid along the river valleys, flat water just above the bed
@@ -1326,6 +1334,13 @@ tgtMeshWreck.visible=false; scene.add(tgtMeshIntact); scene.add(tgtMeshWreck);
 tgtMeshIntact.castShadow=tgtMeshIntact.receiveShadow=tgtMeshWreck.castShadow=tgtMeshWreck.receiveShadow=true;
 
 const AD_SCALE=2.5;   // AAA guns and SAM launchers are drawn this many times life size, so you can pick them out from the air
+// ground objects in the strike missions (buildings, godowns, camps, radars, tanks, AAA, SAMs and their wrecks) are drawn
+// GROUND_K times bigger again at the start of each sortie (growGround); their hit radius grows by GROUND_HIT_K
+const GROUND_K=3, GROUND_HIT_K=2;
+const adR=a=>a.hr||(a.kind==='SAM'?38:30);   // how close a bomb or laser missile must land to hurt an AAA gun or SAM launcher
+// hit points (100 each). A direct hit (inside 35% of the hit radius) does `direct`, a near miss falls from near[0] to near[1]
+// at the edge; buildings take `structure` of that, so they need two good hits. Gun shells hurt ground targets too.
+const GROUND_DMG={direct:100, near:[60,25], structure:0.6, gun:{light:4, structure:1.2}};
 // twin-barrel AA guns with a gunner; they track the jet and fire tracer bursts
 function makeAA(x,z,o){
   o=o||TARGET;
@@ -1455,7 +1470,11 @@ const FLAME_GLOW=new T.SpriteMaterial({map:(()=>{ const cv=document.createElemen
     gr.addColorStop(0,'rgba(255,255,255,1)'); gr.addColorStop(0.25,'rgba(255,255,255,.55)'); gr.addColorStop(1,'rgba(255,255,255,0)'); c2.fillStyle=gr; c2.fillRect(0,0,64,64); return new T.CanvasTexture(cv); })(), color:0xff9a48, blending:T.AdditiveBlending, depthWrite:false, transparent:true});
 function nozzle(g, x, y, z, r){
   const n=new T.Mesh(new T.CylinderGeometry(r*0.85,r,0.9,14,1,true), nozzleMat); n.rotation.x=Math.PI/2; n.position.set(x,y,z); g.add(n);
-  const f=new T.Group(); f.rotation.x=Math.PI/2; f.position.set(x,y,z+0.42); f.visible=false;   // local +y points aft
+  plume(g, x, y, z+0.42, r);
+}
+// the afterburner plume alone, starting at (x,y,z) and pointing aft (+z); used by nozzle() and by jets built from a model file
+function plume(g, x, y, z, r){
+  const f=new T.Group(); f.rotation.x=Math.PI/2; f.position.set(x,y,z); f.visible=false;   // local +y points aft
   const out=new T.Mesh(FLAME_GEO,FLAME_OUT); out.scale.set(r*0.92, 6.5*r+1.6, r*0.92);
   const core=new T.Mesh(FLAME_GEO,FLAME_CORE); core.scale.set(r*0.58, 3.4*r+0.7, r*0.58);
   const gl=new T.Sprite(FLAME_GLOW); gl.scale.setScalar(r*4.2); gl.position.y=0.25;
@@ -1592,23 +1611,6 @@ function detailPlane(g, o){
   return g;
 }
 
-function buildMirage(){
-  const g=newPlane(), {body,skin}=skins('#8f9ba7',['#6d7b8a','#a9b3bd'],11);
-  g.add(new T.Mesh(lathe([[0.5,-7.0],[0.72,-6.5],[0.92,-4.5],[1.0,-2],[1.0,0.5],[0.92,2.5],[0.78,4.0],[0.55,5.6],[0.3,6.8],[0.05,7.7]]), body));
-  const pt=new T.Mesh(new T.CylinderGeometry(0.03,0.03,1.3,5), darkMat); pt.rotation.x=Math.PI/2; pt.position.z=-8.3; g.add(pt);
-  [-1,1].forEach(s=>{
-    const it=new T.Mesh(new T.CylinderGeometry(0.5,0.44,4.2,12), body); it.rotation.x=Math.PI/2; it.position.set(s*1.02,-0.1,-0.7); g.add(it);
-    const cone=new T.Mesh(new T.ConeGeometry(0.3,0.9,10), darkMat); cone.rotation.x=-Math.PI/2; cone.position.set(s*1.02,-0.1,-3.1); g.add(cone);
-  });
-  g.add(slab([[0.9,-2.6],[4.6,4.3],[4.45,5.0],[-4.45,5.0],[-4.6,4.3],[-0.9,-2.6]],0.16,skin,-0.28));
-  g.add(fin([[1.7,0.75],[5.5,0.75],[5.75,3.8],[4.75,3.8]],0.14,skin));
-  canopy(g,0.62,3.6,0.72,-3.7);
-  nozzle(g,0,0,7.3,0.62);
-  roundels(g,[[-3.0,-0.19,3.6],[3.0,-0.19,3.6]]);
-  finFlash(g,0,3.0,4.6,0.17);
-  g.userData.hp=[[-2.0,-0.62,2.2],[2.0,-0.62,2.2],[-3.2,-0.55,3.4],[3.2,-0.55,3.4],[-1.15,-0.95,0.6],[1.15,-0.95,0.6]];
-  return g;
-}
 // ---------- new-style models (Settings: "New aircraft models"): a fuselage lofted through cross-sections instead of
 // joined cylinders, and wings with a real aerofoil section. The old builders stay as they are; the switch picks one.
 // loftGeo: sections from nose to tail, each a superellipse {z, x, y (centre), w (half-width), h (height above the
@@ -1643,6 +1645,7 @@ function wingGeo(st, s){
   g.setIndex(idx); g.computeVertexNormals(); return g;
 }
 const RADOME_MAT=new T.MeshStandardMaterial({color:0x4b5158, metalness:0.15, roughness:0.6, side:T.DoubleSide});
+const RADOME_LT=new T.MeshStandardMaterial({color:0xc9ced2, metalness:0.1, roughness:0.55, side:T.DoubleSide});   // the Flanker's pale radome
 const SKIN2={};   // the wing paint, two-sided, for the hand-built wing meshes
 function skin2(skin){ const k=skin.uuid; if (!SKIN2[k]){ const m=skin.clone(); m.side=T.DoubleSide; m.userData.base=skin.userData.base; SKIN2[k]=m; } return SKIN2[k]; }
 // Mirage 2000H, new style: same size, nozzle, hardpoints and markings as the old model, so everything else lines up
@@ -1716,21 +1719,30 @@ function buildRafale2(){
   const g=newPlane(), {body,skin}=skins('#6f7a84',['#5b656e','#828c95'],19), wsk=skin2(skin);
   loft2(g,[FS(-7.9,0.03,0.03,null,-0.05),FS(-7.4,0.17,0.17,null,-0.05),FS(-6.6,0.36,0.36,null,-0.03),FS(-5.8,0.5,0.58,0.48),FS(-5.0,0.62,0.76,0.56),FS(-4.0,0.74,0.86,0.62),
     FS(-2.8,0.86,0.87,0.7,0,2.4),FS(-1.5,0.98,0.83,0.78,0,2.8),FS(0.5,1.02,0.78,0.74,0,3),FS(3,1.0,0.7,0.62,0,3),FS(5.5,0.98,0.6,0.58,-0.05,3),FS(7.0,0.96,0.52,0.54,-0.12,3.2)],body,24);
-  const W=WS(-0.2,[[0.8,-1.78,5.22,0.045],[2.6,0.72,5.2,0.042],[5.2,4.32,5.17,0.038],[5.42,4.75,5.14,0.034]]);
+  // the real wing: a 48 degree delta (not a slim 54), with the canards close-coupled just ahead of and above its root
+  const W=WS(-0.2,[[0.8,-0.75,5.22,0.045],[2.6,1.28,5.2,0.042],[5.2,4.2,5.17,0.038],[5.42,4.5,5.14,0.034]]);
   wings2(g,W,wsk);
-  wings2(g,WS(0.13,[[0.7,-4.45,-2.7,0.05],[2.5,-3.05,-2.62,0.045],[2.62,-2.9,-2.65,0.04]]),wsk);   // canards
-  [-1,1].forEach(s=>{ intake2(g,s,body,{x:0.92,y:-0.42,z:-2.35,w:0.33,h:0.36,len:3.2,tx:0.75,n:3}); nozzle(g,s*0.5,-0.15,7.3,0.48); });
+  wings2(g,WS(-0.12,[[0.8,-2.7,-0.5,0.02],[1.3,-0.95,-0.35,0.03]]),wsk);                                  // the shoulder fairing from the intake to the wing root
+  wings2(g,WS(0.32,[[0.75,-3.5,-1.55,0.05],[2.6,-2.05,-1.45,0.045],[2.75,-1.9,-1.48,0.04]]),wsk);         // canards
+  [-1,1].forEach(s=>{
+    intake2(g,s,body,{x:0.92,y:-0.42,z:-2.35,w:0.33,h:0.36,len:3.2,tx:0.75,n:2.6}); nozzle(g,s*0.5,-0.15,7.3,0.48);
+    const rail=new T.Mesh(new T.BoxGeometry(0.09,0.09,2.3), darkMat); rail.position.set(s*5.46,-0.2,4.3); g.add(rail);   // wingtip rail and its missile
+    const m=mslProtoP.clone(); m.rotation.y=Math.PI; m.position.set(s*5.56,-0.2,4.15); g.add(m);
+  });
   g.add(fin([[1.6,0.55],[2.6,0.85],[5.3,3.5],[5.6,3.65],[6.55,3.65],[6.6,3.3],[6.2,0.55]],0.14,skin));
+  loft2(g,[FS(5.3,0.03,0.03,null,3.72),FS(5.65,0.12,0.11,null,3.72),FS(6.5,0.12,0.11,null,3.72),FS(6.9,0.04,0.04,null,3.72)],body,10,false,true);   // the pod on top of the fin
+  { const osf=new T.Mesh(new T.SphereGeometry(0.11,10,8), darkMat); osf.position.set(0,0.42,-6.5); g.add(osf); }     // the optical sensor ball ahead of the windscreen
   probe2(g,0.36,0.52,-6.3,1.3);
   canopy(g,0.6,3.8,0.8,-4.6);
-  rnd2(g,W,3.6,3.7);
+  rnd2(g,W,3.5,3.85);
   finFlash(g,0,2.8,5.0,0.17);
-  g.userData.hp=[[-2.4,-0.45,2.0],[2.4,-0.45,2.0],[-3.4,-0.42,3.0],[3.4,-0.42,3.0],[-0.6,-0.85,2.5],[0.6,-0.85,2.5]];
+  g.userData.hp=[[-2.4,-0.45,2.4],[2.4,-0.45,2.4],[-3.4,-0.42,3.4],[3.4,-0.42,3.4],[-0.6,-0.85,2.5],[0.6,-0.85,2.5]];
   return g;
 }
 // the two big twin-fin jets share a layout: drooped forward fuselage, a flat lifting body between two engine nacelles
 function flanker2(g,body,skin,o){
   const wsk=skin2(skin);
+  if (o.radome) loft2(g,o.radome,o.radomeMat||RADOME_MAT,22);
   loft2(g,o.fwd,body,24); loft2(g,o.mid,body,20,true,true);
   wings2(g,WS(0.02,o.lerx),wsk); const W=WS(0.02,o.wing); wings2(g,W,wsk); wings2(g,WS(o.tailY,o.tail),wsk);
   if (o.canard) wings2(g,WS(0.12,o.canard),wsk);
@@ -1746,13 +1758,20 @@ function flanker2(g,body,skin,o){
 function buildSu302(){
   const g=newPlane(), {body,skin}=skins('#9ea8b0',['#7f8b95','#b6bec5'],29);
   const W=flanker2(g,body,skin,{
-    fwd:[FS(-10,0.03,0.03,null,-0.12),FS(-9.4,0.2,0.2,null,-0.1),FS(-8.4,0.4,0.42,null,-0.06),FS(-7.4,0.56,0.66,0.52),FS(-6.4,0.68,0.86,0.6),FS(-5.0,0.8,0.97,0.66),FS(-3.5,0.9,0.96,0.6),
-      FS(-1.5,1.0,0.82,0.5,0,2.4),FS(1.0,0.9,0.62,0.4,0,2.4),FS(4,0.5,0.42,0.3),FS(8.6,0.14,0.22,0.12),FS(10.6,0.05,0.08,0.06)],
+    radome:[FS(-10,0.03,0.03,null,-0.12),FS(-9.6,0.16,0.16,null,-0.11),FS(-9.0,0.3,0.31,null,-0.09),FS(-8.4,0.4,0.42,null,-0.06)], radomeMat:RADOME_LT,   // the big pale radome
+    fwd:[FS(-8.4,0.4,0.42,null,-0.06),FS(-7.4,0.56,0.66,0.52),FS(-6.4,0.68,0.86,0.6),FS(-5.0,0.8,0.97,0.66),FS(-3.5,0.9,0.96,0.6),
+      FS(-1.5,1.0,0.82,0.5,0,2.4),FS(1.0,0.9,0.62,0.4,0,2.4),FS(4,0.5,0.42,0.3),FS(8.6,0.22,0.28,0.18),FS(10.4,0.15,0.17,0.13),FS(10.95,0.03,0.03)],   // ending in the tail sting between the engines
     mid:[FS(-2.5,1.6,0.3,0.3,0,3),FS(0,2.1,0.38,0.38,0,3.5),FS(5,2.0,0.36,0.36,0,3.5),FS(8.6,1.9,0.28,0.28,-0.05,3.5)],
     lerx:[[0.6,-6.5,-1.0,0.02],[1.9,-1.5,-0.5,0.03]], wing:[[1.8,-1.6,5.35,0.04],[4.5,1.0,4.95,0.04],[7.1,3.5,4.62,0.04],[7.25,3.7,4.6,0.035]],
     tail:[[1.8,6.5,9.6,0.04],[4.7,8.5,9.45,0.04],[4.82,8.7,9.4,0.035]], tailY:-0.2, canard:[[0.9,-6.0,-4.3,0.05],[2.9,-4.65,-4.1,0.045],[3.02,-4.5,-4.15,0.04]],
     nx:1.35, nac:[FS(-2.55,0.45,0.42,null,-0.68,4),FS(-1,0.5,0.48,null,-0.66,3.5),FS(2,0.6,0.6,null,-0.58),FS(6,0.64,0.64,null,-0.55),FS(9.0,0.6,0.6,null,-0.55)], mw:0.85, mh:0.8,
     nozY:-0.55, nozZ:9.4, nozR:0.6, fin:[[4.4,0.25],[5.4,0.5],[7.4,3.7],[7.7,3.85],[8.75,3.85],[8.8,3.5],[8.4,0.25]], finT:0.14, finX:1.55, flash:[2.6,7.0]});
+  [-1,1].forEach(s=>{
+    const v=fin([[6.8,-0.3],[8.6,-0.3],[8.5,-1.05],[7.6,-1.05]],0.08,skin); v.position.x=s*1.98; g.add(v);            // ventral fins under the tail booms
+    const rail=new T.Mesh(new T.BoxGeometry(0.1,0.1,2.6), darkMat); rail.position.set(s*7.3,0.02,3.95); g.add(rail);   // wingtip rail and its missile
+    const m=mslProtoP.clone(); m.rotation.y=Math.PI; m.position.set(s*7.42,0.02,3.8); g.add(m);
+  });
+  { const irst=new T.Mesh(new T.SphereGeometry(0.12,10,8), darkMat); irst.position.set(0.1,0.52,-7.95); g.add(irst); }   // the infra-red search ball ahead of the windscreen
   canopy(g,0.65,4.4,0.85,-5.6);
   rnd2(g,W,4.8,3.6);
   g.userData.hp=[[-3.2,-0.35,2.4],[3.2,-0.35,2.4],[-4.4,-0.3,3.2],[4.4,-0.3,3.2],[-5.6,-0.25,3.8],[5.6,-0.25,3.8],[-0.55,-0.6,1.0],[0.55,-0.6,1.0]];
@@ -1898,7 +1917,7 @@ function buildMig272(){
   g.userData.hp=[[-1.75,0.18,-1.4],[1.75,0.18,-1.4],[-0.55,-1.3,-0.8],[0.55,-1.3,-0.8],[-0.55,-1.3,1.8],[0.55,-1.3,1.8],[-1.25,-1.0,0.9],[1.25,-1.0,0.9]];
   return g;
 }
-// the three stealth jets share a layout too: a chined, diamond-section nose widening into a flat blended body, canted twin fins
+// the three stealth jets share a layout too: a chined, diamond-section nose, intake shoulders, a slim body, canted twin fins
 function stealth2(g,body,skin,o){
   const wsk=skin2(skin);
   loft2(g,o.fus,body,24);
@@ -1917,13 +1936,15 @@ function stealth2(g,body,skin,o){
 function buildAMCA2(){
   const g=newPlane(), {body,skin}=skins('#7a838b',['#6c757d','#88919a'],131);
   const W=stealth2(g,body,skin,{
-    fus:[FS(-9.7,0.03,0.03,null,-0.05),FS(-9.0,0.3,0.16,0.12,-0.04,1.4),FS(-8.0,0.62,0.5,0.26,0,1.4),FS(-7,0.86,0.8,0.36,0,1.5),FS(-6,1.0,0.92,0.44,0,1.6),FS(-5,1.1,0.98,0.5,0,1.7),FS(-3.8,1.3,1.0,0.56,0,1.8),
-      FS(-2,1.9,0.9,0.62,-0.05,2.2),FS(0,2.1,0.8,0.66,-0.08,2.6),FS(3,2.0,0.66,0.62,-0.1,2.8),FS(6,1.75,0.5,0.58,-0.14,2.8),FS(8.3,1.45,0.36,0.5,-0.2,2.8)],
-    wing:[[1.5,-2.55,5.62,0.035],[3.6,0.6,5.2,0.035],[5.5,3.45,4.82,0.035],[5.62,3.7,4.78,0.03]],
-    tail:[[1.5,6.1,8.6,0.035],[3.8,7.7,8.5,0.035],[3.92,7.9,8.48,0.03]], tailY:-0.2,
-    duct:[[-4.45,1.5,0.48,0.48,3],[-3,1.5,0.5,0.5,3],[-1.2,1.35,0.4,0.45],[0.5,1.2,0.2,0.3]], dy:-0.3, mx:1.55, mw:0.9, mh:0.9,
-    eng:[[5.5,0.5],[7,0.62],[8.4,0.6]], ex:0.8, ey:-0.3, nozZ:8.5, nozR:0.6,
-    fin:[[4.3,0.35],[5.2,0.6],[6.6,2.95],[6.9,3.1],[8.05,3.1],[8.1,2.75],[7.7,0.35]], finX:1.6, cant:0.45, mark:(fg,s)=>finFlash(fg,s*0.08,2.0,6.3,0.15,0)});
+    // seen from above: a slim body of near-constant width from the intake shoulders back to two close-set nozzles, with the
+    // wing, fins and tailplanes standing out from it (not a wide flat slab)
+    fus:[FS(-9.7,0.03,0.03,null,-0.05),FS(-9.0,0.28,0.16,0.12,-0.04,1.4),FS(-8.0,0.56,0.5,0.26,0,1.4),FS(-7,0.74,0.8,0.36,0,1.5),FS(-6,0.84,0.92,0.44,0,1.6),FS(-5,0.95,0.98,0.5,0,1.7),FS(-3.8,1.05,1.0,0.56,0,1.8),
+      FS(-2,1.25,0.9,0.62,-0.05,2.2),FS(0,1.3,0.8,0.66,-0.08,2.6),FS(3,1.28,0.66,0.62,-0.1,2.8),FS(6,1.2,0.5,0.58,-0.14,2.8),FS(8.3,1.14,0.42,0.5,-0.2,2.8)],
+    wing:[[1.1,-1.6,5.6,0.035],[3.4,0.95,5.15,0.035],[5.5,3.3,4.72,0.035],[5.62,3.5,4.68,0.03]],
+    tail:[[1.0,5.9,8.9,0.035],[3.6,7.6,8.8,0.035],[3.72,7.8,8.78,0.03]], tailY:-0.2,
+    duct:[[-4.0,1.12,0.42,0.46,3],[-2.8,1.12,0.44,0.48,3],[-1.2,1.0,0.36,0.44],[0.4,0.9,0.18,0.3]], dy:-0.3, mx:1.12, mw:0.76, mh:0.84,
+    eng:[[5.5,0.44],[7,0.56],[8.4,0.54]], ex:0.62, ey:-0.3, nozZ:8.5, nozR:0.54,
+    fin:[[4.3,0.35],[5.2,0.6],[6.6,2.95],[6.9,3.1],[8.05,3.1],[8.1,2.75],[7.7,0.35]], finX:1.2, cant:0.45, mark:(fg,s)=>finFlash(fg,s*0.08,2.0,6.3,0.15,0)});
   canopy(g,0.62,4.0,0.95,-5.8);
   rnd2(g,W,3.6,2.4);
   g.userData.hp=[];   // weapons ride in the internal bay
@@ -1932,12 +1953,12 @@ function buildAMCA2(){
 function buildF352(){
   const g=newPlane(), {body,skin}=skins('#6f7880',['#646d75','#7b848c'],151);
   stealth2(g,body,skin,{
-    fus:[FS(-8.6,0.03,0.03,null,-0.05),FS(-7.9,0.34,0.18,0.14,-0.03,1.4),FS(-7,0.66,0.44,0.3,0,1.4),FS(-6,0.9,0.74,0.42,0,1.5),FS(-5,1.08,0.96,0.52,0,1.6),FS(-4,1.25,1.06,0.6,0,1.8),
-      FS(-2.5,1.7,1.0,0.68,-0.03,2.2),FS(0,1.9,0.9,0.72,-0.06,2.6),FS(2.5,1.75,0.78,0.72,-0.08,2.8),FS(5,1.2,0.7,0.72,-0.1,2.4),FS(6.6,0.82,0.72,0.74,-0.1),FS(7.35,0.72,0.72,0.72,-0.1)],
-    wing:[[1.5,-1.95,4.42,0.04],[3.4,0.28,4.1,0.04],[5.3,2.48,3.82,0.038],[5.42,2.7,3.78,0.033]],
-    tail:[[1.1,5.1,7.5,0.035],[3.3,6.5,7.32,0.035],[3.42,6.7,7.3,0.03]], tailY:-0.15,
-    duct:[[-4.25,1.38,0.43,0.5,3],[-3,1.38,0.45,0.52,3],[-1.5,1.25,0.35,0.45],[-0.2,1.1,0.15,0.3]], dy:-0.15, mx:1.4, mw:0.8, mh:0.95,
-    fin:[[3.9,0.45],[4.8,0.7],[5.9,2.75],[6.2,2.9],[7.15,2.9],[7.2,2.55],[6.8,0.45]], finX:1.25, cant:0.45, mark:fg=>usFlag(fg,1.75,5.45,0.13)});
+    fus:[FS(-8.6,0.03,0.03,null,-0.05),FS(-7.9,0.34,0.18,0.14,-0.03,1.4),FS(-7,0.6,0.44,0.3,0,1.4),FS(-6,0.8,0.74,0.42,0,1.5),FS(-5,0.95,0.96,0.52,0,1.6),FS(-4,1.08,1.06,0.6,0,1.8),
+      FS(-2.5,1.3,1.0,0.68,-0.03,2.2),FS(0,1.35,0.9,0.72,-0.06,2.6),FS(2.5,1.25,0.78,0.72,-0.08,2.8),FS(5,1.0,0.7,0.72,-0.1,2.4),FS(6.6,0.82,0.72,0.74,-0.1),FS(7.35,0.72,0.72,0.72,-0.1)],
+    wing:[[1.1,-2.41,4.42,0.04],[3.4,0.28,4.1,0.04],[5.3,2.48,3.82,0.038],[5.42,2.7,3.78,0.033]],
+    tail:[[0.9,4.95,7.5,0.035],[3.3,6.5,7.32,0.035],[3.42,6.7,7.3,0.03]], tailY:-0.15,
+    duct:[[-4.25,1.1,0.4,0.5,3],[-3,1.1,0.42,0.52,3],[-1.5,1.0,0.34,0.45],[-0.2,0.85,0.15,0.3]], dy:-0.15, mx:1.12, mw:0.75, mh:0.95,
+    fin:[[3.9,0.45],[4.8,0.7],[5.9,2.75],[6.2,2.9],[7.15,2.9],[7.2,2.55],[6.8,0.45]], finX:1.05, cant:0.45, mark:fg=>usFlag(fg,1.75,5.45,0.13)});
   nozzle(g,0,-0.1,7.4,0.72);
   canopy(g,0.62,3.6,1.0,-4.6);
   g.userData.hp=[];   // weapons ride in the internal bays
@@ -1946,108 +1967,16 @@ function buildF352(){
 function buildJ202(){
   const g=newPlane(), {body,skin}=skins('#4f565e',['#454c54','#5a6169'],97);
   stealth2(g,body,skin,{
-    fus:[FS(-11,0.03,0.03,null,-0.05),FS(-10.2,0.32,0.16,0.12,-0.04,1.4),FS(-9,0.66,0.52,0.28,0,1.4),FS(-8,0.86,0.8,0.38,0,1.5),FS(-7,1.0,0.92,0.46,0,1.6),FS(-6,1.1,0.97,0.52,0,1.7),FS(-4.8,1.25,1.0,0.58,0,1.8),
-      FS(-3,1.75,0.9,0.64,-0.04,2.2),FS(0,1.95,0.78,0.66,-0.08,2.6),FS(3.5,1.9,0.64,0.62,-0.1,2.8),FS(7,1.6,0.48,0.56,-0.14,2.8),FS(9.1,1.4,0.36,0.5,-0.2,2.8)],
-    wing:[[1.3,-1.62,6.22,0.035],[3.8,1.43,5.86,0.035],[6.3,4.48,5.52,0.035],[6.42,4.7,5.48,0.03]],
-    canard:[[1.0,-5.3,-3.0,0.045],[3.3,-3.68,-3.08,0.04],[3.42,-3.5,-3.1,0.035]],
-    duct:[[-4.75,1.42,0.45,0.45,3],[-3.2,1.42,0.47,0.47,3],[-1.5,1.3,0.38,0.42],[0,1.15,0.18,0.28]], dy:-0.35, mx:1.45, mw:0.85, mh:0.85,
-    eng:[[6,0.48],[7.8,0.6],[9.1,0.58]], ex:0.78, ey:-0.3, nozZ:9.2, nozR:0.58,
-    fin:[[4.9,0.35],[5.8,0.6],[7.2,3.05],[7.5,3.2],[8.55,3.2],[8.6,2.85],[8.2,0.35]], finX:1.5, cant:0.4, mark:fg=>cnFlag(fg,2.0,6.75,0.13)});
-  [-1,1].forEach(s=>{ const vf=fin([[6.5,-0.1],[8.2,-0.1],[8.4,-1.1],[7.4,-1.1]],0.1,skin); vf.position.set(s*1.1,-0.5,0); vf.rotation.z=s*0.5; g.add(vf); });
+    fus:[FS(-11,0.03,0.03,null,-0.05),FS(-10.2,0.32,0.16,0.12,-0.04,1.4),FS(-9,0.58,0.52,0.28,0,1.4),FS(-8,0.74,0.8,0.38,0,1.5),FS(-7,0.86,0.92,0.46,0,1.6),FS(-6,0.94,0.97,0.52,0,1.7),FS(-4.8,1.08,1.0,0.58,0,1.8),
+      FS(-3,1.3,0.9,0.64,-0.04,2.2),FS(0,1.35,0.78,0.66,-0.08,2.6),FS(3.5,1.3,0.64,0.62,-0.1,2.8),FS(7,1.2,0.48,0.56,-0.14,2.8),FS(9.1,1.12,0.42,0.5,-0.2,2.8)],
+    wing:[[1.1,-1.86,6.22,0.035],[3.8,1.43,5.86,0.035],[6.3,4.48,5.52,0.035],[6.42,4.7,5.48,0.03]],
+    canard:[[0.8,-5.44,-3.0,0.045],[3.3,-3.68,-3.08,0.04],[3.42,-3.5,-3.1,0.035]],
+    duct:[[-4.75,1.1,0.42,0.45,3],[-3.2,1.1,0.44,0.47,3],[-1.5,1.0,0.36,0.42],[0,0.9,0.18,0.28]], dy:-0.35, mx:1.12, mw:0.78, mh:0.85,
+    eng:[[6,0.44],[7.8,0.56],[9.1,0.54]], ex:0.62, ey:-0.3, nozZ:9.2, nozR:0.54,
+    fin:[[4.9,0.35],[5.8,0.6],[7.2,3.05],[7.5,3.2],[8.55,3.2],[8.6,2.85],[8.2,0.35]], finX:1.15, cant:0.4, mark:fg=>cnFlag(fg,2.0,6.75,0.13)});
+  [-1,1].forEach(s=>{ const vf=fin([[6.5,-0.1],[8.2,-0.1],[8.4,-1.1],[7.4,-1.1]],0.1,skin); vf.position.set(s*0.9,-0.5,0); vf.rotation.z=s*0.5; g.add(vf); });
   canopy(g,0.62,4.2,0.95,-6.6);
   g.userData.hp=[];   // weapons ride in the internal bay
-  return g;
-}
-function buildMig29(){
-  const g=newPlane(), {body,skin}=skins('#8c98a3',['#66788a','#aab4be'],23);
-  g.add(new T.Mesh(lathe([[0.95,-1.5],[0.95,0.5],[0.85,2.8],[0.7,4.6],[0.5,6.3],[0.26,7.8],[0.04,8.7]]), body));
-  const cb=new T.Mesh(new T.BoxGeometry(2.4,0.55,8.6), body); cb.position.set(0,0,3.0); g.add(cb);
-  const sp=new T.Mesh(new T.BoxGeometry(0.9,0.4,5), body); sp.position.set(0,0.35,1.2); g.add(sp);
-  [-1,1].forEach(s=>{
-    const n=new T.Mesh(new T.CylinderGeometry(0.56,0.6,8.8,12), body); n.rotation.x=Math.PI/2; n.position.set(s*1.05,-0.5,2.6); g.add(n);
-    const it=new T.Mesh(new T.BoxGeometry(0.95,0.85,1.6), body); it.position.set(s*1.05,-0.62,-2.4); g.add(it);
-    const mouth=new T.Mesh(new T.BoxGeometry(0.8,0.7,0.05), darkMat); mouth.position.set(s*1.05,-0.62,-3.22); g.add(mouth);
-    nozzle(g,s*1.05,-0.5,7.4,0.56);
-    const f=fin([[3.6,0.25],[6.8,0.25],[7.1,3.0],[6.0,3.0]],0.13,skin); f.position.x=s*1.3; f.rotation.z=-s*0.14; g.add(f);
-    finFlash(g,s*(1.3+0.31),2.2,6.15,0.17,-s*0.14);
-  });
-  g.add(slab([[0.5,-5.6],[1.7,-1.3],[5.9,2.6],[5.9,3.6],[1.8,3.9],[-1.8,3.9],[-5.9,3.6],[-5.9,2.6],[-1.7,-1.3],[-0.5,-5.6]],0.15,skin,0.02));
-  g.add(slab([[1.5,5.0],[4.0,6.9],[4.0,7.6],[1.5,7.8],[-1.5,7.8],[-4.0,7.6],[-4.0,6.9],[-1.5,5.0]],0.1,skin,-0.15));
-  canopy(g,0.6,3.8,0.82,-4.6);
-  roundels(g,[[-3.8,0.11,2.9],[3.8,0.11,2.9]]);
-  g.userData.hp=[[-2.6,-0.35,2.0],[2.6,-0.35,2.0],[-3.6,-0.3,2.6],[3.6,-0.3,2.6],[-4.6,-0.25,3.0],[4.6,-0.25,3.0]];
-  return g;
-}
-function buildMig21(){
-  const g=newPlane(), {body,skin}=skins('#9aa3ab',['#7a8794','#b9c0c6'],37);
-  g.add(new T.Mesh(lathe([[0.5,-7.0],[0.66,-6.2],[0.8,-3.5],[0.82,0],[0.76,3.2],[0.64,5.8],[0.56,6.9],[0.52,7.4]]), body));
-  const cone=new T.Mesh(new T.ConeGeometry(0.36,1.5,12), darkMat); cone.rotation.x=-Math.PI/2; cone.position.z=-7.8; g.add(cone);
-  const sp=new T.Mesh(new T.BoxGeometry(0.5,0.42,7.5), body); sp.position.set(0,0.68,0.8); g.add(sp);
-  canopy(g,0.48,2.7,0.82,-3.9);
-  g.add(slab([[0.7,-1.2],[4.0,3.6],[3.8,4.2],[-3.8,4.2],[-4.0,3.6],[-0.7,-1.2]],0.12,skin,-0.2));
-  g.add(slab([[0.5,4.9],[2.6,6.8],[2.5,7.25],[-2.5,7.25],[-2.6,6.8],[-0.5,4.9]],0.08,skin,-0.05));
-  g.add(fin([[1.8,0.6],[6.2,0.6],[6.9,3.3],[5.7,3.3]],0.12,skin));
-  g.add(fin([[4.6,-0.55],[6.6,-0.55],[6.5,-1.25],[6.0,-1.25]],0.1,skin));
-  nozzle(g,0,0,7.5,0.52);
-  roundels(g,[[-2.6,-0.13,2.9],[2.6,-0.13,2.9]]);
-  finFlash(g,0,2.5,5.6,0.15);
-  g.userData.hp=[[-1.9,-0.5,1.6],[1.9,-0.5,1.6],[-2.8,-0.45,2.6],[2.8,-0.45,2.6]];
-  return g;
-}
-function buildRafale(){
-  const g=newPlane(), {body,skin}=skins('#6f7a84',['#5b656e','#828c95'],19);
-  g.add(new T.Mesh(lathe([[0.95,-2],[0.95,0.5],[0.85,2.8],[0.68,4.5],[0.45,6.0],[0.2,7.2],[0.03,7.9]]), body));
-  const rb=new T.Mesh(new T.BoxGeometry(1.9,0.8,8), body); rb.position.set(0,-0.15,3.0); g.add(rb);
-  const sp=new T.Mesh(new T.BoxGeometry(0.8,0.4,5.5), body); sp.position.set(0,0.35,1.6); g.add(sp);
-  [-1,1].forEach(s=>{
-    const it=new T.Mesh(new T.BoxGeometry(0.7,0.8,2.2), body); it.position.set(s*0.95,-0.45,-1.2); g.add(it);
-    const mouth=new T.Mesh(new T.BoxGeometry(0.6,0.65,0.05), darkMat); mouth.position.set(s*0.95,-0.45,-2.32); g.add(mouth);
-    nozzle(g,s*0.5,-0.15,7.3,0.48);
-  });
-  g.add(slab([[1.0,-1.5],[5.4,4.6],[5.3,5.2],[-5.3,5.2],[-5.4,4.6],[-1.0,-1.5]],0.15,skin,-0.15));
-  g.add(slab([[0.9,-4.3],[2.6,-3.0],[2.6,-2.6],[0.9,-2.7],[-0.9,-2.7],[-2.6,-2.6],[-2.6,-3.0],[-0.9,-4.3]],0.08,skin,0.1));
-  g.add(fin([[2.0,0.6],[6.0,0.6],[6.6,3.6],[5.4,3.6]],0.14,skin));
-  canopy(g,0.6,3.8,0.8,-4.6);
-  roundels(g,[[-3.6,-0.065,3.6],[3.6,-0.065,3.6]]);
-  finFlash(g,0,2.8,5.0,0.17);
-  g.userData.hp=[[-2.4,-0.45,2.0],[2.4,-0.45,2.0],[-3.4,-0.42,3.0],[3.4,-0.42,3.0],[-0.6,-0.85,2.5],[0.6,-0.85,2.5]];
-  return g;
-}
-function buildSu30(){
-  const g=newPlane(), {body,skin}=skins('#9ea8b0',['#7f8b95','#b6bec5'],29);
-  g.add(new T.Mesh(lathe([[1.0,-1],[1.0,1],[0.9,3.5],[0.72,5.6],[0.5,7.4],[0.25,9.0],[0.04,10.0]]), body));
-  const cb=new T.Mesh(new T.BoxGeometry(2.8,0.6,10), body); cb.position.set(0,0,4.0); g.add(cb);
-  const sp=new T.Mesh(new T.BoxGeometry(1.1,0.45,6.5), body); sp.position.set(0,0.35,2.5); g.add(sp);
-  [-1,1].forEach(s=>{
-    const n=new T.Mesh(new T.CylinderGeometry(0.62,0.66,10,12), body); n.rotation.x=Math.PI/2; n.position.set(s*1.35,-0.55,4.0); g.add(n);
-    const it=new T.Mesh(new T.BoxGeometry(1.0,0.95,1.8), body); it.position.set(s*1.35,-0.65,-1.6); g.add(it);
-    const mouth=new T.Mesh(new T.BoxGeometry(0.85,0.8,0.05), darkMat); mouth.position.set(s*1.35,-0.65,-2.52); g.add(mouth);
-    nozzle(g,s*1.35,-0.55,9.4,0.6);
-    const f=fin([[4.6,0.3],[8.4,0.3],[8.8,3.8],[7.5,3.8]],0.14,skin); f.position.x=s*1.55; g.add(f);
-    finFlash(g,s*1.55,2.6,7.0,0.18);
-  });
-  g.add(slab([[0.6,-6.5],[1.9,-1.5],[7.2,3.6],[7.2,4.6],[2.0,5.4],[-2.0,5.4],[-7.2,4.6],[-7.2,3.6],[-1.9,-1.5],[-0.6,-6.5]],0.16,skin,0.02));
-  g.add(slab([[1.0,-6.0],[3.0,-4.6],[3.0,-4.1],[1.0,-4.3],[-1.0,-4.3],[-3.0,-4.1],[-3.0,-4.6],[-1.0,-6.0]],0.08,skin,0.1));
-  g.add(slab([[1.9,6.6],[4.8,8.6],[4.8,9.4],[1.9,9.6],[-1.9,9.6],[-4.8,9.4],[-4.8,8.6],[-1.9,6.6]],0.1,skin,-0.15));
-  canopy(g,0.65,4.4,0.85,-5.6);
-  roundels(g,[[-4.8,0.11,3.6],[4.8,0.11,3.6]]);
-  g.userData.hp=[[-3.2,-0.35,2.4],[3.2,-0.35,2.4],[-4.4,-0.3,3.2],[4.4,-0.3,3.2],[-5.6,-0.25,3.8],[5.6,-0.25,3.8],[-0.55,-0.6,1.0],[0.55,-0.6,1.0]];
-  return g;
-}
-function buildTejas(){
-  const g=newPlane(), {body,skin}=skins('#8f99a2',['#717d88','#a8b1b9'],43);
-  g.add(new T.Mesh(lathe([[0.5,-6.0],[0.7,-5.4],[0.85,-3],[0.88,0],[0.82,2.4],[0.66,4.2],[0.44,5.6],[0.2,6.6],[0.04,7.2]]), body));
-  [-1,1].forEach(s=>{
-    const it=new T.Mesh(new T.BoxGeometry(0.6,0.8,2.6), body); it.position.set(s*0.9,-0.3,-0.4); g.add(it);
-    const mouth=new T.Mesh(new T.BoxGeometry(0.5,0.65,0.05), darkMat); mouth.position.set(s*0.9,-0.3,-1.72); g.add(mouth);
-  });
-  g.add(slab([[0.7,-3.2],[1.6,-0.6],[4.1,3.8],[4.0,4.6],[-4.0,4.6],[-4.1,3.8],[-1.6,-0.6],[-0.7,-3.2]],0.14,skin,-0.18));
-  g.add(fin([[1.4,0.6],[5.4,0.6],[5.9,3.4],[4.8,3.4]],0.13,skin));
-  canopy(g,0.52,2.8,0.78,-3.4);
-  nozzle(g,0,0,6.2,0.5);
-  roundels(g,[[-2.8,-0.1,3.2],[2.8,-0.1,3.2]]);
-  finFlash(g,0,2.5,4.7,0.16);
-  g.userData.hp=[[-1.9,-0.45,1.8],[1.9,-0.45,1.8],[-2.9,-0.42,2.9],[2.9,-0.42,2.9]];
   return g;
 }
 // Pakistani tail marking, simplified: white hoist stripe and green field
@@ -2093,116 +2022,6 @@ function texFlag(g, y, z, th, tex, fw, fh){
     f.rotation.y = s<0 ? -Math.PI/2 : Math.PI/2;   // faces outward on each side of the fin
     f.position.set(s*(th/2+0.015), y, z+fw/2); g.add(f);
   });
-}
-function buildJF17(){
-  const g=newPlane(), {body,skin}=skins('#9aa2a8',['#7f8a93','#b3bac0'],61);
-  g.add(new T.Mesh(lathe([[0.5,-6.4],[0.75,-5.6],[0.88,-3],[0.9,0],[0.82,2.5],[0.62,4.6],[0.42,6.0],[0.2,7.0],[0.04,7.6]],12), body));
-  [-1,1].forEach(s=>{
-    const it=new T.Mesh(new T.BoxGeometry(0.6,0.85,2.6), body); it.position.set(s*0.95,-0.15,-0.7); g.add(it);
-    const mouth=new T.Mesh(new T.BoxGeometry(0.5,0.7,0.05), darkMat); mouth.position.set(s*0.95,-0.15,-2.02); g.add(mouth);
-  });
-  g.add(slab([[0.6,-4.2],[1.2,-1.0],[4.6,2.0],[4.6,2.8],[1.0,3.6],[-1.0,3.6],[-4.6,2.8],[-4.6,2.0],[-1.2,-1.0],[-0.6,-4.2]],0.13,skin,-0.1));
-  g.add(slab([[0.5,4.6],[2.7,6.0],[2.7,6.6],[0.5,6.7],[-0.5,6.7],[-2.7,6.6],[-2.7,6.0],[-0.5,4.6]],0.08,skin,-0.05));
-  g.add(fin([[2.4,0.65],[6.1,0.65],[6.6,3.3],[5.4,3.3]],0.13,skin));
-  canopy(g,0.55,3.0,0.78,-3.7);
-  nozzle(g,0,0,6.6,0.52);
-  pkFlag(g,2.6,5.1,0.16);
-  g.userData.hp=[[-2.2,-0.35,1.4],[2.2,-0.35,1.4],[-3.4,-0.3,2.2],[3.4,-0.3,2.2]];   // pylons, used when a player flies it
-  return g;
-}
-function buildF16(){
-  const g=newPlane(), {body,skin}=skins('#8e979f',['#737d86','#a6aeb5'],83);
-  g.add(new T.Mesh(lathe([[0.55,-6.6],[0.78,-5.8],[0.9,-3],[0.92,0],[0.85,2.6],[0.68,4.6],[0.45,6.2],[0.2,7.4],[0.04,8.0]],12), body));
-  const it=new T.Mesh(new T.BoxGeometry(1.2,0.8,2.8), body); it.position.set(0,-0.95,-1.2); g.add(it);
-  const mouth=new T.Mesh(new T.BoxGeometry(1.0,0.6,0.05), darkMat); mouth.position.set(0,-0.95,-2.62); g.add(mouth);
-  g.add(slab([[0.5,-4.6],[1.1,-1.2],[4.7,2.2],[4.7,3.0],[1.2,3.8],[-1.2,3.8],[-4.7,3.0],[-4.7,2.2],[-1.1,-1.2],[-0.5,-4.6]],0.13,skin,-0.1));
-  g.add(slab([[0.6,5.2],[3.0,6.6],[3.0,7.2],[0.6,7.3],[-0.6,7.3],[-3.0,7.2],[-3.0,6.6],[-0.6,5.2]],0.08,skin,-0.1));
-  g.add(fin([[2.6,0.7],[6.3,0.7],[6.8,3.5],[5.6,3.5]],0.13,skin));
-  [-1,1].forEach(s=>{
-    const v=fin([[5.0,-0.6],[6.4,-0.6],[6.3,-1.1],[5.9,-1.1]],0.08,skin); v.position.x=s*0.6; v.rotation.z=s*0.3; g.add(v);
-    const m=mslProtoE.clone(); m.rotation.y=Math.PI; m.position.set(s*4.8,-0.05,2.4); g.add(m);   // wingtip missiles
-  });
-  canopy(g,0.55,3.0,0.85,-4.0);
-  nozzle(g,0,0,6.9,0.55);
-  usFlag(g,2.7,5.25,0.16);
-  g.userData.hp=[[-2.2,-0.35,1.4],[2.2,-0.35,1.4],[-3.3,-0.3,2.2],[3.3,-0.3,2.2],[-4.1,-0.28,2.7],[4.1,-0.28,2.7]];
-  return g;
-}
-function buildJ10(){
-  const g=newPlane(), {body,skin}=skins('#a3abb2',['#8a949d','#bcc3c9'],73);
-  g.add(new T.Mesh(lathe([[0.55,-6.8],[0.8,-6.0],[0.95,-3],[0.98,0],[0.9,2.6],[0.72,4.6],[0.48,6.2],[0.22,7.4],[0.04,8.1]],12), body));
-  const it=new T.Mesh(new T.BoxGeometry(1.3,0.8,3.2), body); it.position.set(0,-0.95,-0.6); g.add(it);
-  const mouth=new T.Mesh(new T.BoxGeometry(1.1,0.6,0.05), darkMat); mouth.position.set(0,-0.95,-2.23); g.add(mouth);
-  g.add(slab([[0.9,-1.2],[4.6,4.4],[4.5,5.0],[-4.5,5.0],[-4.6,4.4],[-0.9,-1.2]],0.14,skin,-0.2));
-  g.add(slab([[0.8,-3.6],[2.3,-2.4],[2.3,-2.0],[0.8,-2.1],[-0.8,-2.1],[-2.3,-2.0],[-2.3,-2.4],[-0.8,-3.6]],0.07,skin,0.05));
-  g.add(fin([[2.3,0.7],[6.0,0.7],[6.6,3.6],[5.4,3.6]],0.13,skin));
-  [-1,1].forEach(s=>{ const v=fin([[5.0,-0.6],[6.6,-0.6],[6.5,-1.2],[6.0,-1.2]],0.08,skin); v.position.x=s*0.6; v.rotation.z=s*0.3; g.add(v); });
-  canopy(g,0.55,3.2,0.82,-4.2);
-  nozzle(g,0,0,7.1,0.55);
-  cnFlag(g,2.8,5.0,0.16);
-  g.userData.hp=[[-1.9,-0.4,2.2],[1.9,-0.4,2.2],[-2.9,-0.35,3.2],[2.9,-0.35,3.2],[-3.8,-0.3,4.1],[3.8,-0.3,4.1]];
-  return g;
-}
-// AMCA: twin-engine stealth fighter: diamond nose, trapezoid wing, twin canted fins, no canards; tricolour roundels and fin flash
-function buildAMCA(){
-  const g=newPlane(), {body,skin}=skins('#7a838b',['#6c757d','#88919a'],131);
-  g.add(new T.Mesh(lathe([[0.6,-8.6],[0.95,-7],[1.05,-3],[1.0,0],[0.9,3],[0.7,5.6],[0.42,7.6],[0.18,9.0],[0.03,9.7]],12), body));
-  const cb=new T.Mesh(new T.BoxGeometry(3.2,0.65,10), body); cb.position.set(0,-0.1,1.2); g.add(cb);
-  const ch=new T.Mesh(new T.BoxGeometry(2.0,0.25,4.4), body); ch.position.set(0,0.05,-5.6); g.add(ch);   // chined nose
-  [-1,1].forEach(s=>{
-    const it=new T.Mesh(new T.BoxGeometry(1.05,1.05,4.4), body); it.position.set(s*1.55,-0.3,-2.2); g.add(it);
-    const mouth=new T.Mesh(new T.BoxGeometry(0.9,0.9,0.05), darkMat); mouth.position.set(s*1.55,-0.3,-4.42); g.add(mouth);
-    const en=new T.Mesh(new T.CylinderGeometry(0.62,0.64,7.5,12), body); en.rotation.x=Math.PI/2; en.position.set(s*0.8,-0.3,4.6); g.add(en);
-    nozzle(g,s*0.8,-0.3,8.5,0.6);
-    const f=fin([[4.6,0.4],[7.6,0.4],[8.1,3.1],[6.6,3.1]],0.13,skin); f.position.x=s*1.6; f.rotation.z=-s*0.45; g.add(f);   // canted outwards
-    const fl=new T.Group(); fl.position.x=s*1.6; fl.rotation.z=-s*0.45; g.add(fl); finFlash(fl,s*0.08,2.0,6.1,0.15,0);
-  });
-  g.add(slab([[1.0,-3.4],[1.6,-2.4],[5.6,3.6],[5.6,4.8],[1.6,5.6],[-1.6,5.6],[-5.6,4.8],[-5.6,3.6],[-1.6,-2.4],[-1.0,-3.4]],0.14,skin,-0.05));
-  g.add(slab([[1.6,6.2],[3.9,7.8],[3.9,8.5],[1.6,8.6],[-1.6,8.6],[-3.9,8.5],[-3.9,7.8],[-1.6,6.2]],0.08,skin,-0.2));   // tailplanes
-  canopy(g,0.62,4.0,0.95,-5.8);
-  roundels(g,[[-3.6,0.1,2.4],[3.6,0.1,2.4]]);
-  g.userData.hp=[];   // weapons ride in the internal bay
-  return g;
-}
-// F-35A: single-engine stealth fighter: trapezoid wing and tailplanes, twin canted fins, side intakes; US flag on both fins
-function buildF35(){
-  const g=newPlane(), {body,skin}=skins('#6f7880',['#646d75','#7b848c'],151);
-  g.add(new T.Mesh(lathe([[0.75,-7.4],[1.05,-6],[1.15,-2.5],[1.1,0],[0.95,2.8],[0.7,5.0],[0.42,6.8],[0.18,8.0],[0.03,8.6]],12), body));
-  const cb=new T.Mesh(new T.BoxGeometry(3.0,0.75,8.5), body); cb.position.set(0,-0.1,0.6); g.add(cb);
-  const ch=new T.Mesh(new T.BoxGeometry(1.8,0.25,3.8), body); ch.position.set(0,0.05,-5.0); g.add(ch);   // chined nose
-  [-1,1].forEach(s=>{
-    const it=new T.Mesh(new T.BoxGeometry(0.95,1.1,3.6), body); it.position.set(s*1.4,-0.15,-2.4); g.add(it);
-    const mouth=new T.Mesh(new T.BoxGeometry(0.8,0.95,0.05), darkMat); mouth.position.set(s*1.4,-0.15,-4.22); g.add(mouth);
-    const f=fin([[4.2,0.5],[6.6,0.5],[7.2,2.9],[5.9,2.9]],0.13,skin); f.position.x=s*1.25; f.rotation.z=-s*0.45; g.add(f);   // canted outwards
-    const fg=new T.Group(); fg.position.x=s*1.25; fg.rotation.z=-s*0.45; g.add(fg); usFlag(fg,1.75,5.25,0.13);
-  });
-  nozzle(g,0,-0.1,7.4,0.72);
-  g.add(slab([[1.1,-2.6],[1.6,-1.8],[5.4,2.6],[5.4,3.8],[1.6,4.4],[-1.6,4.4],[-5.4,3.8],[-5.4,2.6],[-1.6,-1.8],[-1.1,-2.6]],0.14,skin,-0.05));
-  g.add(slab([[1.2,5.2],[3.4,6.6],[3.4,7.3],[1.2,7.5],[-1.2,7.5],[-3.4,7.3],[-3.4,6.6],[-1.2,5.2]],0.08,skin,-0.15));   // tailplanes
-  canopy(g,0.62,3.6,1.0,-4.6);
-  g.userData.hp=[];   // weapons ride in the internal bays
-  return g;
-}
-// J-20: long stealth fighter, canards, big delta wing, twin canted fins, DSI intakes; dark grey, Chinese flag on both fins
-function buildJ20(){
-  const g=newPlane(), {body,skin}=skins('#4f565e',['#454c54','#5a6169'],97);
-  g.add(new T.Mesh(lathe([[0.6,-9.5],[0.95,-8],[1.05,-4],[1.0,0],[0.92,3],[0.75,6],[0.48,8.5],[0.2,10.2],[0.03,11]],12), body));
-  const cb=new T.Mesh(new T.BoxGeometry(3.0,0.6,9.5), body); cb.position.set(0,-0.1,1.5); g.add(cb);
-  const ch=new T.Mesh(new T.BoxGeometry(2.2,0.25,5), body); ch.position.set(0,0.05,-6.2); g.add(ch);   // chined nose
-  [-1,1].forEach(s=>{
-    const it=new T.Mesh(new T.BoxGeometry(1.0,1.0,4.2), body); it.position.set(s*1.45,-0.35,-2.6); g.add(it);
-    const mouth=new T.Mesh(new T.BoxGeometry(0.85,0.85,0.05), darkMat); mouth.position.set(s*1.45,-0.35,-4.72); g.add(mouth);
-    const en=new T.Mesh(new T.CylinderGeometry(0.6,0.62,8,12), body); en.rotation.x=Math.PI/2; en.position.set(s*0.78,-0.3,5.0); g.add(en);
-    nozzle(g,s*0.78,-0.3,9.2,0.58);
-    const f=fin([[5.2,0.4],[8.0,0.4],[8.6,3.2],[7.2,3.2]],0.13,skin); f.position.x=s*1.5; f.rotation.z=-s*0.4; g.add(f);   // canted outwards
-    const fg=new T.Group(); fg.position.x=s*1.5; fg.rotation.z=-s*0.4; g.add(fg); cnFlag(fg,2.0,6.6,0.13);
-    const vf=fin([[6.5,-0.1],[8.2,-0.1],[8.4,-1.1],[7.4,-1.1]],0.1,skin); vf.position.set(s*1.1,-0.5,0); vf.rotation.z=s*0.5; g.add(vf);
-  });
-  g.add(slab([[0.9,-2.5],[1.4,-1.5],[6.4,4.6],[6.4,5.5],[1.4,6.2],[-1.4,6.2],[-6.4,5.5],[-6.4,4.6],[-1.4,-1.5],[-0.9,-2.5]],0.14,skin,-0.05));
-  g.add(slab([[1.1,-5.2],[3.4,-3.6],[3.4,-3.1],[1.1,-3.0],[-1.1,-3.0],[-3.4,-3.1],[-3.4,-3.6],[-1.1,-5.2]],0.08,skin,0.15));   // canards
-  canopy(g,0.62,4.2,0.95,-6.6);
-  g.userData.hp=[];   // weapons ride in the internal bay
-  return g;
 }
 function buildMissile(col){
   const g=new T.Group(), mat=new T.MeshLambertMaterial({color:col});
@@ -2256,76 +2075,164 @@ function buildUAV(){
   const eo=new T.Mesh(new T.SphereGeometry(0.28,10,8), dk); eo.position.set(0,-0.55,-2.6); g.add(eo);   // camera turret
   return g;
 }
-// MiG-27: sloping "duck" nose, shoulder wing shown at mid sweep, side intakes, big fin and a ventral fin
-function buildMig27(){
-  const g=newPlane(), {body,skin}=skins('#8a8f7c',['#666d58','#a5a088'],53);
-  g.add(new T.Mesh(lathe([[0.75,-8.0],[0.95,-7.3],[1.0,-4],[1.0,0],[0.98,2.5],[0.95,4.2]],14), body));
-  const nose=new T.Mesh(lathe([[0.95,0],[0.85,1.6],[0.6,3.0],[0.3,4.2],[0.06,4.8]],14), body);
-  nose.position.set(0,-0.05,-4.1); nose.rotation.x=-0.08; g.add(nose);
-  const pt=new T.Mesh(new T.CylinderGeometry(0.03,0.03,1.0,5), darkMat); pt.rotation.x=Math.PI/2; pt.position.set(0,-0.45,-9.3); g.add(pt);
-  const sp=new T.Mesh(new T.BoxGeometry(0.7,0.45,7), body); sp.position.set(0,0.85,1.5); g.add(sp);
-  [-1,1].forEach(s=>{
-    const it=new T.Mesh(new T.BoxGeometry(0.7,1.3,3.4), body); it.position.set(s*1.15,-0.05,-2.0); g.add(it);
-    const mouth=new T.Mesh(new T.BoxGeometry(0.6,1.15,0.05), darkMat); mouth.position.set(s*1.15,-0.05,-3.72); g.add(mouth);
-  });
-  // fixed glove, plus outer wing panels on pivots that sweep with speed (see updateSwing)
-  g.add(slab([[1.1,-3.4],[2.2,-1.6],[2.2,1.4],[1.1,2.0],[-1.1,2.0],[-2.2,1.4],[-2.2,-1.6],[-1.1,-3.4]],0.14,skin,0.55));
-  g.userData.swing=[-1,1].map(s=>{
-    const pv=new T.Group(); pv.position.set(s*2.0,0.55,-0.4); g.add(pv);
-    let pts=[[0,-1.0],[4.0,-0.2],[4.0,0.7],[0,1.8]].map(([x,z])=>[s*x,z]); if (s<0) pts=pts.reverse();
-    pv.add(slab(pts,0.12,skin,0));
-    roundels(pv,[[s*2.6,0.07,0.4]]);
-    return {pv,s};
-  });
-  g.add(slab([[0.8,5.0],[3.4,7.4],[3.4,8.0],[0.8,7.9],[-0.8,7.9],[-3.4,8.0],[-3.4,7.4],[-0.8,5.0]],0.09,skin,-0.1));
-  g.add(fin([[2.4,0.9],[7.4,0.9],[8.0,4.6],[6.6,4.6]],0.14,skin));
-  g.add(fin([[6.0,-0.8],[7.8,-0.8],[7.6,-1.6],[6.9,-1.6]],0.1,skin));
-  canopy(g,0.55,3.0,0.95,-5.0);
-  nozzle(g,0,0,8.4,0.65);
-  finFlash(g,0,3.6,7.2,0.17);
-  g.userData.hp=[[-1.75,0.18,-1.4],[1.75,0.18,-1.4],[-0.55,-1.3,-0.8],[0.55,-1.3,-0.8],[-0.55,-1.3,1.8],[0.55,-1.3,1.8],[-1.25,-1.0,0.9],[1.25,-1.0,0.9]];
-  return g;
-}
-// Jaguar: long pointed nose, high swept wing, twin engines in a wide rear body, low tailplane, missiles above the wing
-function buildJaguar(){
-  const g=newPlane(), {body,skin}=skins('#7f8770',['#5e6650','#a19e86'],67);
-  g.add(new T.Mesh(lathe([[0.7,-8.0],[0.85,-6.5],[0.9,-3],[0.9,0],[0.8,2.4],[0.6,4.4],[0.42,6.2],[0.2,7.8],[0.04,8.6]],14), body));
-  const rb=new T.Mesh(new T.BoxGeometry(1.9,1.1,8.5), body); rb.position.set(0,-0.15,3.6); g.add(rb);
-  [-1,1].forEach(s=>{
-    const it=new T.Mesh(new T.BoxGeometry(0.6,1.0,2.6), body); it.position.set(s*1.1,-0.05,-1.6); g.add(it);
-    const mouth=new T.Mesh(new T.BoxGeometry(0.5,0.85,0.05), darkMat); mouth.position.set(s*1.1,-0.05,-2.92); g.add(mouth);
-    nozzle(g,s*0.5,-0.3,8.2,0.42);
-    const v=fin([[5.4,-0.7],[7.0,-0.7],[6.9,-1.2],[6.3,-1.2]],0.08,skin); v.position.x=s*0.6; v.rotation.z=s*0.25; g.add(v);
-    const m=mslProtoP.clone(); m.rotation.y=Math.PI; m.position.set(s*2.4,0.95,0.6); g.add(m);   // overwing self-defence missile
-  });
-  g.add(slab([[0.95,-1.8],[4.35,2.0],[4.3,2.55],[1.0,2.9],[-1.0,2.9],[-4.3,2.55],[-4.35,2.0],[-0.95,-1.8]],0.14,skin,0.6));
-  g.add(slab([[0.6,5.6],[3.0,7.4],[3.0,8.0],[0.6,8.1],[-0.6,8.1],[-3.0,8.0],[-3.0,7.4],[-0.6,5.6]],0.08,skin,-0.45));
-  g.add(fin([[3.2,0.4],[7.6,0.4],[8.4,3.6],[7.1,3.6]],0.13,skin));
-  canopy(g,0.52,2.8,0.8,-4.6);
-  roundels(g,[[-3.2,0.68,1.7],[3.2,0.68,1.7]]);
-  finFlash(g,0,2.6,7.0,0.16);
-  g.userData.hp=[[-2.0,0.23,0.4],[2.0,0.23,0.4],[-3.1,0.23,1.6],[3.1,0.23,1.6],[0,-1.0,0.2],[0,-1.0,3.0]];
-  return g;
-}
 // per-jet options for the detail pass: fin serial (made-up numbers), ink colour, nose pitot, two-seat cockpit
 const DETAIL = {
   m2k:{serial:'KF 107', pitot:1}, rafale:{serial:'RB 011'}, su30:{serial:'SB 046', pitot:1, seats:2}, tejas:{serial:'LA 5021', pitot:1},
   mig29:{serial:'KB 734', pitot:1}, mig21:{serial:'C 2786', pitot:1}, mig27:{serial:'TS 548', pitot:1}, jaguar:{serial:'JS 139', pitot:1},
   amca:{serial:'AX 004', ink:'#2c3238'}, jf17:{serial:'14-127', pitot:1}, f16:{serial:'AF 412'}, j10:{serial:'31-058', pitot:1},
   j20:{serial:'78-271', ink:'#9aa2aa'}, f35:{serial:'AF 6093', ink:'#3a4148'} };
-// Settings, "New aircraft models" (on by default): every fighter has a new-style builder; untick the box to fly the
-// original models again. If a new builder ever fails, that jet falls back to its original model.
-try { $('newModels').checked = localStorage.getItem('thinair.newac')!=='0'; } catch (e) {}
-const newModelsOn=()=>{ const e=$('newModels'); return !!(e && e.checked); };
-const NEWB={m2k:buildMirage2, rafale:buildRafale2, su30:buildSu302, tejas:buildTejas2, mig29:buildMig292, mig21:buildMig212, mig27:buildMig272, jaguar:buildJaguar2,
-  amca:buildAMCA2, jf17:buildJF172, f16:buildF162, j10:buildJ102, j20:buildJ202, f35:buildF352};
-const detailed=(k,fn)=>()=>{
-  if (newModelsOn() && NEWB[k]){ try { return detailPlane(NEWB[k](),DETAIL[k]); } catch (e) { console.error('New model failed, using the original: '+k, e); } }
-  return detailPlane(fn(),DETAIL[k]);
-};
-const BUILD = {m2k:detailed('m2k',buildMirage), rafale:detailed('rafale',buildRafale), su30:detailed('su30',buildSu30), tejas:detailed('tejas',buildTejas),
-  mig29:detailed('mig29',buildMig29), mig21:detailed('mig21',buildMig21), mig27:detailed('mig27',buildMig27), jaguar:detailed('jaguar',buildJaguar),
-  amca:detailed('amca',buildAMCA), jf17:detailed('jf17',buildJF17), f16:detailed('f16',buildF16), j10:detailed('j10',buildJ10), j20:detailed('j20',buildJ20), f35:detailed('f35',buildF35)};
+const detailed=(k,fn)=>()=>detailPlane(fn(),DETAIL[k]);
+const BUILD = {m2k:detailed('m2k',buildMirage2), rafale:detailed('rafale',buildRafale2), su30:detailed('su30',buildSu302), tejas:detailed('tejas',buildTejas2),
+  mig29:detailed('mig29',buildMig292), mig21:detailed('mig21',buildMig212), mig27:detailed('mig27',buildMig272), jaguar:detailed('jaguar',buildJaguar2),
+  amca:detailed('amca',buildAMCA2), jf17:detailed('jf17',buildJF172), f16:detailed('f16',buildF162), j10:detailed('j10',buildJ102), j20:detailed('j20',buildJ202), f35:detailed('f35',buildF352)};
+
+// ---------- jets from model files (Settings: "Aircraft from model files", on by default). Each is the user's Blender
+// model converted to plain glTF with its geometry embedded and only its paint texture kept: tejas.json (+ tejas_paint.png)
+// and models/<key>.json (+ the shared models/tex_*.png). They load in the background, the jet you picked first, then
+// the enemy types, then the rest; until one arrives, or if it is missing (or the page is opened straight from disk),
+// the code-built jet flies instead. Each file's parts are merged into one mesh per material, turned so the nose points
+// -z, and mirrored so the refuelling probe and the red light end up on the correct sides. A pilot in each seat, the
+// afterburner at each nozzle, the lights and the store stations come from the "extras" the converter wrote.
+// j: a glTF document whose one buffer is embedded as base64 (data: URI) and whose images are separate files (base: their folder)
+function glbParts(j,base){
+  const b64=atob(j.buffers[0].uri.slice(j.buffers[0].uri.indexOf(',')+1)), u8=new Uint8Array(b64.length);
+  for (let i=0;i<b64.length;i++) u8[i]=b64.charCodeAt(i);
+  const buf=u8.buffer, dv=new DataView(buf), bin=0;
+  const GET={5126:'getFloat32',5125:'getUint32',5123:'getUint16',5121:'getUint8'}, SZ={5126:4,5125:4,5123:2,5121:1};
+  const acc=i=>{ const a=j.accessors[i], v=j.bufferViews[a.bufferView], n={SCALAR:1,VEC2:2,VEC3:3,VEC4:4}[a.type], bs=SZ[a.componentType], g=GET[a.componentType];
+    const st=bin+(v.byteOffset||0)+(a.byteOffset||0), stride=v.byteStride||n*bs, out=new Float64Array(a.count*n);
+    for (let e=0;e<a.count;e++) for (let c=0;c<n;c++) out[e*n+c]=dv[g](st+e*stride+c*bs,true);
+    return out; };
+  // glTF (nose +x, y up, +z right) to the game (nose -z, y up, +x right), mirrored left to right: (x,y,z) -> (-z, y, -x)
+  const F=new T.Matrix4().set(0,0,-1,0, 0,1,0,0, -1,0,0,0, 0,0,0,1);
+  const B=j.materials.map(()=>({pos:[], nrm:[], uv:[], idx:[]}));
+  const p=new T.Vector3(), nm=new T.Matrix3();
+  const walk=(ni,parent)=>{ const n=j.nodes[ni], L=new T.Matrix4();
+    if (n.matrix) L.fromArray(n.matrix);
+    else L.compose(new T.Vector3().fromArray(n.translation||[0,0,0]), new T.Quaternion().fromArray(n.rotation||[0,0,0,1]), new T.Vector3().fromArray(n.scale||[1,1,1]));
+    const Wd=new T.Matrix4().multiplyMatrices(parent,L);
+    if (n.mesh!=null){ const W=new T.Matrix4().multiplyMatrices(F,Wd), flip=W.determinant()<0; nm.getNormalMatrix(W);
+      j.meshes[n.mesh].primitives.forEach(pr=>{ if (pr.mode!=null && pr.mode!==4) return;
+        const b=B[pr.material||0], base=b.pos.length/3, P=acc(pr.attributes.POSITION), N=pr.attributes.NORMAL!=null ? acc(pr.attributes.NORMAL) : null, U=pr.attributes.TEXCOORD_0!=null ? acc(pr.attributes.TEXCOORD_0) : null;
+        for (let k=0;k<P.length/3;k++){ p.set(P[k*3],P[k*3+1],P[k*3+2]).applyMatrix4(W); b.pos.push(p.x,p.y,p.z);
+          if (N){ p.set(N[k*3],N[k*3+1],N[k*3+2]).applyMatrix3(nm).normalize(); b.nrm.push(p.x,p.y,p.z); } else b.nrm.push(0,1,0);
+          if (U) b.uv.push(U[k*2],U[k*2+1]); else b.uv.push(0,0); }
+        const I=pr.indices!=null ? acc(pr.indices) : Array.from({length:P.length/3},(_,k)=>k);
+        for (let k=0;k+2<I.length;k+=3){ if (flip) b.idx.push(base+I[k],base+I[k+2],base+I[k+1]); else b.idx.push(base+I[k],base+I[k+1],base+I[k+2]); } }); }
+    (n.children||[]).forEach(c=>walk(c,Wd)); };
+  j.scenes[j.scene||0].nodes.forEach(ni=>walk(ni,new T.Matrix4()));
+  // the paint texture: a PNG next to the page (tejas_paint.png)
+  const texP=(j.textures||[]).map(t=>new Promise((res,rej)=>{ const im=j.images[t.source];
+    const img=new Image(); img.onload=()=>{ const tx=new T.Texture(img); tx.flipY=false; tx.wrapS=tx.wrapT=T.RepeatWrapping; tx.anisotropy=4; tx.needsUpdate=true; res(tx); };
+    img.onerror=()=>rej(new Error('texture '+im.uri)); img.src=(base||'')+im.uri; }));
+  return Promise.all(texP).then(tex=>B.map((b,i)=>{ if (!b.idx.length) return null;
+    const m=j.materials[i], pb=m.pbrMetallicRoughness||{}, f=pb.baseColorFactor||[1,1,1,1], ex=m.extensions||{};
+    let mat;
+    if (ex.KHR_materials_transmission) mat=glassMat;   // the canopy uses the game's own tinted glass
+    else { mat=new T.MeshStandardMaterial({color:new T.Color().setRGB(f[0],f[1],f[2]).convertLinearToSRGB(),
+        metalness:Math.min(pb.metallicFactor==null?1:pb.metallicFactor,0.6), roughness:Math.max(pb.roughnessFactor==null?1:pb.roughnessFactor,0.3)});
+      if (pb.baseColorTexture && tex[pb.baseColorTexture.index]){ mat.map=tex[pb.baseColorTexture.index]; mat.metalness=0.25; mat.roughness=0.62; mat.userData.base='#8f99a2'; }
+      if (m.doubleSided) mat.side=T.DoubleSide; }
+    const geo=new T.BufferGeometry(); geo.setAttribute('position',new T.Float32BufferAttribute(b.pos,3)); geo.setAttribute('normal',new T.Float32BufferAttribute(b.nrm,3));
+    geo.setAttribute('uv',new T.Float32BufferAttribute(b.uv,2)); geo.setIndex(b.idx); geo.computeBoundingSphere();
+    return {geo, mat}; }).filter(Boolean));
+}
+// a pilot: helmet (at the group's origin), dark visor, shoulders in a flying suit
+const GLB_PILOT=(()=>{ const g=new T.Group(), S=(c)=>new T.MeshStandardMaterial({color:c, metalness:0.1, roughness:0.7});
+  const h=new T.Mesh(new T.SphereGeometry(0.13,12,9),S(0xd6d6cc)); g.add(h);
+  const v=new T.Mesh(new T.SphereGeometry(0.115,10,7),S(0x14181d)); v.scale.set(1,0.72,0.6); v.position.set(0,-0.015,-0.065); g.add(v);
+  const s=new T.Mesh(new T.BoxGeometry(0.44,0.22,0.26),S(0x56604b)); s.position.set(0,-0.24,0.02); g.add(s);
+  return g; })();
+// which jets have a model file (MiG-27: none, it stays code-built). Tejas: its own file, with its anchors written here.
+// Model files: the Tejas Mk1A (glb\Tejas) and three support aircraft from glb\allplanes: the C-130J (escort), the
+// IL-78 tanker and the Netra AEW&C. The allplanes fighters were tried in v147-148 and rolled back; every fighter
+// except the Tejas is code-built. To bring a model back, add its key here and put its file
+// in models/<key>.json (keys the code understands: rafale su30 m2k mig29 mig21 jaguar amca jf17 f16 j10 j20 f35,
+// mig29k for the naval jet and carrier deck, c130 for the escort, il78 for the tanker, netra for the AWACS).
+const MODEL_KEYS=['tejas','c130','il78','netra'];
+const MODEL_URL=k=>k==='tejas' ? 'tejas.json' : 'models/'+k+'.json';
+const TEJAS_EX={nozzles:[[0,0,6.55,0.46]], pilots:[[0,0.82,-2.22]], navL:[-4.12,-0.12,3.85], navR:[4.12,-0.12,3.85], fin:[0,2.72,5.85], beacon:[0,0.8,1.2],
+  hp:[[-1.45,-0.7,2.15],[1.45,-0.7,2.15],[-2.7,-0.7,2.15],[2.7,-0.7,2.15]]};
+const MODELS={}, MODEL_FAIL=new Set(), MODEL_Q=[];   // loaded models {parts, ex}; files that failed; the load queue
+const BUILD_CODE={...BUILD};   // the code-built jets, for the switch and as the fallback
+const modelsOn=()=>true;   // (v147-148 had a Settings switch for this; it is always on now)
+function buildModelJet(k){
+  const M=MODELS[k], ex=M.ex, g=newPlane();
+  M.parts.forEach(p=>{ const m=new T.Mesh(p.geo,p.mat); if (p.mat===glassMat) m.renderOrder=1; g.add(m); });
+  // a pilot in each seat: the helmet a little above and ahead of the seat's centre
+  (ex.pilots || (ex.seats||[]).map(s=>[s[0],s[1]+0.18,s[2]-0.2])).forEach(h=>{ const pl=GLB_PILOT.clone(); pl.position.set(h[0],h[1],h[2]); g.add(pl); });
+  (ex.nozzles||[]).forEach(([x,y,z,r])=>plume(g,x,y,z-0.05,r));   // an afterburner plume at each nozzle exit
+  // lights: red on the left wingtip, green on the right, white strobe on the fin tip, red beacon on the spine (Tejas)
+  const lamp=(mt,p,s,dx,dy)=>{ if (!p) return; const sp=new T.Sprite(mt); sp.scale.setScalar(s); sp.position.set(p[0]+(dx||0),p[1]+(dy||0),p[2]); g.add(sp); };
+  lamp(NAV_R,ex.navL,0.9,-0.08); lamp(NAV_G,ex.navR,0.9,0.08); lamp(NAV_W,ex.fin,1.1,0,0.1); lamp(NAV_B,ex.beacon,0.7);
+  g.userData.hp=(ex.hp||[]).map(p=>p.slice());   // store stations, inner pair first (missiles go on the outer ones)
+  return g;
+}
+const useModel=k=>modelsOn() && !!MODELS[k];
+// just the model's parts in a group: the support aircraft, and the parked jets on the carrier deck
+function modelBody(k){ const g=new T.Group(); MODELS[k].parts.forEach(p=>{ const m=new T.Mesh(p.geo,p.mat); if (p.mat===glassMat) m.renderOrder=1; g.add(m); }); castAll(g); return g; }
+// the naval strike and fleet defence fly the MiG-29K (the game's 'mig29' jet), from its own file
+const carrierJet=()=>(NAVAL || FLEET) && prefs.plane==='mig29' && useModel('mig29k');
+// the MiG-29Ks parked on the carrier deck: their code-built parts are hidden (the landing gear stays) and the model shown
+const DECK_JETS=[];
+function deckRefresh(){
+  DECK_JETS.forEach(m=>{
+    const on=useModel('mig29k'), gear=m.userData.gearObj;
+    if (on && !m.userData.model){
+      m.children.forEach(c=>{ if (c!==gear && c.visible){ c.visible=false; c.userData.deckHid=true; } });
+      const b=modelBody('mig29k'); m.add(b); m.userData.model=b;
+    } else if (!on && m.userData.model){
+      m.remove(m.userData.model); m.userData.model=null;
+      m.children.forEach(c=>{ if (c.userData.deckHid){ c.visible=true; c.userData.deckHid=false; } });
+    }
+  });
+}
+// point BUILD at the model or the code-built jet, drop cached copies so they rebuild, and swap the enemy prototypes
+function modelRefresh(keys){
+  keys.forEach(k=>{
+    if (BUILD_CODE[k]){
+      BUILD[k] = useModel(k) ? ()=>buildModelJet(k) : BUILD_CODE[k];
+      delete WPROTO[k]; if (MP.protos) delete MP.protos[k]; delete parkedCache[k];
+      if (FOES[k]){ const p=BUILD[k](); castAll(p); p.scale.setScalar(FOE_K); FOES[k].proto=p; }
+    }
+    if (k==='c130') C130_PROTO=null;    // the escort's C-130J and the AWACS's Netra rebuild at the next sortie
+    if (k==='netra') NETRA_PROTO=null;
+    if (k==='il78' && state!=='fly'){ if (TK_MESH && TK_MESH.parent) TK_MESH.parent.remove(TK_MESH); TK_MESH=null; }
+    if (k==='mig29k') deckRefresh();
+  });
+  if (THUMBS && keys.some(k=>BUILD_CODE[k])){ THUMBS=false; makeThumbs(); }   // the hangar pictures
+  if (state==='brief'){   // in the hangar: put the new model in place now (your jet, or this mission's support aircraft)
+    const mine=keys.includes(prefs.plane) || (keys.includes('mig29k') && (NAVAL || FLEET));
+    const support=(keys.includes('c130') && ESCORT) || (keys.includes('netra') && AWACS) || (keys.includes('il78') && TANKER);
+    if (mine) setPlaneMesh();
+    if (mine || support) reset();
+  }
+}
+// the support aircraft: the model when it is in, else the code-built one
+const supportProto=(k,code)=>useModel(k) ? modelBody(k) : code();
+function buildIL78Model(){   // the model's own hoses and drogues are drawn; invisible markers at the drogues are what you plug into
+  const g=modelBody('il78');
+  g.userData.baskets=(MODELS.il78.ex.baskets||[]).map(([x,y,z])=>{ const o=new T.Object3D(); o.position.set(x,y,z+0.6); g.add(o); return o; });
+  return g;
+}
+// background loading, one file at a time; while you are flying, the rest wait (parsing a model can stall a frame)
+function loadModel(k,front){
+  if (location.protocol==='file:' || typeof fetch!=='function' || !modelsOn()) return;
+  if (!MODEL_KEYS.includes(k) || MODELS[k] || MODEL_FAIL.has(k) || MODEL_Q.includes(k) || MODEL_Q.busy===k) return;
+  if (front) MODEL_Q.unshift(k); else MODEL_Q.push(k);
+  pumpModels();
+}
+function pumpModels(){
+  if (MODEL_Q.busy || !MODEL_Q.length) return;
+  if (state==='fly' && MODEL_Q[0]!==prefs.plane){ clearTimeout(MODEL_Q.wait); MODEL_Q.wait=setTimeout(pumpModels,5000); return; }
+  const k=MODEL_Q.shift(), url=MODEL_URL(k), base=url.slice(0,url.lastIndexOf('/')+1); MODEL_Q.busy=k;
+  Promise.resolve().then(()=>fetch(url)).then(r=>{ if (!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+    .then(j=>glbParts(j,base).then(parts=>{ MODELS[k]={parts, ex: k==='tejas' ? TEJAS_EX : ((j.extras && j.extras.thinAir) || {})}; modelRefresh([k]); }))
+    .catch(e=>{ MODEL_FAIL.add(k); console.warn(`${url} not used, flying the built-in ${k}:`, e && e.message || e); })
+    .then(()=>{ MODEL_Q.busy=null; pumpModels(); });
+}
+function loadAllModels(){ loadModel(prefs.plane,true); MODEL_KEYS.forEach(k=>loadModel(k)); }
+Promise.resolve().then(loadAllModels);
 
 const bombGeo = new T.CylinderGeometry(0.18,0.18,2.2,8); bombGeo.rotateX(Math.PI/2);
 const bombMat = new T.MeshLambertMaterial({color:0x3d4a3a});
@@ -2359,6 +2266,8 @@ const FOES = {
   boat: { name:'MISSILE BOAT', proto:buildBoat(), speed:40, turn:0.12, range:0, flares:0, cd:999, boat:true, stealth:0.8 },
 };
 Object.values(FOES).forEach(f=>castAll(f.proto));
+// enemy fighters are drawn at twice life size so they are easier to see; their gun hit zone grows with them
+const FOE_K=2; ['jf17','f16','j10','j20'].forEach(k=>FOES[k].proto.scale.setScalar(FOE_K));
 const WAVE_MIX = [null,
   ['jf17','jf17'],               // the single dogfight wave: two JF-17s
   ['jf17','jf17','f16'],
@@ -2420,7 +2329,7 @@ RAID.targets.push(raidTarget('COMMAND',CPX,CPZ,(I,Wk,sec)=>{   // the command po
 function addParkedJets(){
   RAID.targets.slice(0,2).forEach(t=>{
     const m=FOES.jf17.proto.clone(); m.add(makeGear()); castAll(m);
-    m.position.set(t.x, groundAt(t.x,t.z-34)+2.05, t.z-34); scene.add(m); t.extras.push(m);
+    m.position.set(t.x, groundAt(t.x,t.z-34)+2.05*m.scale.y, t.z-34); m.userData.gearH=2.05; scene.add(m); t.extras.push(m);
   });
 }
 // runway, taxiway, apron, barracks: scenery only
@@ -2478,8 +2387,8 @@ let ESCORT=false, HERC=null;   // the escort mission (set in applyPrefs) and the
 const SEAD_PLANES=['su30','rafale'];   // SEAD: the player picks either
 const SEAD_MASK=150;   // SEAD: below this height above the ground the SAM radars cannot see you
 let SEAD=false;   // the night SEAD mission (set in applyPrefs): its SAM launchers count as targets too
-const raidLeft=()=>RAID.targets.filter(t=>t.alive).length + (SEAD ? RAID.ad.filter(a=>a.mob && a.alive).length : 0);
-const raidN=()=>RAID.targets.length + (SEAD ? RAID.ad.filter(a=>a.mob).length : 0);
+const raidLeft=()=>RAID.targets.filter(t=>t.alive).length + (SEAD ? RAID.ad.filter(a=>a.mob && a.alive).length : 0) + (NAVAL && NB.on && NB.ad.alive ? 1 : 0);   // naval: the SAM boat once it is out
+const raidN=()=>RAID.targets.length + (SEAD ? RAID.ad.filter(a=>a.mob).length : 0) + (NAVAL && NB.on ? 1 : 0);
 
 // ---------- mission 2, precision strike: a Mirage 2000 with laser-guided missiles against three intruder camps spread
 // across the ridges south of the LoC, as at Tiger Hill, Tololing and Muntho Dhalo in 1999. Each camp has one AAA gun,
@@ -2612,7 +2521,7 @@ const BRG={targets:[], ad:[], objs:[]};
     for (let k=-50;k<=50;k+=20){ put(I,UBOX,0x3f4a52,-4.6,dy+5,dz+k,0.4,9,0.4,0.6,0,0); put(I,UBOX,0x3f4a52,4.6,dy+5,dz+k,0.4,9,0.4,-0.6,0,0); }
     put(Wk,UBOX,BURNT,0,dy*0.45,dz-28,9,1.6,64,0.45,0,0.05); put(Wk,UBOX,BURNT,0,dy*0.45,dz+28,9,1.6,64,-0.45,0,-0.05);   // broken deck, ends in the water
     put(Wk,UBOX,0x2a2e32,3,dy*0.5,dz,0.6,8,50,0.3,0.2,0.4);
-    const t={name:`SPAN ${i+1}`, x:BRG_X, z:BRG_RZ+dz, y:BRG_Y, r:32, alive:true, intact:raidMesh(I,false), wreck:raidMesh(Wk,false), extras:[],
+    const t={name:`SPAN ${i+1}`, x:BRG_X, z:BRG_RZ+dz, y:BRG_Y, r:32, noGrow:true, alive:true, intact:raidMesh(I,false), wreck:raidMesh(Wk,false), extras:[],
       sec:[new T.Vector3(BRG_X,BRG_Y+2,BRG_RZ+dz), new T.Vector3(BRG_X+3,BRG_Y,BRG_RZ+dz-30), new T.Vector3(BRG_X-2,BRG_Y-6,BRG_RZ+dz+25)]};
     BRG.targets.push(t); BRG.objs.push(t.intact);
   });
@@ -2964,6 +2873,81 @@ function updateBoat(e,dt){
   e.m.position.copy(e.p); orient(e.m,e.fwd,0.05*Math.sin(S.time*1.3+e.seed));
   e.wakeT-=dt; if (e.wakeT<=0){ e.wakeT=0.3; effects.push(makeFx(e.p.clone().addScaledVector(e.fwd,-16).setY(0.8),0xf2f5f7,false,3,2,10,0.55,1.6)); }
   if (e.runT>45 || Math.abs(e.p.x)>15500){ e.alive=false; scene.remove(e.m); if (S.lockTgt===e){ S.lockTgt=null; S.locked=false; } S.msg={text:'MISSILE BOAT ESCAPED WEST', col:AMB, t:2}; fleetGone(); }
+}
+// naval strike: once both fighters are down (or the last godown burns first) a fast attack craft with a SAM launcher
+// on the stern and a close-in gun on the bow comes out after you. It is a RAID.ad entry like a SAM site, so T
+// designates it, bombs, laser missiles and the gun all hurt it, and its health bar shows. It steams round a slow
+// circle on open water and has to be sunk to finish the mission.
+const NB={on:false, ad:null, ang:0, cx:0, cz:0, R:1400, speed:11, wakeT:0};
+const NB_ARMOR=0.5;   // the boat takes half damage: two direct hits, or one hit and a long burst from the gun
+function buildSamBoat(){
+  const g=buildBoat(), dk=new T.MeshStandardMaterial({color:0x3a4046, metalness:0.2, roughness:0.7}), wt=new T.MeshStandardMaterial({color:0xd9d6cc, roughness:0.6}), ol=new T.MeshStandardMaterial({color:0x56603f, roughness:0.7});
+  const yaw=new T.Group(); yaw.position.set(0,3.0,11.5); g.add(yaw);   // the SAM launcher on the stern
+  yaw.add(new T.Mesh(new T.CylinderGeometry(1.5,1.7,0.6,12),ol));
+  const pitch=new T.Group(); pitch.position.set(0,0.8,0.4); yaw.add(pitch);
+  [[-0.55,0],[0.55,0],[-0.55,0.75],[0.55,0.75]].forEach(([x,y])=>{ const tb=new T.Mesh(new T.CylinderGeometry(0.3,0.3,4.6,8),wt); tb.rotation.x=-Math.PI/2; tb.position.set(x,y,-1.4); pitch.add(tb); });
+  pitch.rotation.x=0.5;
+  const radar=new T.Group(); radar.position.set(0,10.4,-2); g.add(radar);   // a turning search radar on the mast
+  radar.add(new T.Mesh(new T.BoxGeometry(3.2,1.1,0.2),dk));
+  const gy=new T.Group(); gy.position.set(0,4.2,-11); g.add(gy);   // the close-in gun on the bow
+  const gp=new T.Group(); gp.position.y=0.4; gy.add(gp);
+  const br=new T.Mesh(new T.CylinderGeometry(0.12,0.12,2.6,6),dk); br.rotation.x=-Math.PI/2; br.position.z=-1.3; gp.add(br);
+  g.scale.setScalar(1.6); castAll(g); g.visible=false;
+  return {g, yaw, pitch, radar, gun:{yaw:gy, pitch:gp, muzzle:new T.Vector3(), burst:0, cd:0}};
+}
+function buildBoatWreck(){   // a burnt hull heeled over, low in the water, in a slick of oil
+  const g=new T.Group(), bm=new T.MeshStandardMaterial({color:0x2a2a28, roughness:0.9}), sl=new T.MeshBasicMaterial({color:0x111111, transparent:true, opacity:0.55, depthWrite:false});
+  const h=new T.Mesh(new T.BoxGeometry(6.5,2.6,30),bm); h.position.y=-0.7; h.rotation.set(0.12,0,0.35); g.add(h);
+  const s=new T.Mesh(new T.CircleGeometry(40,24),sl); s.rotation.x=-Math.PI/2; s.position.y=0.15; g.add(s);
+  g.scale.setScalar(1.6); g.visible=false; return g;
+}
+function navBoatReset(){
+  NB.on=false; if (!NB.ad) return;
+  [RAID.ad, SEA && SEA.ad].forEach(L=>{ if (!L) return; const i=L.indexOf(NB.ad); if (i>=0) L.splice(i,1); });
+  NB.ad.alive=false; NB.ad.g.visible=false; NB.ad.wreck.visible=false;
+}
+function navBoatSpawn(){
+  if (!NAVAL || NB.on || state!=='fly') return;
+  if (!NB.ad){ const b=buildSamBoat(), wk=buildBoatWreck(); scene.add(b.g); scene.add(wk);
+    NB.ad={kind:'SAM BOAT', name:'SAM BOAT', boat:true, g:b.g, yaw:b.yaw, pitch:b.pitch, radar:b.radar, gun:b.gun, wreck:wk,
+      x:0, y:0, z:0, alive:false, cd:0, track:false, phase:0, burst:0, hp:100, hr:45, barH:26, grown:true, armor:NB_ARMOR}; }
+  // about 8 km from you on open water (2 km or more off the coast), ahead of you if it can be
+  const hd=Math.atan2(S.vel.x,S.vel.z); let px=0, pz=2000;
+  for (let k=0;k<24;k++){ const a=hd+(k%2 ? 1 : -1)*Math.ceil(k/2)*Math.PI/12, x=S.pos.x+Math.sin(a)*8000, z=S.pos.z+Math.cos(a)*8000;
+    if (Math.abs(x)<HALF-3000 && Math.abs(z)<HALF-3000 && coastZ(x)-z<-(NB.R+2000) && Math.hypot(x-CARRIER.x,z-CARRIER.z)>NB.R+3000){ px=x; pz=z; break; } }
+  NB.on=true; NB.cx=px; NB.cz=pz; NB.ang=Math.random()*Math.PI*2;
+  const a=NB.ad; Object.assign(a,{alive:true, hp:100, cd:5, track:false, burst:0}); a.gun.burst=0; a.g.visible=true; a.wreck.visible=false;
+  navBoatPlace(0);
+  if (!RAID.ad.includes(a)) RAID.ad.push(a);
+  S.banner={text:'SAM BOAT INBOUND', col:RED, t:3};
+  S.msg={text:`ENEMY SAM BOAT · ${(Math.hypot(a.x-S.pos.x,a.z-S.pos.z)/1000).toFixed(1)} KM · SINK IT · T TO DESIGNATE`, col:RED, t:4.5};
+}
+function navBoatPlace(dt){
+  const a=NB.ad; NB.ang+=dt*NB.speed/NB.R;
+  a.x=NB.cx+Math.cos(NB.ang)*NB.R; a.z=NB.cz+Math.sin(NB.ang)*NB.R; a.y=-0.5+0.3*Math.sin(S.time*2.1);
+  const fx=-Math.sin(NB.ang), fz=Math.cos(NB.ang);   // heading along the circle
+  a.g.position.set(a.x,a.y,a.z); a.g.rotation.set(0,Math.atan2(-fx,-fz),0.03*Math.sin(S.time*1.3));
+  return [fx,fz];
+}
+function updateNavBoat(dt){
+  if (!NAVAL || !NB.on || !NB.ad.alive) return;
+  const a=NB.ad;
+  if (state==='fly'){ const [fx,fz]=navBoatPlace(dt);
+    NB.wakeT-=dt; if (NB.wakeT<=0){ NB.wakeT=0.3; effects.push(makeFx(new T.Vector3(a.x-fx*26,0.8,a.z-fz*26),0xf2f5f7,false,3,2,10,0.55,1.6)); } }
+  // the close-in gun: short bursts inside 3 km, like an AAA site (its SAM is run by updateRaidAD)
+  const G=a.gun; _t.copy(S.pos).sub(a.g.position); const d=_t.length();
+  if (!(S.alive && state==='fly' && d<3000)){ G.burst=0; return; }
+  G.yaw.rotation.y=Math.atan2(-_t.x,-_t.z)-a.g.rotation.y;
+  G.pitch.rotation.x=clamp(Math.atan2(_t.y,Math.hypot(_t.x,_t.z)),0.05,1.45);
+  G.burst+=dt;
+  if (G.burst<1.0){ G.cd-=dt; while (G.cd<=0){ G.cd+=0.12; aaShot(G,d); } S.aaFiring=true; }
+  else if (G.burst>4.2) G.burst=0;
+}
+function drawNavBoat(){   // its marker, or an arrow at the screen edge
+  if (!NAVAL || !NB.on || !NB.ad.alive) return;
+  const a=NB.ad, d=Math.hypot(a.x-S.pos.x,a.z-S.pos.z), s=proj(a.x,a.y+14,a.z), lb=isTouch ? (d/1000).toFixed(1) : `SAM BOAT ${(d/1000).toFixed(1)} KM`;
+  if (onScreen(s)){ diamond(s.x,s.y,isTouch?8:11,RED); txt(lb,s.x,s.y+(isTouch?20:24),RED,'center',isTouch?9:11,true); }
+  else edgeArrow(a.x,a.y+14,a.z,RED,lb);
 }
 function drawFleetHUD(flash){
   const d=Math.hypot(CARRIER.x-S.pos.x,CARRIER.z-S.pos.z), s=proj(CARRIER.x,CARRIER.deck+20,CARRIER.z), lb=`CARRIER ${(d/1000).toFixed(1)} KM`;
@@ -3347,7 +3331,7 @@ function turnToward(dir, aim, maxAng){
 // plane mesh and the stores hanging under it
 function setPlaneMesh(){
   if (plane) scene.remove(plane);
-  plane = BUILD[prefs.plane](); scene.add(plane);
+  plane = carrierJet() ? buildModelJet('mig29k') : BUILD[prefs.plane](); scene.add(plane);
   // find the starboard wingtip (furthest +x vertex) for the vapour trails; port is its mirror
   { plane.updateMatrixWorld(true); const tip=new T.Vector3(), _p=new T.Vector3();
     plane.traverse(o=>{ if (!o.isMesh || !o.geometry.attributes.position) return; const a=o.geometry.attributes.position;
@@ -3709,7 +3693,7 @@ const tgp={on:true, d:null, dist:0};
 function tdList(){
   if (mode==='raid' && RCP===1) return [];   // nothing to designate until the fighters are down
   if (mode==='raid') return [...RAID.targets.filter(t=>t.alive).map(t=>({ref:t, x:t.x, y:t.y, z:t.z, name:t.name, r:t.r})),
-                             ...RAID.ad.filter(a=>a.alive && !(a.mob && !a.seen)).map(a=>({ref:a, x:a.x, y:a.y, z:a.z, name:a.kind, r:a.kind==='SAM'?38:30})),
+                             ...RAID.ad.filter(a=>a.alive && !(a.mob && !a.seen)).map(a=>({ref:a, x:a.x, y:a.y, z:a.z, name:a.kind, r:adR(a)})),
                              ...(CSAR && CMP && CMP.alive && !CMP.hid ? [{ref:CMP, x:CMP.x, y:CMP.y, z:CMP.z, name:'MANPADS', r:30}] : [])];
   if (mode==='training') return trTargets().map(t=>({ref:t, x:t.x, y:t.y, z:t.z, name:t.name, r:t.r}));
   return S.targetHit ? [] : [{ref:'p4875', x:TARGET.x, y:TG_Y, z:TARGET.z, name:'PT 4875', r:HIT_RADIUS}];
@@ -3718,7 +3702,7 @@ function designated(){
   const L=tdList(); if (!L.length) return null;
   let d=L.find(o=>o.ref===S.td);
   if (!d){   // default: the nearest main target
-    const main=mode==='raid' ? L.filter(o=>RAID.targets.includes(o.ref)) : L, pool=main.length ? main : L;
+    const main=mode==='raid' ? L.filter(o=>RAID.targets.includes(o.ref) || o.ref.boat) : L, pool=main.length ? main : L;   // the naval SAM boat counts as a main target
     let bd=Infinity; for (const o of pool){ const k=Math.hypot(o.x-S.pos.x,o.z-S.pos.z); if (!(k>=bd)){ bd=k; d=o; } }
     S.td=d.ref;
   }
@@ -3736,7 +3720,7 @@ function toggleDeliv(){
   S.msg={text: deliv==='CCRP' ? 'CCRP · FLY THE STEERING LINE, HOLD SPACE' : 'CCIP · DIVE, PIPPER ON TARGET', col:HUD, t:2};
 }
 // ---------- laser-guided air-to-ground missile: the pod lases the designated target, the missile homes on the laser spot
-const AGM_MAX=10000, AGM_MIN=1500, AGM_DROP=0.45;   // AGM_DROP: seconds it falls clear of the jet before the motor lights
+const AGM_MAX=10000, AGM_MIN=1500, AGM_DROP=0.45, AGM_SPEED_K=1.5;   // AGM_DROP: seconds it falls clear of the jet before the motor lights
 const AGM_FLAME=new T.MeshBasicMaterial({color:0xffb25a, transparent:true, opacity:0.95, depthWrite:false, blending:T.AdditiveBlending});
 function lasing(aim){
   axes(); _t.copy(aim).sub(S.pos); const r=_t.length();
@@ -3924,9 +3908,17 @@ function bombImpact(b){
   if (mode==='raid'){ raidBombImpact(b); return; }
   const dx=b.p.x-TARGET.x, dz=b.p.z-TARGET.z, d=Math.hypot(dx,dz);
   S.bestMiss=Math.min(S.bestMiss,d);
-  const hit=d<=HIT_RADIUS;
-  pipImpact(b,b.p,b.v, hit?'DIRECT HIT':`MISS ${Math.round(d)} M`, hit?HUD:AMB);
-  if (hit && !S.targetHit){
+  // hit points: a bomb inside the hit circle takes half (so it needs two), one landing just outside it a little
+  const hit=d<=HIT_RADIUS, near=!hit && d<=HIT_RADIUS*2;
+  if (!S.targetHit && (hit || near)) S.tgtHp=Math.max(0,S.tgtHp-(hit ? STRIKE_HIT_DMG : STRIKE_NEAR_DMG));
+  const kill=!S.targetHit && S.tgtHp<=0.5;
+  pipImpact(b,b.p,b.v, hit ? (kill ? 'DIRECT HIT' : `HIT · ${Math.round(S.tgtHp)}%`) : `MISS ${Math.round(d)} M`, hit?HUD:AMB);
+  if (!kill && !S.targetHit && (hit || near)){
+    S.msg={text: hit ? `DIRECT HIT · SANGAR ${Math.round(S.tgtHp)}% · HIT IT AGAIN` : `NEAR MISS ${Math.round(d)} M · SANGAR ${Math.round(S.tgtHp)}%`, col:hit?HUD:AMB, t:3};
+    strikeOutCheck();
+    return;
+  }
+  if (kill){
     S.targetHit=true; sangarMat.color.setHex(0x1b1a19); destroyTarget();
     effects.push(makeFx(new T.Vector3(TARGET.x,TG_Y,TARGET.z), 0x3b3836, false, 40, 8, 220, 0.75, 12));
     S.msg={text:'TARGET DESTROYED', col:HUD, t:3};
@@ -3934,9 +3926,24 @@ function bombImpact(b){
   } else if (!S.targetHit){
     const h=Math.hypot(b.v.x,b.v.z)||1, along=(dx*b.v.x+dz*b.v.z)/h;
     S.msg={text:`MISS ${Math.round(d)} M ${along>0?'LONG':'SHORT'}`, col:AMB, t:3};
-    if (S.bombs===0 && bombs.length===0 && S.agm===0 && !missiles.some(x=>x.agm))
-      endMission(false,`All ${S.ac.bombs} bombs missed`,`Closest miss: ${Math.round(S.bestMiss)} m. Put the CCIP pipper on the target diamond before you release. A shallow dive makes it easier.`,3.4);
+    strikeOutCheck();
   }
+}
+// mission 1: Point 4875's sangar has hit points (the bar over it); two bombs inside the circle destroy it
+const STRIKE_HIT_DMG=50, STRIKE_NEAR_DMG=15, STRIKE_GUN_DMG=1.5;
+function strikeOutCheck(){
+  if (state!=='fly' || S.targetHit || S.bombs>0 || bombs.length || S.agm>0 || missiles.some(x=>x.agm) || S.gun>0) return;
+  if (S.tgtHp>=100) endMission(false,`All ${S.maxB} bombs missed`,`Closest miss: ${Math.round(S.bestMiss)} m. Put the CCIP pipper on the target diamond before you release. A shallow dive makes it easier. The sangar takes two direct hits.`,3.4);
+  else endMission(false,'The sangar is still standing',`It is down to ${Math.round(S.tgtHp)}% (the bar over it). A bomb inside the target circle takes half its strength, so it needs two direct hits; one just outside the circle only takes ${STRIKE_NEAR_DMG}%. Gun shells that land on it take ${STRIKE_GUN_DMG}% each.`,3.4);
+}
+function strikeGunHit(p){   // a gun shell landing on the sangar chips at it
+  if (S.targetHit || Math.hypot(p.x-TARGET.x,p.z-TARGET.z)>HIT_RADIUS*0.8) return;
+  S.tgtHp=Math.max(0,S.tgtHp-STRIKE_GUN_DMG);
+  if (S.tgtHp>0.5) return;
+  S.targetHit=true; sangarMat.color.setHex(0x1b1a19); destroyTarget();
+  effects.push(makeFx(new T.Vector3(TARGET.x,TG_Y,TARGET.z), 0x3b3836, false, 40, 8, 220, 0.75, 12));
+  S.msg={text:'TARGET DESTROYED', col:HUD, t:3};
+  endMission(true,'Target destroyed','You finished off the sangar on Point 4875 with the gun, and you stayed south of the Line of Control.',3.6);
 }
 
 function destroyTarget(){
@@ -3992,30 +3999,53 @@ function updateManpads(dt){
 function raidBombImpact(b){
   if (RAIL){ railImpact(b); return; }   // Iron Rail: wagons with hit points, bombs and laser missiles alike
   if (b.own==='w'){   // wingmen bomb the air defences only; the four main targets are yours
-    let hit=null;
-    RAID.ad.forEach(a=>{ if (a.alive && Math.hypot(b.p.x-a.x,b.p.z-a.z)<=(a.kind==='SAM'?38:30)){ killAD(a); hit=a; } });
-    S.msg = hit ? {text:`${b.by.name} · ${hit.kind} DESTROYED`, col:HUD, t:2.6} : {text:`${b.by.name} · BOMB WIDE`, col:AMB, t:1.6};
+    let hit=null, dm=null;
+    RAID.ad.forEach(a=>{ if (!a.alive) return; const d=Math.hypot(b.p.x-a.x,b.p.z-a.z); if (d<=adR(a)){ if (hitGround(a,groundDmg(d,adR(a),false))) hit=a; else dm=a; } });
+    S.msg = hit ? {text:`${b.by.name} · ${hit.kind} DESTROYED`, col:HUD, t:2.6} : dm ? {text:`${b.by.name} · ${dm.kind} HIT · ${Math.round(dm.hp)}%`, col:AMB, t:2.2} : {text:`${b.by.name} · BOMB WIDE`, col:AMB, t:1.6};
     return;
   }
-  const hits=[];
+  const hits=[], dmgd=[];
   const lorries = BRIDGE ? convoyHit(b.p) : 0;
   if (lorries) hits.push(lorries>1 ? `${lorries} LORRIES` : 'LORRY');
-  RAID.targets.forEach(t=>{ if (t.alive && Math.hypot(b.p.x-t.x,b.p.z-t.z)<=t.r){ killRaidTarget(t); hits.push(t.name); } });
-  RAID.ad.forEach(a=>{ if (a.alive && Math.hypot(b.p.x-a.x,b.p.z-a.z)<=(a.kind==='SAM'?38:30)){ killAD(a); hits.push(a.kind); } });
+  // every object inside its hit radius takes damage: full for a direct hit, less for a near miss; it dies at 0 hit points
+  RAID.targets.forEach(t=>{ if (!t.alive) return; const d=Math.hypot(b.p.x-t.x,b.p.z-t.z); if (d<=t.r){ if (hitGround(t,groundDmg(d,t.r,!t.conv))) hits.push(t.name); else dmgd.push(`${t.name} ${Math.round(t.hp)}%`); } });
+  RAID.ad.forEach(a=>{ if (!a.alive) return; const d=Math.hypot(b.p.x-a.x,b.p.z-a.z); if (d<=adR(a)){ if (hitGround(a,groundDmg(d,adR(a),false))) hits.push(a.kind); else dmgd.push(`${a.kind} ${Math.round(a.hp)}%`); } });
   if (CSAR && CMP && CMP.alive && Math.hypot(b.p.x-CMP.x,b.p.z-CMP.z)<=30){ killCmp(); hits.push('MANPADS'); }
   let nd=Infinity, nt=null;
   RAID.targets.forEach(t=>{ if (!t.alive) return; const d=Math.hypot(b.p.x-t.x,b.p.z-t.z); if (d<nd){ nd=d; nt=t; } });
   if (nt) S.bestMiss=Math.min(S.bestMiss,nd);
   else RAID.ad.forEach(a=>{ if (!a.alive) return; const d=Math.hypot(b.p.x-a.x,b.p.z-a.z); if (d<nd){ nd=d; nt={name:a.kind}; } });   // no main targets (rescue cover): measure from the nearest gun
-  const left=raidLeft();
-  if (hits.length){
-    pipImpact(b,b.p,b.v,`${hits.join(' + ')} HIT`,HUD);
-    S.msg={text: CSAR ? `${hits.join(' · ')} DESTROYED · ${RAID.ad.filter(a=>a.alive).length} GUNS LEFT` : left ? `${hits.join(' · ')} DESTROYED · ${left} TO GO` : NAVAL ? 'ALL GODOWNS DESTROYED' : TANKS ? 'ALL TANKS DESTROYED' : PRECISE ? 'ALL CAMPS DESTROYED' : SEAD ? 'ALL SAM SITES DESTROYED' : 'BASE DESTROYED', col:HUD, t:3};
-  } else {
+  if (hits.length) pipImpact(b,b.p,b.v,`${hits.join(' + ')} DESTROYED`,HUD);
+  else if (dmgd.length){ pipImpact(b,b.p,b.v,'HIT',AMB); S.msg={text:`HIT · ${dmgd.join(' · ')}`, col:AMB, t:3}; }
+  else {
     pipImpact(b,b.p,b.v,`MISS ${Math.round(nd)} M`,AMB);
     S.msg={text:`MISS ${Math.round(nd)} M FROM ${nt ? nt.name : 'TARGET'}`, col:AMB, t:3};
   }
+  raidAfter(hits);
+}
+// hit points on ground objects
+function groundDmg(d,R,structure){
+  const f=d<=R*0.35 ? GROUND_DMG.direct : lerp(GROUND_DMG.near[0],GROUND_DMG.near[1],clamp((d-R*0.35)/(R*0.65),0,1));
+  return f*(structure ? GROUND_DMG.structure : 1);
+}
+function hitGround(o,dmg){   // true when this hit destroys it
+  o.hp=(o.hp==null ? 100 : o.hp)-dmg*(o.armor||1);   // armor: the naval SAM boat takes half
+  if (o.hp>0.5) return false;
+  o.hp=0; if (RAID.ad.includes(o)) killAD(o); else killRaidTarget(o); return true;
+}
+// a gun shell hitting the ground: it hurts the ground object it landed on
+function groundGunHit(p){
+  if (RAIL || mode!=='raid' || (plainRaid() && RCP===1)) return;
+  for (const t of RAID.targets){ if (t.alive && Math.hypot(p.x-t.x,p.z-t.z)<=t.r*0.8){ const k=hitGround(t,t.conv ? GROUND_DMG.gun.light : GROUND_DMG.gun.structure); if (k){ S.msg=null; raidAfter([t.name]); } return; } }
+  for (const a of RAID.ad){ if (a.alive && !(a.mob && !a.seen) && Math.hypot(p.x-a.x,p.z-a.z)<=adR(a)*0.8){ if (hitGround(a,GROUND_DMG.gun.light)) raidAfter([a.kind]); return; } }
+}
+// after something on the ground is destroyed (or a bomb lands): the message, and the end of the mission when all are down
+function raidAfter(hits){
+  const left=raidLeft();
+  if (hits.length) S.msg={text: CSAR ? `${hits.join(' · ')} DESTROYED · ${RAID.ad.filter(a=>a.alive).length} GUNS LEFT` : left ? `${hits.join(' · ')} DESTROYED · ${left} TO GO` : NAVAL ? (NB.on ? 'SAM BOAT SUNK · PORT STRIKE COMPLETE' : 'ALL GODOWNS DESTROYED') : TANKS ? 'ALL TANKS DESTROYED' : PRECISE ? 'ALL CAMPS DESTROYED' : SEAD ? 'ALL SAM SITES DESTROYED' : 'BASE DESTROYED', col:HUD, t:3};
+  if (state!=='fly') return;
   if (CSAR){ if (!RAID.ad.some(a=>a.alive)) S.msg={text:'ALL GUNS SILENCED · VIPER CLEARED IN', col:HUD, t:3}; }
+  else if (!left && NAVAL && !NB.on) navBoatSpawn();   // naval: the godowns are down before the fighters, so the SAM boat comes out now
   else if (!left){
     S.score+=1000;
     if (TANKS){ const L=tankLead0(); endMission(true,'The column is stopped',`All ${raidN()} tanks are burning on the road${L!=null ? `, the nearest ${(Math.max(0,TANK_TOWN.z-L)/1000).toFixed(1)} km short of the town` : ''}. Column air defences knocked out: ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length}. Fighters shot down: ${S.kills} of 2.`,4); }
@@ -4023,11 +4053,17 @@ function raidBombImpact(b){
     else if (TANKER){ S.rtb=true; S.msg={text:'DEPOT DESTROYED · RTB · PLUG IN TO THE TANKER FOR THE TRIP HOME', col:HUD, t:4.5}; }
     else if (SEAD) endMission(true,'Air defences suppressed',`All three radars and all six SAM launchers in the desert are destroyed, so the strike packages can now fly through. AAA guns knocked out: ${RAID.ad.filter(a=>a.kind==='AAA' && !a.alive).length} of ${RAID.ad.filter(a=>a.kind==='AAA').length}. Fighters shot down: ${S.kills} of 2.`,4);
     else if (PRECISE) endMission(true,'All three camps destroyed',`Tiger Hill, Tololing and Muntho Dhalo are burning, and you stayed south of the Line of Control. AAA guns knocked out: ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length}. F-16s shot down: ${S.kills}. Time left: ${Math.floor(Math.max(0,S.precT)/60)}:${String(Math.floor(Math.max(0,S.precT)%60)).padStart(2,'0')}.`,4);
-    else if (NAVAL) endMission(true,'Port godowns destroyed',`All four godowns along the coast are burning. You knocked out ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length} AAA guns and shot down ${S.kills} of 2 fighters, flying a single MiG-29K off the carrier.`,4);
+    else if (NAVAL) endMission(true,'Port strike complete',`All four godowns along the coast are burning and the SAM boat is on the bottom. You knocked out ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length} AAA guns and shot down ${S.kills} of 2 fighters, flying a single MiG-29K off the carrier.`,4);
     else endMission(true,'Base destroyed',`All four structures are burning: both aircraft shelters, the fuel depot and the command post. Flying alone, you knocked out ${RAID.ad.filter(a=>!a.alive).length} of ${RAID.ad.length} air-defence sites and shot down ${S.kills} of 2 fighters, with ${clockTxt(S.raidT)} to spare.`,4);
   } else if (MP.coop){ if (S.bombs===0 && S.agm===0) S.msg={text:`OUT OF BOMBS · ${left} TO GO · LEAVE IT TO YOUR FLIGHT`, col:AMB, t:3}; }
-  else if (S.bombs===0 && bombs.length===0 && S.agm===0 && !missiles.some(x=>x.agm))
-    endMission(false,`${left} target${left>1?'s':''} still standing`,`You ran out of bombs${PRECISE||SEAD?' and laser missiles':''}. Each ${NAVAL?'godown':PRECISE?'camp':SEAD?'radar and launcher':TANKS?'tank':'structure'} needs a hit within ${TANKS?TANK_R:RAID_HIT} m${TANKS?'; laser missiles follow a moving tank, bombs do not':''}. Make one pass per target, put the pipper on the diamond, and hold Space to let it release itself.`,3.4);
+  else raidOutCheck(left);
+}
+// out of bombs, laser missiles and gun rounds with targets still standing
+function raidOutCheck(left){
+  if (left==null) left=raidLeft();
+  if (state!=='fly' || !left || MP.coop) return;
+  if (S.bombs===0 && bombs.length===0 && S.agm===0 && !missiles.some(x=>x.agm) && S.gun<=0)
+    endMission(false,`${left} target${left>1?'s':''} still standing`,`You ran out of bombs${PRECISE||SEAD?', laser missiles':''} and gun rounds. Each ${NAVAL?'godown':PRECISE?'camp':SEAD?'radar and launcher':TANKS?'tank':'structure'} has hit points (the green bar over it): a direct hit within about ${Math.round((TANKS?TANK_R:RAID_HIT)*GROUND_HIT_K*0.35)} m does the most damage, near misses less, and buildings need two good hits. Finish damaged targets with the gun.${TANKS?' Laser missiles follow a moving tank, bombs do not.':''} Put the pipper on the diamond and hold Space to let it release itself.`,3.4);
 }
 function killRaidTarget(t){
   t.alive=false; t.intact.visible=false; t.wreck.visible=true; t.extras.forEach(o=>{ o.visible=false; });
@@ -4041,9 +4077,59 @@ function killRaidTarget(t){
 function killAD(a){
   a.alive=false; a.g.visible=false; a.wreck.visible=true; a.track=false;
   if (a.mob) a.wreck.position.set(a.x-a.x0, a.y-a.y0, a.z-a.z0);   // the wreck was built where the launcher started
+  if (a.boat){ a.wreck.position.set(a.x,0,a.z); a.wreck.rotation.y=a.g.rotation.y; effects.push(makeFx(new T.Vector3(a.x,4,a.z),0x2b2a28,false,40,10,160,0.75,10)); S.banner={text:'SAM BOAT SUNK', col:HUD, t:2.4}; }
   spawnExplosion(new T.Vector3(a.x,a.y+2,a.z),false);
   secondaries.push({p:new T.Vector3(a.x,a.y+1.5,a.z), t:0.5});
   missiles.forEach(m=>{ if (m.sam===a) m.target=null; });   // its radar is gone, so its missiles lose guidance
+}
+// make the ground objects of the active mission GROUND_K times bigger, once each. A merged mesh holding world-space
+// geometry (buildings, wrecks) is rescaled in place about the object's ground point; a group with its own origin (guns,
+// launchers, tanks) just has its scale raised. Bridge spans keep their size (they have to meet the banks); the train
+// in Iron Rail is already built big.
+function growMesh(o,ax,ay,az,k){
+  if (!o || o.userData.grown) return; o.userData.grown=true;
+  if (o.isMesh && !o.children.length && o.position.lengthSq()<1e-6 && o.scale.x===1){
+    const g=o.geometry; g.translate(-ax,-ay,-az); g.scale(k,k,k); g.translate(ax,ay,az); g.computeBoundingSphere(); g.computeBoundingBox();
+  } else o.scale.multiplyScalar(k);
+}
+function growGround(){
+  if (!aaGuns.grown){ aaGuns.grown=true; aaGuns.forEach(a=>a.g.scale.multiplyScalar(GROUND_K)); }   // the guns round Point 4875
+  if (RAIL) return;
+  const K=GROUND_K;
+  for (const t of RAID.targets){
+    if (t.grown || t.noGrow) continue; t.grown=true;
+    growMesh(t.intact,t.x,t.y,t.z,K); growMesh(t.wreck,t.x,t.y,t.z,K);
+    t.extras.forEach(e=>{
+      const nx=t.x+(e.position.x-t.x)*K, nz=t.z+(e.position.z-t.z)*K;
+      if (e.userData.gearH!=null) e.position.set(nx, groundAt(nx,nz)+e.userData.gearH*e.scale.y, nz);   // a parked jet: still on its wheels
+      else { e.position.set(nx, t.y+(e.position.y-t.y)*K, nz); e.scale.multiplyScalar(K); } });
+    t.sec.forEach(p=>{ p.x=t.x+(p.x-t.x)*K; p.z=t.z+(p.z-t.z)*K; p.y=t.y+(p.y-t.y)*K; });   // secondary explosions spread with it
+    t.r*=GROUND_HIT_K;
+  }
+  for (const a of RAID.ad){
+    if (a.grown) continue; a.grown=true;
+    a.g.scale.multiplyScalar(K);
+    growMesh(a.wreck, a.x0!=null ? a.x0 : a.x, a.y0!=null ? a.y0 : a.y, a.z0!=null ? a.z0 : a.z, K);   // a launcher that drives: its wreck was built where it started
+    a.hr=(a.kind==='SAM'?38:30)*GROUND_HIT_K;
+  }
+}
+// green and red health bars over the ground objects you can hit (like the ones over other pilots in multiplayer)
+function drawGroundHp(){
+  if (mode==='strike' && S.alive && !S.targetHit && Math.hypot(TARGET.x-S.pos.x,TARGET.z-S.pos.z)<15000){   // mission 1: the sangar's bar
+    const p=proj(TARGET.x,TG_Y+30,TARGET.z); if (p.ok) hpBar(p.x,p.y-12,S.tgtHp,isTouch?26:36); }
+  if (mode!=='raid' || !S.alive) return;
+  const L=[];
+  if (RAIL){ if (IR.detected) IR.wag.forEach(w=>{ if (w.ref.alive && w.hp0) L.push([w.ref, 100*w.hp/w.hp0, 9]); }); }
+  else if (!(plainRaid() && RCP===1)){
+    RAID.targets.forEach(t=>{ if (t.alive) L.push([t, t.hp, t.noGrow ? 14 : 30]); });
+    RAID.ad.forEach(a=>{ if (a.alive && !(a.mob && !a.seen)) L.push([a, a.hp, a.barH || (a.kind==='SAM' ? 26 : 16)]); });
+  }
+  drawNavBoat();
+  for (const [o,hp,h] of L){
+    if (Math.hypot(o.x-S.pos.x,o.z-S.pos.z)>15000) continue;
+    const p=proj(o.x,(o.y||0)+h,o.z); if (!p.ok) continue;
+    hpBar(p.x,p.y-12,hp,isTouch?26:36);
+  }
 }
 function updateRaidAD(dt){
   S.aaFiring=false; S.samTrack=false;
@@ -4295,6 +4381,7 @@ function killEnemy(e,how){
       if (RCP===1){ RCP=2; S.msg={text:`CHECKPOINT 1 DONE · FIGHTERS DOWN · NEXT: STRIKE THE BASE ${(Math.hypot(S.pos.x-BASE.x,S.pos.z-BASE.z)/1000).toFixed(0)} KM`, col:HUD, t:4.5}; }
       else S.msg={text:`SKY CLEAR · ${raidLeft()} TARGET${raidLeft()===1?'':'S'} LEFT`, col:HUD, t:2.6};
     }
+    if (NAVAL && S.kills>=2) navBoatSpawn();   // naval: both fighters down, so the SAM boat comes out after you
     return; }
   if (state==='fly' && plainDog() && !S.j10In){ S.j10In=true; spawnLateJ10(); }
   if (state==='fly' && !enemies.some(x=>x.alive)) waveCleared();
@@ -4336,9 +4423,8 @@ function waveCleared(){
     else S.msg={text:'SKY CLEAR · ESCORT THE HERCULES IN', col:HUD, t:3};
     return;
   }
-  if (LADAKH){
-    S.score+=1000;
-    endMission(true,'Airspace restored',`All four J-20s are down on the Indian side of the LAC, near Pangong Tso. You flew ${fmtTime(S.time)} and scored ${S.score} points.`,3.4);
+  if (LADAKH){   // the J-20s are down: next, film the enemy camp near the LAC and report back
+    if (LR.ph==='fight'){ S.score+=1000; ladReconStart(); }
     return;
   }
   if (S.wave>=WAVES){
@@ -4696,7 +4782,7 @@ function mpReadEv(pr,d){
 }
 function mpMesh(ac){
   if (!BUILD[ac]) ac='m2k';
-  if (!MP.protos[ac]){ const m=BUILD[ac](); castAll(m); MP.protos[ac]=m; }
+  if (!MP.protos[ac]){ const m=BUILD[ac](); castAll(m); m.scale.setScalar(FOE_K); MP.protos[ac]=m; }   // other pilots' jets: twice life size, like AI bandits
   return MP.protos[ac].clone();
 }
 function mpGhost(peer){
@@ -5091,9 +5177,10 @@ function updateMissiles(dt){
     }
     if (m.flame && m.flame.visible){ const fl=0.85+0.3*Math.random(); m.flame.scale.set(0.16*fl,0.16*fl,0.9*fl); }
     const isP=m.own!=='e', mt=m.mt;
-    const vmax=mt ? mt.v : isP?820:(m.sam?780:650), rate=mt ? mt.turn*(m.turnK||1) : isP?(m.own==='w'?0.9:1.3):(m.sam?0.75:0.6);
+    // laser missiles at ground targets (yours and your wingman's) fly 50% faster than they used to: 1230 m/s top speed
+    const vmax=m.agm ? 820*AGM_SPEED_K : mt ? mt.v : isP?820:(m.sam?780:650), rate=mt ? mt.turn*(m.turnK||1) : isP?(m.own==='w'?0.9:1.3):(m.sam?0.75:0.6);
     let sp=m.v.length();
-    sp = m.life<(mt?mt.burn:2.5) ? Math.min(vmax, sp+(m.agm?170:300)*dt) : Math.max(250, sp-(mt?mt.decel:30)*dt);
+    sp = m.life<(mt?mt.burn:2.5) ? Math.min(vmax, sp+(m.agm?170*AGM_SPEED_K:300)*dt) : Math.max(250, sp-(mt?mt.decel:30)*dt);
     _d.copy(m.v).divideScalar(Math.max(1,m.v.length()));
     let tg=tgtPV(m.target);
     if (tg && isP && !m.flareChk && m.p.distanceTo(tg.p)<1800){
@@ -5172,12 +5259,15 @@ function updateBullets(dt){
   for (let i=bullets.length-1;i>=0;i--){
     const b=bullets[i], ox=b.p.x, oy=b.p.y, oz=b.p.z;
     b.p.addScaledVector(b.v,dt); b.v.y-=G*dt; b.life+=dt;
-    let dead = b.life>(b.own==='aa'?3.6:MP.on?MP_GUN_LIFE:1.8) || b.p.y<groundAt(b.p.x,b.p.z);   // multiplayer: shells fly about twice as far
+    const gnd=b.p.y<groundAt(b.p.x,b.p.z);
+    let dead = b.life>(b.own==='aa'?3.6:MP.on?MP_GUN_LIFE:1.8) || gnd;   // multiplayer: shells fly about twice as far
+    if (gnd && b.own==='p' && mode==='raid') groundGunHit(b.p);   // strafing: shells hurt what they land on
+    if (gnd && b.own==='p' && mode==='strike') strikeGunHit(b.p);
     if (!dead){
       if (b.own==='p'){
         for (const e of enemies){
           if (!e.alive) continue;
-          if (segDist(ox,oy,oz,b.p,e.p)<(e.remote ? MP_GUN_HIT : 9)){
+          if (segDist(ox,oy,oz,b.p,e.p)<(e.remote ? MP_GUN_HIT : 9)*(e.m ? e.m.scale.x : 1)){
             if (e.remote){ dead=true; mpGunHit(e); effects.push(makeFx(b.p.clone(),0xffc070,true,0.25,1,6,1,0)); break; }
             dead=true; e.hp-=12;
             effects.push(makeFx(b.p.clone(),0xffc070,true,0.25,1,6,1,0));
@@ -5224,7 +5314,7 @@ function fireGun(dt){
   const firing=(keys.has('KeyX')||touchGun) && S.alive && state==='fly';
   if (firing && S.gun>0) GUNSND.want=true;   // the cannon sound runs while this is set (see updateEngine)
   if (!firing){ if (S.gunCd<0) S.gunCd=0; return; }
-  if (S.gun<=0){ if (!S.gunEmptyMsg){ S.gunEmptyMsg=true; S.msg={text:'GUN EMPTY', col:AMB, t:1.2}; } return; }
+  if (S.gun<=0){ if (!S.gunEmptyMsg){ S.gunEmptyMsg=true; S.msg={text:'GUN EMPTY', col:AMB, t:1.2}; if (mode==='raid' && !RAIL) setTimeout(()=>raidOutCheck(),2500); } return; }   // the last shells are still in the air
   axes();
   let aim=vF;
   if (isTouch){ const gt=gunTarget(); if (gt){ const ld=gunLeadDir(gt); if (ld.dot(vF)>GUN_ASSIST) aim=ld; } }   // phone: ring on the bandit and the shells lead it
@@ -5301,13 +5391,14 @@ function loadout0(){ const A=S.ac, agm=(mode==='raid'||(mode==='training' && LES
   if (CSAR) return {bombs:4, msl:4, agm:4};      // rescue cover: something for the guns and something for the jets    // the bridge: laser-guided missiles first, bombs as a back-up
   if (SEAD) return {bombs:6, msl:4, agm:8};      // SEAD: eight laser-guided missiles for nine targets, plus bombs
   if (PRECISE) return {bombs:2, msl:2, agm:4};   // the Mirage: four laser-guided missiles, two bombs, two air-to-air missiles
+  if (mode==='strike') return {bombs:Math.max(4,A.bombs), msl:A.msl, agm};   // Point 4875 takes two direct hits: at least four bombs, so a miss or two is allowed
   return mode==='raid' ? {bombs:Math.max(6,A.bombs), msl:Math.max(2,Math.min(4,A.msl)), agm} : {bombs:A.bombs, msl:A.msl, agm}; }
 function reset(){
   const st = RAIL ? IR_START : AWACS ? AW_START : SWARM ? SWARM_START : TANKS ? TANK_START : RECON ? REC_START : CSAR ? CSAR_START : FLEET ? FLEET_START : TANKER ? TANKER_START : ESCORT ? ESCORT_START : SEAD ? SEAD_START : DOGN ? DOGN_START : plainRaid() ? BASE_RAID_START : mode==='raid' ? RAID_START : WORLD==='pune' ? PUNE_START : WORLD==='ladakh' ? LADAKH_START : WORLD==='jungle' ? JUN_START : START;
   S.pos.set(st.x,st.y,st.z); S.q.setFromAxisAngle(XA,0.045); S.vel.set(0,0,-START.speed);
   const A=S.ac, LO=loadout();
   Object.assign(S,{maxB:LO.bombs,maxM:LO.msl,samTrack:false,locMsg:false,td:null,sol:null,agm:LO.agm,maxA:LO.agm,lastAgm:-9});
-  Object.assign(S,{thr:0.78,bombs:LO.bombs,alive:true,alpha:0,beta:0,nz:1,aLim:0.41,dLoc:1e9,minLoc:1e9,bestMiss:Infinity,time:0,lastDrop:-9,targetHit:false,msg:null,
+  Object.assign(S,{thr:0.78,bombs:LO.bombs,alive:true,alpha:0,beta:0,nz:1,aLim:0.41,dLoc:1e9,minLoc:1e9,bestMiss:Infinity,time:0,lastDrop:-9,targetHit:false,tgtHp:100,msg:null,
     hp:100,msl:LO.msl,gun:MP.on ? MP_GUN : A.gun,flares:MP.on ? MP_FLARES : FLARES,score:0,kills:0,wave:0,waveT:0,lockTgt:null,lockT:0,locked:false,lastMsl:-9,lastFlare:-9,gunCd:0,hitFlash:0,gunEmptyMsg:false,autoArm:false,armT:0,brake:false,launch:null});
   input.pitch=input.roll=input.yaw=0; S.banner=null;
   LOC_OBJS.forEach(o=>{ o.visible=!MP.on; });   // multiplayer: no LoC, an open field
@@ -5322,14 +5413,16 @@ function reset(){
   bullets.length=0; drawTracers();
   sangarMat.color.setHex(0x6b5a44);
   tgtMeshIntact.visible=true; tgtMeshWreck.visible=false; aaGuns.forEach(a=>{ a.g.visible=true; a.burst=a.phase; }); secondaries.length=0; S.aaFiring=false; S.samCd=6; S.samIdx=0;
-  RAID.targets.forEach(t=>{ t.alive=true; t.intact.visible=true; t.wreck.visible=false; t.extras.forEach(o=>{ o.visible=true; }); });
-  RAID.ad.forEach((a,i)=>{ a.alive=true; a.g.visible=true; a.wreck.visible=false; a.cd=3+i*1.5; a.burst=a.phase; a.track=false;
+  navBoatReset();   // the naval SAM boat leaves the air-defence list until it comes out again
+  RAID.targets.forEach(t=>{ t.alive=true; t.hp=100; t.intact.visible=true; t.wreck.visible=false; t.extras.forEach(o=>{ o.visible=true; }); });
+  RAID.ad.forEach((a,i)=>{ a.alive=true; a.hp=100; a.g.visible=true; a.wreck.visible=false; a.cd=3+i*1.5; a.burst=a.phase; a.track=false;
     if (a.mob){ a.seen=false; a.cyc=a.cyc0; a.reloc=0; a.moving=false; a.wreck.position.set(0,0,0); seadPlace(a,a.ang0); } });
   RCP = plainRaid() ? 1 : 0;   // the base raid starts at checkpoint 1: the fighters
   spawnWingmen(); escortReset(); tankerReset(); convoyReset(); illumReset(); heloReset(); if (TANKS) tankReset();
+  growGround();
   if (SWARM && SEA) SEA.ad.forEach(a=>{ a.g.visible=false; a.wreck.visible=false; });   // the night swarm: a friendly coast, no port guns
   awacsReset();
-  S.rwrLvl=0; if (RAIL) irReset();   // Iron Rail: the train back at its start, nothing designated until it is found
+  S.rwrLvl=0; ladReconReset(); if (RAIL) irReset();   // Iron Rail: the train back at its start, nothing designated until it is found
   if (AWACS && PUN){ hideRaidSet(PUN); hideRaidSet(PUN.tank); PUN.chute.visible=false; }   // Punjab without the rescue's guns or the tank column
   Object.assign(S,{fuel: TANKER ? TANKER_FUEL0 : 0, contact:false, rtb:false, bingo:false, autoRef:false, leaks:0, obs:null, obsT:3, cvHits:0, asmDown:0, photos:0, photoFlash:0});
   REC_SITES.forEach(s=>{ s.done=false; }); REC_CAM=null;
@@ -5416,14 +5509,14 @@ function showEnd(){
     setFacts('endFacts',[[fmtTime(S.time),'Lesson time'],[`${Math.min(TR.step,L.steps.length)} / ${L.steps.length}`,'Steps done'],
       [`${TR.done.filter(Boolean).length} / ${LESSONS.length}`,'Lessons passed'],[avg,'Average FPS']]);
   } else if (mode==='strike'){
-    setFacts('endFacts',[[fmtTime(S.time),'Flight time'],[String(S.ac.bombs-S.bombs),'Bombs used'],
+    setFacts('endFacts',[[fmtTime(S.time),'Flight time'],[String(S.maxB-S.bombs),'Bombs used'],
       [S.minLoc<0 ? 'Crossed' : (S.minLoc/1000).toFixed(1)+' km','Closest to LoC'],[avg,'Average FPS']]);
   } else if (mode==='raid'){
     if (RAIL){ const sc=irScore(endInfo.win), w=wingmen[0];
       setFacts('endFacts',[[fmtTime(S.time),'Time taken'],[irKillsTxt(),'Kills by type'],[`${IR.samsKilled} / ${IR.ad.length}`,'SAM wagons destroyed'],
         [w ? (w.alive ? 'Yes' : 'No') : '–','Wingman survived'],[`${Math.round(100-S.hp)}%`,'Damage taken'],[endInfo.win ? `${sc.rank} · ${sc.total}` : String(sc.total),endInfo.win ? 'Rank · score' : 'Score']]); }
     else if (RECON) setFacts('endFacts',[[fmtTime(S.time),'Flight time'],[`${S.photos} / ${REC_SITES.length}`,'Sites photographed'],[String(FLARES-S.flares),'Flares used'],[Math.round(S.hp)+'%','Hull']]);
-    else setFacts('endFacts',[[fmtTime(S.time),'Flight time'],CSAR ? [HELO && HELO.pilot && HELO.alive ? 'Yes' : 'No','Pilot recovered'] : [`${raidN()-raidLeft()} / ${raidN()}`,NAVAL?'Godowns destroyed':PRECISE?'Camps destroyed':SEAD?'Radars + launchers':TANKER?'Depot targets hit':BRIDGE?'Spans dropped':TANKS?'Tanks destroyed':'Targets destroyed'],
+    else setFacts('endFacts',[[fmtTime(S.time),'Flight time'],CSAR ? [HELO && HELO.pilot && HELO.alive ? 'Yes' : 'No','Pilot recovered'] : [`${raidN()-raidLeft()} / ${raidN()}`,NAVAL?(NB.on?'Godowns + SAM boat':'Godowns destroyed'):PRECISE?'Camps destroyed':SEAD?'Radars + launchers':TANKER?'Depot targets hit':BRIDGE?'Spans dropped':TANKS?'Tanks destroyed':'Targets destroyed'],
       BRIDGE ? [`${CONVOY.trucks.filter(t=>!t.alive).length} / ${CONVOY.trucks.length}`,'Lorries destroyed'] : [`${S.kills} / ${PRECISE?2:(CSAR||TANKER)?3:BRIDGE?1:2}`,'Fighters downed'],[`${RAID.ad.filter(a=>!a.alive).length} / ${RAID.ad.length}`,NAVAL?'AAA guns hit':'Air defences hit']]);
   } else {
     const cleared = endInfo.win ? WAVES : Math.max(0,S.wave-1);
@@ -5431,7 +5524,7 @@ function showEnd(){
     else if (DRONES) setFacts('endFacts',[[fmtTime(S.time),'Flight time'],[`${S.kills} / ${DRONE_WAVES.reduce((a,b)=>a+b,0)}`,'Drones shot down'],[`${S.leaks} / ${DRONE_LEAKS}`,SWARM?'Strikes on the refinery':'Strikes on posts'],[String(S.score),'Score']]);
     else if (AWACS) setFacts('endFacts',[[fmtTime(S.time),'Flight time'],[NETRA && NETRA.alive ? Math.round(NETRA.hp/1.2)+'%' : 'Lost','Netra condition'],[`${S.kills} / ${AW_WAVES.slice(1).reduce((a,w)=>a+w.length,0)}`,'Bandits down'],[String(S.score),'Score']]);
     else if (ESCORT) setFacts('endFacts',[[fmtTime(S.time),'Flight time'],[HERC && HERC.alive ? Math.round(HERC.hp/1.7)+'%' : 'Lost','C-130J condition'],[`${S.kills} / 4`,'Bandits down'],[String(S.score),'Score']]);
-    else setFacts('endFacts',[[String(S.score),'Score'],[`${S.kills} / ${LADAKH?4:2}`,LADAKH?'J-20s down':'Kills'],[cleared ? 'Yes' : 'No',LADAKH?'Airspace restored':'Sector secure'],[LADAKH?fmtTime(S.time):avg,LADAKH?'Flight time':'Average FPS']]);
+    else setFacts('endFacts',[[String(S.score),'Score'],[`${S.kills} / ${LADAKH?4:2}`,LADAKH?'J-20s down':'Kills'],[cleared ? 'Yes' : 'No',LADAKH?'Camp reported':'Sector secure'],[LADAKH?fmtTime(S.time):avg,LADAKH?'Flight time':'Average FPS']]);
   }
   showStars();
   // after a successful strike, offer the next mission straight away
@@ -5440,6 +5533,46 @@ function showEnd(){
   nx.hidden=!chain;
   if (chain){ nx.dataset.next=nextMode; nx.textContent=`Next mission: ${NAMES[nextMode]} ›`; }
   $('end').hidden=false; (chain ? nx : $('again')).focus();
+}
+// a clear run-in at the start of every mission: nothing starts inside your weapons' reach, so you fly 3 to 5 km
+// (picked at random each time) before you can lock or hit anything. Enemy jets that would start inside your radar lock
+// range plus that stretch are moved straight out from you (a patrol's orbit moves with them). If a ground target starts
+// inside laser-missile range (7 km with bombs only) plus the stretch, your start moves back along your heading, with your
+// wingmen. Training and multiplayer keep their set starts; on the carrier deck only the bandits move.
+const RUNIN_MIN=3000, RUNIN_MAX=5000, MAP_EDGE=19500;
+function runIn(){
+  S.runIn=0;
+  if (MP.on || mode==='training') return;
+  const P=S.pos, gap=()=>RUNIN_MIN+Math.random()*(RUNIN_MAX-RUNIN_MIN);
+  if (!S.launch && mode!=='dogfight' && !(plainRaid() && RCP===1)){   // the base raid's base is hidden until its fighters are down
+    const G = mode==='raid' ? [...RAID.targets.filter(t=>t.alive), ...RAID.ad.filter(a=>a.alive && !(a.mob && !a.seen))] : [{x:TARGET.x, z:TARGET.z}];
+    const need=(S.agm>0 ? AGM_MAX : 7000)+gap(), hl=Math.hypot(S.vel.x,S.vel.z)||1, hx=S.vel.x/hl, hz=S.vel.z/hl;
+    const minD=(x,z)=>{ let m=1e9; for (const o of G) m=Math.min(m,Math.hypot(o.x-x,o.z-z)); return m; };
+    let best=0, bestD=minD(P.x,P.z);
+    if (G.length && bestD<need){
+      for (let d=250; d<=12000; d+=250){
+        const x=P.x-hx*d, z=P.z-hz*d; if (Math.abs(x)>MAP_EDGE-1000 || Math.abs(z)>MAP_EDGE-1000) break;
+        const m=minD(x,z); if (m>bestD){ bestD=m; best=d; } if (m>=need) break;
+      }
+      if (best>0){ moveStart(-hx*best,-hz*best); S.runIn=best; if (PRECISE) S.precT+=best/230; }   // precision strike: the clock allows for the longer run-in
+    }
+  }
+  const lr=lockRange(S.ac), moved=new Set();
+  for (const e of enemies){
+    if (!e.alive || e.remote) continue;
+    const need=lr*((e.type && e.type.stealth) || 1)+gap(), dx=e.p.x-P.x, dz=e.p.z-P.z, d=Math.hypot(dx,dz)||1;
+    if (d>=need) continue;
+    const nx=clamp(e.p.x+dx/d*(need-d),-MAP_EDGE,MAP_EDGE), nz=clamp(e.p.z+dz/d*(need-d),-MAP_EDGE,MAP_EDGE);
+    if (Math.hypot(nx-P.x,nz-P.z)<=d) continue;   // the map edge is in the way: leave it
+    const mx=nx-e.p.x, mz=nz-e.p.z;
+    e.p.x=nx; e.p.z=nz; e.p.y=Math.max(e.p.y, groundAt(nx,nz)+600); e.m.position.copy(e.p);
+    if (e.capC && !moved.has(e.capC)){ moved.add(e.capC); e.capC.x+=mx; e.capC.z+=mz; }
+  }
+}
+function moveStart(dx,dz){
+  S.pos.x+=dx; S.pos.z+=dz; S.pos.y=Math.max(S.pos.y, groundAt(S.pos.x,S.pos.z)+800);
+  wingmen.forEach(w=>{ w.p.x+=dx; w.p.z+=dz; w.p.y=Math.max(w.p.y, groundAt(w.p.x,w.p.z)+800); w.m.position.copy(w.p); });
+  if (plane) plane.position.copy(S.pos);
 }
 function startSortie(){
   if (state==='fly') return;
@@ -5466,6 +5599,7 @@ function startSortie(){
     : TANKER ? {text:`LOW ON FUEL · JOIN THE IL-78 AHEAD · ${(S.pos.distanceTo(TKR.p)/1000).toFixed(1)} KM`, col:AMB, t:4.5}
     : TANKS ? {text:`TANK COLUMN ACROSS THE BORDER · ${raidN()} TANKS · STOP THEM BEFORE THE TOWN`, col:AMB, t:4.5}
     : {text:'CHECKPOINT 1 · SHOOT DOWN THE 2 FIGHTERS AHEAD · THEN THE BASE', col:AMB, t:4.5}; }
+  runIn();
   if (MP.coop) mpCoopStart();
   MP.sendT=0;   // tell the room straight away that we are airborne
   if (mode==='strike' && $('introOn').checked) startIntro(); else setState('fly');
@@ -6484,8 +6618,8 @@ function applyPrefs(){
   } else if (mode==='strike'){
     $('briefEyebrow').textContent='Thin Air · Strike · Dras sector, June 1999';
     $('briefTitle').textContent='Hit the sangar on Point 4875';
-    $('briefBody').textContent=`You are flying the ${p.name} with ${p.bombs} × 250 kg bombs. Intruders hold Point 4875, a 4,875 m ridge north of the Dras valley just south of the Line of Control: infantry in stone sangars, two field guns, two anti-aircraft guns that open fire inside 3.5 km, and shoulder-fired missiles. You carry ${FLARES} flares and no guided weapons: this is old-school bombing, so dive at the target, put the CCIP pipper on the diamond and release. Put one bomb within 60 m of the position; you only have ${p.bombs}, so make each pass count. Crossing the LoC ends the sortie. You take off from Srinagar; once you are over the Dras sector, you have control.`;
-    setFacts('briefFacts',[['6,300 m','Start altitude'],['4,875 m','Target elevation'],[tgtLocTxt,'Target to LoC'],[`${p.bombs} × 250 kg`,'Bombs, CCIP']]);
+    $('briefBody').textContent=`You are flying the ${p.name} with ${loadout().bombs} × 250 kg bombs. Intruders hold Point 4875, a 4,875 m ridge north of the Dras valley just south of the Line of Control: infantry in stone sangars, two field guns, two anti-aircraft guns that open fire inside 3.5 km, and shoulder-fired missiles. You carry ${FLARES} flares and no guided weapons: this is old-school bombing, so dive at the target, put the CCIP pipper on the diamond and release. The sangar has a health bar over it: each bomb within 60 m of the position takes half, so it needs two direct hits (one landing within 120 m takes a little). The gun hurts it too, at any time: each shell that lands on it takes 1.5%, so strafing passes add up. You only have ${loadout().bombs}, so make each pass count. Crossing the LoC ends the sortie. You take off from Srinagar; once you are over the Dras sector, you have control.`;
+    setFacts('briefFacts',[['6,300 m','Start altitude'],['4,875 m','Target elevation'],[tgtLocTxt,'Target to LoC'],[`${loadout().bombs} × 250 kg`,'Bombs, CCIP']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle; above the dashed line is afterburner. Tap BOMB when the pipper sits on the target diamond, FLR when MISSILE flashes, and BREAK to turn south, away from the LoC.';
   } else if (PRECISE){
     const LO=loadout();
@@ -6553,8 +6687,8 @@ function applyPrefs(){
     const LO=loadout(), dk=((CARRIER.z-PORT.z)/1000).toFixed(0);
     $('briefEyebrow').textContent='Thin Air · Naval strike · from the carrier · what-if scenario';
     $('briefTitle').textContent='Destroy the port godowns';
-    $('briefBody').textContent=`You fly a single MiG-29K off the carrier INS Vikramaditya, ${dk} km south of an enemy port. The launch is automatic: the jet holds on the deck in full afterburner, runs up the ski-jump, and you take control as it leaves the bow. Fly north over the sea and destroy all four godowns (warehouses), spread 3.5 to 4 km apart along the coast: one behind the quay at the port, two to the west and one to the east (the refinery further east is not a target). Each godown has an AAA gun beside it and there is one more on the quay; they open fire inside 3.5 km, so keep each pass short, then turn back out to sea. A JF-17 and an F-16 patrol between the carrier and the coast and come for you once you are within 12 km. You are on your own: no wingmen. Your jet carries ${LO.bombs} × 250 kg bombs, ${LO.msl} × ${AAM[p.aam].name} missiles, ${p.gun} gun rounds and ${FLARES} flares, plus 2 laser-guided missiles (L key, up to 10 km; keep the target in the pod until impact). A bomb or missile on an AAA gun knocks it out too. Over the sea, the radar altitude is your height above the water.`;
-    setFacts('briefFacts',[[`${dk} km`,'Carrier to port'],['4','Godowns'],['5','AAA guns'],['2','Bandits']]);
+    $('briefBody').textContent=`You fly a single MiG-29K off the carrier INS Vikramaditya, ${dk} km south of an enemy port. The launch is automatic: the jet holds on the deck in full afterburner, runs up the ski-jump, and you take control as it leaves the bow. Fly north over the sea and destroy all four godowns (warehouses), spread 3.5 to 4 km apart along the coast: one behind the quay at the port, two to the west and one to the east (the refinery further east is not a target). Each godown has an AAA gun beside it and there is one more on the quay; they open fire inside 3.5 km, so keep each pass short, then turn back out to sea. A JF-17 and an F-16 patrol between the carrier and the coast and come for you once you are within 12 km. Once both are down, an enemy fast attack craft comes out about 8 km from you: a SAM launcher on its stern (out to 9 km) and a close-in gun on its bow (inside 3 km). It has to be sunk too. It shows as a red diamond, T designates it, and it is armoured: it takes half damage, so it needs two direct hits, a laser missile, or a long burst from the gun. (If you finish the godowns first, it comes out then.) Every target has a health bar over it. You are on your own: no wingmen. Your jet carries ${LO.bombs} × 250 kg bombs, ${LO.msl} × ${AAM[p.aam].name} missiles, ${p.gun} gun rounds and ${FLARES} flares, plus 2 laser-guided missiles (L key, up to 10 km; keep the target in the pod until impact). A bomb or missile on an AAA gun knocks it out too. Over the sea, the radar altitude is your height above the water.`;
+    setFacts('briefFacts',[[`${dk} km`,'Carrier to port'],['4 + 1','Godowns + SAM boat'],['5','AAA guns'],['2','Bandits']]);
     $('touchNote').textContent='The launch is automatic. Then: left stick flies the jet (drag down to pull up), right slider is the throttle. BOMB when the pipper sits on a godown diamond, MSL once a fighter reads LOCK, hold GUN for close fights, and tap FLR the moment MISSILE flashes.';
   } else if (mode==='raid'){
     const LO=loadout(), dl=((locZ(BASE.x)-BASE.z)/1000).toFixed(1);
@@ -6608,7 +6742,7 @@ function applyPrefs(){
     const R=lockRange(p), Rs=R*FOES.j20.stealth;
     $('briefEyebrow').textContent='Thin Air · Intercept · eastern Ladakh · what-if scenario';
     $('briefTitle').textContent='Four J-20s across the LAC';
-    $('briefBody').textContent=`Four J-20 stealth fighters have crossed the Line of Actual Control near Pangong Tso and are flying into Indian airspace in two pairs. You are scrambled alone to intercept. Shoot down all four. The J-20 is hard to see on radar: your ${p.name} locks a normal jet at ${(R/1000).toFixed(1).replace('.0','')} km but a J-20 only inside about ${(Rs/1000).toFixed(1).replace('.0','')} km, and its box reads STEALTH until then. Each J-20 carries the long-range PL-15 radar missile and the agile PL-10 heat-seeker, so it can shoot first${p.stealth ? `, but your AMCA is a stealth jet too: their radars lock you only inside about ${(Math.min(FOES.j20.range, AAM.pl15.lock*0.85)*p.stealth/1000).toFixed(1)} km instead of ${(Math.min(FOES.j20.range, AAM.pl15.lock*0.85)/1000).toFixed(0)} km, so it becomes a fair fight` : ''}. When RADAR MISSILE flashes, turn so the missile is on your wingtip (beam it) to break its lock; against the PL-10, pop flares and turn hard. Close in, then fire once the box reads LOCK and IN RANGE, and use the gun up close. These J-20 pilots are good: they spot your missile early, break hard across its path with a dive, and time their flares well, so a long shot often misses. Fire close and from behind, and follow up with the gun. Your jet carries ${mslTxt({...p, msl:loadout().msl})}, ${p.gun} gun rounds and ${FLARES} flares. The air here is thin: the valleys sit at 4,300 m and the ridges reach 6,400 m. Do not cross the LAC (the red line to the north) yourself: that ends the sortie.`;
+    $('briefBody').textContent=`Four J-20 stealth fighters have crossed the Line of Actual Control near Pangong Tso and are flying into Indian airspace in two pairs. You are scrambled alone to intercept. Shoot down all four. The J-20 is hard to see on radar: your ${p.name} locks a normal jet at ${(R/1000).toFixed(1).replace('.0','')} km but a J-20 only inside about ${(Rs/1000).toFixed(1).replace('.0','')} km, and its box reads STEALTH until then. Each J-20 carries the long-range PL-15 radar missile and the agile PL-10 heat-seeker, so it can shoot first${p.stealth ? `, but your AMCA is a stealth jet too: their radars lock you only inside about ${(Math.min(FOES.j20.range, AAM.pl15.lock*0.85)*p.stealth/1000).toFixed(1)} km instead of ${(Math.min(FOES.j20.range, AAM.pl15.lock*0.85)/1000).toFixed(0)} km, so it becomes a fair fight` : ''}. When RADAR MISSILE flashes, turn so the missile is on your wingtip (beam it) to break its lock; against the PL-10, pop flares and turn hard. Close in, then fire once the box reads LOCK and IN RANGE, and use the gun up close. These J-20 pilots are good: they spot your missile early, break hard across its path with a dive, and time their flares well, so a long shot often misses. Fire close and from behind, and follow up with the gun. Your jet carries ${mslTxt({...p, msl:loadout().msl})}, ${p.gun} gun rounds and ${FLARES} flares. The air here is thin: the valleys sit at 4,300 m and the ridges reach 6,400 m. Once the J-20s are down, you get a second task: the enemy has set up a camp on the Indian side, above the north shore of Pangong Tso about 3.75 km south of the LAC, guarded by a SAM launcher that reaches 9 km. Film it: fly within ${LR_R/1000} km of the camp, below ${LR_ALT} m above the ground and with the wings level, for 2 km in all. Below ${LR_ALT} m the SAM radar cannot see you, and a ridge in between hides you too. Then report back by flying ${LR_HOME/1000} km south of the LAC. Do not cross the LAC (the red line on the ground to the north) yourself: that ends the sortie.`;
     setFacts('briefFacts',[['4','J-20s'],[`${(Rs/1000).toFixed(1).replace('.0','')} km`,'Your lock on a J-20'],[String(loadout().msl),'Missiles'],['4,225 m','Pangong Tso']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. MSL fires once a J-20 reads LOCK; hold GUN with the cross inside the lead circle; tap FLR when MISSILE flashes, and turn across a radar missile to beam it.';
   } else if (WORLD==='pune'){
@@ -6628,6 +6762,8 @@ function applyPrefs(){
   }
   if (isTouch) touchHelp();
   briefFormat();
+  [(NAVAL || FLEET) && 'mig29k', ESCORT && 'c130', TANKER && 'il78', AWACS && 'netra'].forEach(k=>{ if (k) loadModel(k,true); });   // this mission's own aircraft
+  loadModel(prefs.plane,true);   // the model file of the jet you picked, first in the queue
   setPlaneMesh(); reset();
   mpUI();
   if (MP.on && MP.lobby && !MP.joining && (MP.room ? MP.rkind!==mpKind() : !MP.err)) mpJoin();
@@ -6922,8 +7058,6 @@ function applyGfx(){
 }
 try { $('lowGfx').checked = localStorage.getItem('thinair.gfx')==='1'; $('stallProt').checked = localStorage.getItem('thinair.prot')!=='0'; } catch (e) {}
 $('stallProt').addEventListener('change',()=>{ try { localStorage.setItem('thinair.prot',$('stallProt').checked?'1':'0'); } catch (e) {} });
-$('newModels').addEventListener('change',()=>{ try { localStorage.setItem('thinair.newac',$('newModels').checked?'1':'0'); } catch (e) {}
-  if (state==='brief'){ applyPrefs(); THUMBS=false; if (HSTEP.step==='plane' || HSTEP.step==='brief'){ makeThumbs(); paintAcSum(); } } });   // rebuild your jet and its picture straight away
 $('lowGfx').addEventListener('change',()=>{ try { localStorage.setItem('thinair.gfx',$('lowGfx').checked?'1':'0'); } catch (e) {} applyGfx(); });
 applyGfx();
 
@@ -6978,10 +7112,13 @@ function missionObjectives(){
   const hit=()=>raidN()-raidLeft(), tm=t=>fmtTime(Math.max(0,t));
   if (RAIL) return irObjectives();
   const k=Math.min(S.kills, mode==='raid' ? 2 : (ESCORT || LADAKH) ? 4 : (AWACS || FLEET || DRONES) ? 999 : 3);   // never show more kills than there are bandits
-  if (mode==='strike') return [['Bomb the sangar on Point 4875',S.targetHit],[`${S.bombs} bomb${S.bombs===1?'':'s'} left · stay south of the LoC`,false,'rule']];
+  if (mode==='strike') return [[`Bomb the sangar on Point 4875 (two direct hits${S.targetHit ? '' : ` · ${Math.round(S.tgtHp)}% left`})`,S.targetHit],[`${S.bombs} bomb${S.bombs===1?'':'s'} left · stay south of the LoC`,false,'rule']];
   if (mode==='raid'){
     if (PRECISE) return [[`Destroy the three camps (${hit()}/${raidN()})`,!raidLeft()],[`Time left ${tm(S.precT)} · stay south of the LoC`,false,'rule'],[`Optional: shoot down the F-16s (${k}/2)`,k>=2,true]];
-    if (NAVAL) return [[`Destroy the four godowns (${hit()}/${raidN()})`,!raidLeft()],[`Optional: shoot down the fighters (${k}/2)`,k>=2,true]];
+    if (NAVAL){ const gd=RAID.targets.filter(t=>!t.alive).length, b=NB.on && NB.ad;
+      return [[`Destroy the four godowns (${gd}/${RAID.targets.length})`,gd===RAID.targets.length],
+        [b ? `Sink the SAM boat${b.alive ? ` (${Math.round(b.hp)}% left)` : ''}` : 'Sink the SAM boat (it comes out once both fighters are down)', !!b && !b.alive],
+        [`Optional: shoot down the fighters (${k}/2)`,k>=2,true]]; }
     if (SEAD) return [[`Destroy the radars and launchers (${hit()}/${raidN()})`,!raidLeft()],[`Below ${SEAD_MASK} m the radars cannot see you`,false,'rule'],[`Optional: shoot down the fighters (${k}/2)`,k>=2,true]];
     if (TANKER) return [['Refuel from the IL-78',S.rtb || hit()>0 || S.fuel>=S.ac.fuel*0.95],[`Destroy the depot (${hit()}/${raidN()})`,!raidLeft()],['Plug in to the tanker for the trip home',false],[`Fuel ${Math.round(S.fuel)} kg`,false,'rule']];
     if (BRIDGE) return [[`Drop both spans of the bridge (${hit()}/${raidN()})`,!raidLeft()],['Before the first lorry gets across',false,'rule']];
@@ -6994,7 +7131,10 @@ function missionObjectives(){
   if (FLEET) return [[`Beat all the raids (raid ${Math.max(1,S.wave)} of ${FLEET_WAVES.length-1})`,false],[`Carrier hits ${S.cvHits} of ${FLEET_HITS} · missiles stopped ${S.asmDown}`,false,'rule']];
   if (DRONES) return [[`Shoot down every drone (wave ${Math.max(1,S.wave)} of ${DRONE_WAVES.length-1})`,false],[`Drones down: ${k} · got through: ${S.leaks} of ${DRONE_LEAKS}`,false,'rule']];
   if (ESCORT) return [['Escort the C-130J until it lands',false],[`Shoot down the bandits (${k}/4)`,k>=4,true],['The C-130J can take two hits',false,'rule']];
-  if (LADAKH) return [[`Shoot down the four J-20s (${k}/4)`,k>=4],['Stay south of the LAC',false,'rule']];
+  if (LADAKH) return [[`Shoot down the four J-20s (${k}/4)`,k>=4],
+    [LR.ph==='fight' ? 'Then: film the enemy camp near the LAC' : `Film the enemy camp: 2 km below ${LR_ALT} m (${(LR.film/1000).toFixed(1)}/${LR_FILM/1000} km)`, LR.ph==='rtb'],
+    [`Report back: ${LR_HOME/1000} km south of the LAC`,false],
+    ['Stay south of the LAC',false,'rule']];
   if (mode==='dogfight') return [[`Shoot down both JF-17s and the J-10C (${k}/3)`,k>=3]];
   return null;
 }
@@ -7255,10 +7395,11 @@ function drawCombatHUD(){
     if (isTouch){   // phone: a small diamond; only the target you are locking shows its distance
       diamond(s.x,s.y,sz,col);
       if (e.remote){ txt(shortName(e.type.name),s.x,s.y-sz-15,col,'center',9,true); hpBar(s.x,s.y-sz-6,e.hp,22); }   // multiplayer: whose jet it is, and its health
+      else if (!e.type.asm) hpBar(s.x,s.y-sz-6,e.hp,18);   // every enemy jet, drone and boat shows its health too (not the anti-ship missiles)
       if (isT) txt((d/1000).toFixed(1),s.x,s.y+sz+10,col,'center',10,true);
     } else {
       c.beginPath(); c.rect(s.x-sz,s.y-sz,sz*2,sz*2); strokeP(col,1.5);
-      if (e.remote) hpBar(s.x,s.y-sz-7,e.hp,Math.max(28,sz*2));
+      if (e.remote || !e.type.asm) hpBar(s.x,s.y-sz-7,e.hp,Math.max(28,sz*2));   // health over every bandit (not the anti-ship missiles)
       txt(`${e.remote ? shortName(e.type.name) : e.type.name} ${(d/1000).toFixed(1)}${stl ? (e.type.uav ? ' · TOO SMALL TO LOCK' : ' · STEALTH') : ''}`,s.x,s.y+sz+11,col,'center',11,true);
     }
     if (isT){
@@ -7362,7 +7503,7 @@ function drawHUD(now){
   }
 
   if (raid){ drawRaidHUD(fpm); drawCombatHUD(); if (RAIL) drawIronRailHUD(flash); if (TANKER) drawTankerHUD(flash); if (CSAR) drawCsarHUD(); if (RECON) drawReconHUD(); }
-  else if (dog){ drawCombatHUD(); if (ESCORT) drawEscortHUD(); if (AWACS) drawAwacsHUD(); if (DRONES) drawDroneHUD(); if (FLEET) drawFleetHUD(flash); } else if (mode!=='training' || carriesBombs()) drawStrikeHUD(fpm);
+  else if (dog){ drawCombatHUD(); if (LADAKH) drawLadRecon(); if (ESCORT) drawEscortHUD(); if (AWACS) drawAwacsHUD(); if (DRONES) drawDroneHUD(); if (FLEET) drawFleetHUD(flash); } else if (mode!=='training' || carriesBombs()) drawStrikeHUD(fpm);
   if (mode==='training') drawTrainingHUD();
   drawObjectives();
   if (isTouch && S.alive && !raid && !dog && TW.sel==='GUN'){   // phone: the gun pointer in the other missions too, when GUN is picked
@@ -7372,6 +7513,7 @@ function drawHUD(now){
   drawTouchLock(now);
   drawComms(now);
   drawThreats(mode==='dogfight');
+  drawGroundHp();
 
   // heading tape (phone: just the number)
   const hy=safeT+22, hw=Math.min(300,W*0.42), ppd=hw/50;
@@ -7444,7 +7586,7 @@ function drawHUD(now){
     else if (missiles.some(m=>m.target==='player' && m.mt && m.mt.seeker==='RADAR')) warns.push(['RADAR MISSILE · BEAM IT: TURN 90° TO IT',RED,true]);
     else if (missiles.some(m=>m.target==='player')) warns.push([isTouch?'MISSILE · FLR':'MISSILE · FLARES Z',RED,true]);
     if (!dog && S.aaFiring) warns.push(['AAA FIRE',AMB,false]);
-    if (raid && S.samTrack) warns.push(RAIL ? (S.rwrLvl===2 ? ['SAM LOCK · GET LOW OR BREAK LINE OF SIGHT',RED,true] : ['RADAR SEARCH · SAM ACQUIRING',AMB,false]) : ['SAM RADAR',AMB,false]);
+    if ((raid || LADAKH) && S.samTrack) warns.push((RAIL || LADAKH) ? (S.rwrLvl===2 ? ['SAM LOCK · GET LOW OR BREAK LINE OF SIGHT',RED,true] : ['RADAR SEARCH · SAM ACQUIRING',AMB,false]) : ['SAM RADAR',AMB,false]);
     if (raid && !PRECISE){}
     else if (S.dLoc<1000) warns.push([`${lineName()} ${(Math.max(0,S.dLoc)/1000).toFixed(1)} KM · TURN SOUTH`,RED,true]);
     else if (S.dLoc<LOC_WARN) warns.push([`${lineName()} ${(S.dLoc/1000).toFixed(1)} KM`,AMB,false]);
@@ -7576,12 +7718,16 @@ function drawHUD(now){
     if (RECON) REC_SITES.forEach(s=>{ const [tx2,ty2]=mp(s.x,s.z); c.beginPath(); c.rect(tx2-3.5,ty2-3.5,7,7); c.fillStyle=s.done?'#6b7480':AMB; c.fill(); c.lineWidth=1; c.strokeStyle='#0b1320'; c.stroke(); });
     else if (PRECISE || SEAD || TANKER || BRIDGE || TANKS || NAVAL || (plainRaid() && RCP!==1)) RAID.targets.forEach(t=>{ const [tx2,ty2]=mp(t.x,t.z); c.beginPath(); c.rect(tx2-3.5,ty2-3.5,7,7); c.fillStyle=t.alive?AMB:'#6b7480'; c.fill(); c.lineWidth=1; c.strokeStyle='#0b1320'; c.stroke(); });
     else if (RCP!==1){ const [bx2,by2]=mp(BASE.x,BASE.z); c.beginPath(); c.rect(bx2-4,by2-4,8,8); c.fillStyle=raidLeft()?AMB:'#6b7480'; c.fill(); c.lineWidth=1; c.strokeStyle='#0b1320'; c.stroke(); }
-    if (NAVAL){ const [kx,ky]=mp(CARRIER.x,CARRIER.z); c.fillStyle='#e6ecf2'; c.fillRect(kx-1.5,ky-5,3,10); }   // the carrier
+    if (NAVAL){ const [kx,ky]=mp(CARRIER.x,CARRIER.z); c.fillStyle='#e6ecf2'; c.fillRect(kx-1.5,ky-5,3,10);   // the carrier
+      if (NB.on && NB.ad.alive){ const [bx,by]=mp(NB.ad.x,NB.ad.z); c.fillStyle=RED; c.fillRect(bx-3,by-3,6,6); } }   // the SAM boat
     c.fillStyle=HUD; wingmen.forEach(w=>{ if (!w.alive) return; const [wx,wy]=mp(w.p.x,w.p.z); c.fillRect(wx-2,wy-2,4,4); });
     if (MP.coop) MP.ghosts.forEach(g=>{ if (!g.alive) return; const [gx,gy]=mp(g.p.x,g.p.z); c.fillRect(gx-2.5,gy-2.5,5,5); txt(shortName(g.type.name),gx,gy-8,g.tk?'#ffffff':HUD,'center',isTouch?8:9,true); hpBar(gx,gy+6,g.hp,14,2); c.fillStyle=HUD; });
     c.restore();
   }
   if (dog || raid){
+    if (LADAKH && LR.ph!=='fight' && LCAMP.sam){   // the enemy camp to film, and its SAM's reach
+      const [sx2,sy2]=mp(LCAMP.sam.x,LCAMP.sam.z,true); c.beginPath(); c.arc(sx2,sy2,LR_SAM_RANGE*DIFF.samRange*MK,0,Math.PI*2); c.lineWidth=1; c.strokeStyle='rgba(255,90,79,.75)'; c.stroke();
+      if (LR.ph==='film'){ const [lx,ly]=mp(LCAMP.x,LCAMP.z); c.beginPath(); c.rect(lx-3.5,ly-3.5,7,7); c.fillStyle=AMB; c.fill(); } }
     c.fillStyle=RED;
     for (const e of enemies){ if (!e.alive || (e.type.uav && e.p.distanceTo(S.pos)>DRONE_VIS) || !awSees(e)) continue; const [ex,ey]=mp(e.p.x,e.p.z); c.fillRect(ex-2.5,ey-2.5,5,5);
       if (e.remote){ txt(shortName(e.type.name),ex,ey-8,e.tk?'#ffffff':BANDIT,'center',isTouch?8:9,true); hpBar(ex,ey+6,e.hp,14,2); c.fillStyle=RED; } }   // white while they talk; their health under the dot   // multiplayer: each pilot's callsign, kept short
@@ -8202,7 +8348,8 @@ function buildSea(){
       [-1,1].forEach(s=>{ const m=tx('R33',12,6,'#eeeeea'); m.rotation.y=s*Math.PI/2; m.position.set(cx+s*17.08,12.5,cz-92); objs.push(m); });
       const dn=tx('33',18,9,'#e8e8e2'); dn.rotation.x=-Math.PI/2; dn.position.set(cx-6,D+0.06,cz+133); objs.push(dn); }
     for (const [px,pz] of [[18,70],[18,96],[-14,118]]){      // MiG-29Ks parked aft
-      const m=detailPlane(buildMig29(),{serial:'IN 3'+(17+objs.length%40), pitot:1, parked:1, deckY:GEAR_H}); m.add(makeGear()); castAll(m); m.position.set(cx+px,D+GEAR_H,cz+pz); objs.push(m);
+      const m=detailPlane(buildMig292(),{serial:'IN 3'+(17+objs.length%40), pitot:1, parked:1, deckY:GEAR_H}), gr=makeGear(); m.add(gr); m.userData.gearObj=gr; castAll(m); m.position.set(cx+px,D+GEAR_H,cz+pz); objs.push(m);
+      DECK_JETS.push(m); if (useModel('mig29k')) deckRefresh();   // the model file, once it is in
     }
     const wm=new T.MeshBasicMaterial({color:0xf2f6f8, transparent:true, opacity:0.5, depthWrite:false});
     const wake=new T.Mesh(new T.PlaneGeometry(1,1),wm); wake.rotation.x=-Math.PI/2; wake.scale.set(30,700,1); wake.position.set(cx,0.2,cz+135+350); objs.push(wake);
@@ -8311,6 +8458,7 @@ function ladakhHeight(x,z){
   if (L.d<w) h=lerp(4180,4240,smooth(w-250,w,L.d));                           // the lake bed, under the water
   else { const dz=clamp(z,DBO.z0,DBO.z1), dv=Math.hypot(x-DBO.x,z-dz);       // the airstrip valley, flattened (but never over the lake)
     if (dv<2400) h=lerp(h, lerp(DBO.y,h,smooth(800,2400,dv)), smooth(w+300,w+1300,L.d)); }
+  const dc=Math.hypot(x-LCAMP.x,z-LCAMP.z); if (dc<1100) h=lerp(LCAMP.y0,h,smooth(450,1100,dc));   // the enemy camp's levelled ground
   return h;
 }
 function buildLadakh(){
@@ -8338,15 +8486,8 @@ function buildLadakh(){
   { const g=new T.PlaneGeometry(MAP*1.2,MAP*1.2); g.rotateX(-Math.PI/2);   // Pangong's famous blue; terrain only dips below it in the lake
     const m=new T.Mesh(g,new T.MeshStandardMaterial({color:0x1f78a8, metalness:0.3, roughness:0.15, envMapIntensity:1.3}));
     m.position.y=LAKE_Y; m.receiveShadow=true; objs.push(m); }
-  { const pts=[], wall=[], idx=[]; let i=0;                                  // the LAC: a red line on the ground and a faint curtain
-    for (let x=-HALF; x<=HALF; x+=100, i++){
-      const z=lacZ(x), gy=groundAt(x,z);
-      pts.push(new T.Vector3(x,gy+12,z)); wall.push(x,gy,z, x,gy+2500,z);
-      if (i>0){ const a=(i-1)*2; idx.push(a,a+2,a+1, a+1,a+2,a+3); }
-    }
-    objs.push(new T.Line(new T.BufferGeometry().setFromPoints(pts), new T.LineBasicMaterial({color:0xff5a4f})));
-    const wg=new T.BufferGeometry(); wg.setAttribute('position', new T.Float32BufferAttribute(wall,3)); wg.setIndex(idx);
-    objs.push(new T.Mesh(wg, new T.MeshBasicMaterial({color:0xff5a4f, transparent:true, opacity:0.13, side:T.DoubleSide, depthWrite:false}))); }
+  objs.push(...groundBand(lacZ));   // the LAC: a red band on the ground
+  try { buildLadCamp(objs); } catch (e) { console.error('Ladakh camp', e); }   // the enemy camp the intercept goes on to film
   { const P=[], rl=DBO.rw1-DBO.rw0, rc=(DBO.rw0+DBO.rw1)/2, r0=DBO.rw0-rc;   // the airstrip: runway, markings, a hangar and huts
     base(0,0,0,{x:DBO.x, z:rc});
     put(P,UBOX,0x4a4846,0,0.3,0,46,0.6,rl+200);
@@ -8389,6 +8530,112 @@ function buildLadakh(){
   return {h, geo, objs, map:cv};
 }
 let LADAKH=false, LAD=null;
+// Ladakh intercept, part 2: once the J-20s are down, film an enemy camp set up on the Indian side, on Pangong Tso's
+// north shore about 3.5 km south of the LAC, guarded by a SAM launcher. The camera runs while you are within LR_R of
+// the camp, below LR_ALT above the ground and wings level; LR_FILM metres of film in all, then report back LR_HOME
+// south of the LAC. The SAM radar cannot see you below LR_ALT, and it needs line of sight over the ridges.
+const LCAMP={x:1500, z:lacZ(1500)+3750, y0:4320, y:0, mesh:null, sam:null};   // 3.75 km south of the LAC, above the north shore; ladakhHeight levels the ground to y0
+const LR_R=1500, LR_ALT=400, LR_FILM=2000, LR_HOME=10000, LR_SAM_RANGE=9000;
+const LR={ph:'fight', film:0, cam:null, shotT:0};   // ph: fight (the J-20s), film, rtb
+function buildLadCamp(objs){
+  LCAMP.y=groundAt(LCAMP.x,LCAMP.z);
+  const I=[], K=2.5, P=(g,c,x,y,zz,sx,sy,sz,rx,ry,rz)=>put(I,g,c,x*K,y*K,zz*K,sx*K,sy*K,sz*K,rx,ry,rz);   // drawn 2.5 times life size, like the other ground targets
+  base(0,0,0.25,LCAMP);
+  [-60,-30,0,30,60].forEach(dx=>{ P(UBOX,0x8f9a7a,dx,2,-40,18,4,9); P(UBOX,0x5d6650,dx,4.3,-40,18.6,0.6,9.6); });   // prefab huts
+  [-45,-15,15,45].forEach(dx=>P(UPYR,0x6f7a52,dx,2.2,-10,11,4.4,11,0,Math.PI/4,0));                                   // tents
+  [[-70,30],[-58,30],[-46,30],[-70,46],[-58,46]].forEach(([dx,dz])=>{ P(UBOX,0x55603f,dx,1.6,dz,2.8,2.4,7); P(UBOX,0x48523a,dx,1.8,dz-4.4,2.8,2.2,2); });   // lorries
+  P(UCYL,0x6a6a62,40,0.2,40,26,0.4,26); P(UBOX,0xe6e4dc,36,0.45,40,1.6,0.05,10); P(UBOX,0xe6e4dc,44,0.45,40,1.6,0.05,10); P(UBOX,0xe6e4dc,40,0.45,40,8,0.05,1.6);   // helipad
+  P(UBOX,STEEL,-90,12,-20,0.6,24,0.6); P(UBOX,0xd0ccc0,-90,23,-20,5,1.6,0.3);                                           // radio mast
+  [[80,-30],[90,-22],[80,-14]].forEach(([dx,dz])=>P(UCYL,0x4f5a3c,dx,1.5,dz,4,3,4));                                    // fuel bladders
+  [[0,-75,200,3],[0,75,200,3],[-100,0,3,150],[100,0,3,150]].forEach(([a,d,sx,sz])=>P(UBOX,0x9a8a6a,a,1,d,sx,2,sz));        // earth berm
+  const m=new T.Mesh(mergeParts(I),RAID_MAT); m.castShadow=m.receiveShadow=true; objs.push(m); LCAMP.mesh=m;
+  // the SAM launcher, just outside the berm
+  const sx=LCAMP.x+130*K, sz=LCAMP.z+60*K, g=new T.Group(); g.position.set(sx,groundAt(sx,sz),sz);
+  const mG=new T.MeshLambertMaterial({color:0x56603f}), mS=new T.MeshLambertMaterial({color:STEEL}), mT=new T.MeshLambertMaterial({color:TYRE}), mW=new T.MeshLambertMaterial({color:0xd9d6cc});
+  const hull=new T.Mesh(UBOX,mG); hull.scale.set(3.2,1.2,6.5); hull.position.y=1.0; g.add(hull);
+  [-1,1].forEach(s=>{ const tr=new T.Mesh(UBOX,mT); tr.scale.set(0.7,1.0,6.8); tr.position.set(s*1.75,0.55,0); g.add(tr); });
+  const yaw=new T.Group(); yaw.position.y=1.7; g.add(yaw);
+  const ring=new T.Mesh(UCYL,mG); ring.scale.set(2.4,0.4,2.4); yaw.add(ring);
+  const pitch=new T.Group(); pitch.position.set(0,0.6,0.6); yaw.add(pitch);
+  [[-0.55,0],[0.55,0],[-0.55,0.75],[0.55,0.75]].forEach(([tx,ty])=>{ const tb=new T.Mesh(UCYL,mW); tb.scale.set(0.5,5.2,0.5); tb.rotation.x=-Math.PI/2; tb.position.set(tx,ty,-2.0); pitch.add(tb); });
+  pitch.rotation.x=0.5;
+  const mast=new T.Mesh(UBOX,mS); mast.scale.set(0.3,5,0.3); mast.position.set(6,2.5,0); g.add(mast);
+  const radar=new T.Group(); radar.position.set(6,5.2,0); g.add(radar);
+  const dish=new T.Mesh(UBOX,mG); dish.scale.set(4.5,1.6,0.25); radar.add(dish);
+  g.traverse(o=>{ if (o.isMesh) o.castShadow=o.receiveShadow=true; }); g.scale.setScalar(AD_SCALE*2); objs.push(g);
+  LCAMP.sam={g, yaw, pitch, radar, x:sx, y:g.position.y, z:sz, alive:true, unit:null};
+}
+function ladReconReset(){
+  LR.ph='fight'; LR.film=0; LR.cam=null; LR.shotT=0;
+  if (!LCAMP.sam) return;
+  LCAMP.sam.unit=samUnit({missiles:6, lockTime:3, reload:12});
+  LCAMP.mesh.visible=LCAMP.sam.g.visible=LADAKH;   // the escort flies over Ladakh too, without the camp
+}
+function ladReconStart(){   // all four J-20s down: the second task
+  LR.ph='film'; S.waveT=0;
+  const d=Math.hypot(LCAMP.x-S.pos.x,LCAMP.z-S.pos.z)/1000;
+  S.banner={text:'NEW TASKING · RECON', col:AMB, t:3};
+  S.msg={text:`ENEMY CAMP ${d.toFixed(1)} KM · ${((LCAMP.z-lacZ(LCAMP.x))/1000).toFixed(1)} KM SOUTH OF THE LAC · FILM IT LOW: BELOW ${LR_ALT} M FOR 2 KM · SAM`, col:AMB, t:6};
+}
+function updateLadRecon(dt){
+  LR.cam=null; if (S.photoFlash>0) S.photoFlash-=dt;
+  if (!LADAKH || LR.ph==='fight' || !LCAMP.sam) return;
+  const fly=state==='fly' && S.alive, a=LCAMP.sam, u=a.unit;
+  // the SAM: below LR_ALT its radar loses you in the ground clutter, and a ridge in between blocks it too
+  _t.copy(S.pos).sub(a.g.position); const hd=Math.hypot(_t.x,_t.z);
+  const vis=()=>S.alive && S.agl>LR_ALT && losClear(a.x,a.y+5,a.z,S.pos.x,S.pos.y,S.pos.z);
+  const see=fly && hd<LR_SAM_RANGE*DIFF.samRange && vis();
+  const ev=samStep(u,see,dt,missiles.some(m=>m.sam===a));
+  S.samTrack=see; S.rwrLvl=see ? (u.st==='locked' ? 2 : 1) : 0;
+  a.radar.rotation.y+=dt*(see ? 4 : 1.4);
+  if (see){ a.yaw.rotation.y=Math.atan2(-_t.x,-_t.z); a.pitch.rotation.x=clamp(Math.atan2(_t.y,hd),0.35,1.2); }
+  if (ev==='launch'){
+    const p=a.g.position.clone(); p.y+=6; _d.copy(_t).normalize(); _d.y=Math.max(_d.y,0.5); _d.normalize();
+    const m=spawnMissile(p,_d.clone().multiplyScalar(90),'player','e'); m.sam=a; m.maxLife=16; m.mesh.scale.setScalar(1.8);
+    effects.push(makeFx(p.clone(),0xd8d2c4,false,3,3,16,0.7,3));
+    S.msg={text:`SAM LAUNCH FROM THE CAMP · FLARES, BREAK, GET BELOW ${LR_ALT} M`, col:RED, t:2.4};
+  }
+  for (const m of missiles){   // a missile in the air needs the radar on you: lose it for a second and it goes dumb
+    if (m.sam!==a || m.target!=='player') continue;
+    if (vis()) m.nlos=0;
+    else { m.nlos=(m.nlos||0)+dt; if (m.nlos>1){ m.target=null; S.msg={text:'SAM LOST YOU · STAY LOW', col:HUD, t:1.8}; } }
+  }
+  if (!fly) return;
+  if (LR.ph==='film'){
+    axes();
+    const d=Math.hypot(S.pos.x-LCAMP.x,S.pos.z-LCAMP.z);
+    if (d<LR_R){
+      const low=S.agl<LR_ALT, lvl=vU.y>0.82;
+      LR.cam={ok:low && lvl, why: !low ? `TOO HIGH · BELOW ${LR_ALT} M` : 'LEVEL THE WINGS'};
+      if (low && lvl){
+        LR.film+=Math.hypot(S.vel.x,S.vel.z)*dt;
+        LR.shotT-=dt; if (LR.shotT<=0){ LR.shotT=1.2; S.photoFlash=0.15; }
+        if (LR.film>=LR_FILM){ LR.film=LR_FILM; LR.ph='rtb'; S.photoFlash=0.3; S.score+=500;
+          S.banner={text:'CAMP FILMED', col:HUD, t:2.4};
+          S.msg={text:`FILM IN THE CAN · REPORT BACK: ${LR_HOME/1000} KM SOUTH OF THE LAC`, col:HUD, t:4.5}; }
+      }
+    }
+  } else if (LR.ph==='rtb' && S.dLoc>LR_HOME){
+    S.score+=1000;
+    endMission(true,'Camp reported',`All four J-20s are down, and the film of the enemy camp on Pangong Tso's north shore, ${((LCAMP.z-lacZ(LCAMP.x))/1000).toFixed(1)} km inside the Indian side of the LAC, is home. Flight time ${fmtTime(S.time)}. Hull ${Math.round(S.hp)}%. Score ${S.score}.`,3);
+  }
+}
+function drawLadRecon(){
+  if (!LADAKH || LR.ph==='fight' || !S.alive) return;
+  const y0=H*0.72;
+  if (LR.ph==='film'){
+    const d=Math.hypot(S.pos.x-LCAMP.x,S.pos.z-LCAMP.z), p=proj(LCAMP.x,LCAMP.y+20,LCAMP.z), lb=isTouch ? `CAMP ${(d/1000).toFixed(1)}` : `ENEMY CAMP ${(d/1000).toFixed(1)} KM`;
+    if (onScreen(p)){ c.beginPath(); c.rect(p.x-12,p.y-12,24,24); strokeP(AMB,1.6);
+      c.beginPath(); c.moveTo(p.x-5,p.y); c.lineTo(p.x+5,p.y); c.moveTo(p.x,p.y-5); c.lineTo(p.x,p.y+5); strokeP(AMB,1.2);
+      txt(lb,p.x,p.y-22,AMB,'center',isTouch?10:12,true); }
+    else edgeArrow(LCAMP.x,LCAMP.y+20,LCAMP.z,AMB,lb);
+    const f=LR.film/LR_FILM, bw=isTouch?120:180;   // how much film is shot
+    c.fillStyle='rgba(0,0,0,.35)'; c.fillRect(W/2-bw/2,y0+12,bw,6); c.fillStyle=HUD; c.fillRect(W/2-bw/2,y0+12,bw*f,6);
+    if (LR.cam) txt(LR.cam.ok ? `CAMERA RUNNING · ${(LR.film/1000).toFixed(1)} / ${LR_FILM/1000} KM` : `CAMERA WINDOW · ${LR.cam.why}`, W/2, y0, LR.cam.ok?HUD:RED, 'center', isTouch?12:14, true);
+    else txt(isTouch ? `FILM ${(LR.film/1000).toFixed(1)}/${LR_FILM/1000} KM · BELOW ${LR_ALT} M` : `CAMERA: WITHIN ${LR_R/1000} KM OF THE CAMP · BELOW ${LR_ALT} M · WINGS LEVEL · ${(LR.film/1000).toFixed(1)} / ${LR_FILM/1000} KM`, W/2, y0, AMB, 'center', isTouch?11:12, true);
+  } else txt(isTouch ? `REPORT BACK · ${(Math.max(0,LR_HOME-S.dLoc)/1000).toFixed(1)} KM SOUTH` : `FILM IN THE CAN · REPORT BACK ${LR_HOME/1000} KM SOUTH OF THE LAC · ${(Math.max(0,LR_HOME-S.dLoc)/1000).toFixed(1)} KM TO GO`, W/2, y0, HUD, 'center', isTouch?12:13, true);
+  if (S.photoFlash>0){ c.fillStyle=`rgba(255,255,255,${(S.photoFlash/0.3*0.55).toFixed(3)})`; c.fillRect(0,0,W,H); }
+}
 const LAD_PLANES=['amca','rafale','su30','mig29','m2k','tejas'];   // IAF fighters that could be scrambled for eastern Ladakh (the escort)
 const LADI_PLANES=['tejas'];   // the Ladakh intercept is flown in the Tejas Mk1A only
 const lineZ = x => WORLD==='ladakh' ? lacZ(x) : WORLD==='jungle' ? junLacZ(x) : WORLD==='punjab' ? pbBorderZ(x) : locZ(x);    // the line: the LoC at Kargil, the LAC in Ladakh and Arunachal, the border in Punjab
@@ -8431,11 +8678,7 @@ function buildJungle(){
     const objs=[], posts=JUN_POSTS.map(P=>({...P, y:groundAt(P.x,P.z)}));
     { const g=new T.PlaneGeometry(MAP*1.2,MAP*1.2); g.rotateX(-Math.PI/2);   // the river: terrain only dips below this in the valley
       const m=new T.Mesh(g,new T.MeshStandardMaterial({color:0x3f6f6a, metalness:0.25, roughness:0.2, envMapIntensity:1.2})); m.position.y=JUN_WATER; m.receiveShadow=true; objs.push(m); }
-    { const pts=[], wall=[], idx=[]; let i=0;   // the LAC
-      for (let x=-HALF; x<=HALF; x+=100, i++){ const z=junLacZ(x), gy=groundAt(x,z); pts.push(new T.Vector3(x,gy+12,z)); wall.push(x,gy,z, x,gy+2500,z); if (i>0){ const a=(i-1)*2; idx.push(a,a+2,a+1, a+1,a+2,a+3); } }
-      objs.push(new T.Line(new T.BufferGeometry().setFromPoints(pts), new T.LineBasicMaterial({color:0xff5a4f})));
-      const wg=new T.BufferGeometry(); wg.setAttribute('position', new T.Float32BufferAttribute(wall,3)); wg.setIndex(idx);
-      objs.push(new T.Mesh(wg, new T.MeshBasicMaterial({color:0xff5a4f, transparent:true, opacity:0.13, side:T.DoubleSide, depthWrite:false}))); }
+    objs.push(...groundBand(junLacZ));   // the LAC: a red band on the ground
     // roads: one along the river valley (on the bank, crossing side valleys on bridges) and a branch up to each post;
     // villages of Monpa houses with coloured tin roofs along the valley road
     let jnet=null, jvill=[];
@@ -8531,11 +8774,7 @@ function buildPunjab(){
   try {
     { const g=new T.PlaneGeometry(MAP*1.2,MAP*1.2); g.rotateX(-Math.PI/2);   // the Ravi: the ground only dips below this in the river bed
       const m=new T.Mesh(g,new T.MeshStandardMaterial({color:0x5d7f7c, metalness:0.2, roughness:0.25, envMapIntensity:1.1})); m.position.y=PB_WATER; m.receiveShadow=true; scene.add(m); }
-    { const pts=[], wall=[], idx=[]; let i=0;   // the border, with its fence
-      for (let x=-HALF; x<=HALF; x+=100, i++){ const z=pbBorderZ(x), gy=groundAt(x,z); pts.push(new T.Vector3(x,gy+6,z)); wall.push(x,gy,z, x,gy+2500,z); if (i>0){ const a=(i-1)*2; idx.push(a,a+2,a+1, a+1,a+2,a+3); } }
-      scene.add(new T.Line(new T.BufferGeometry().setFromPoints(pts), new T.LineBasicMaterial({color:0xff5a4f})));
-      const wg=new T.BufferGeometry(); wg.setAttribute('position', new T.Float32BufferAttribute(wall,3)); wg.setIndex(idx);
-      scene.add(new T.Mesh(wg, new T.MeshBasicMaterial({color:0xff5a4f, transparent:true, opacity:0.12, side:T.DoubleSide, depthWrite:false})));
+    { groundBand(pbBorderZ).forEach(o=>scene.add(o));   // the border: a red band on the ground, with its fence
       const F=[]; for (let x=-HALF; x<=HALF; x+=60){ const z=pbBorderZ(x); base(0,0,Math.atan2(pbBorderZ(x-30)-pbBorderZ(x+30),60),{x,z}); put(F,UBOX,0x8a8a84,0,1.8,0,60,3.6,0.15); put(F,UBOX,0xb8b4a8,0,3,0,0.3,6,0.3); }
       scene.add(raidMesh(F,true)); }
     const nearRiver=(x,z,d)=>Math.abs(x-pbRiverX(z))<d;
@@ -8874,7 +9113,7 @@ function buildC130(){
 function escortReset(){
   if (HERC){ scene.remove(HERC.m); HERC=null; }
   if (!ESCORT) return;
-  if (!C130_PROTO) C130_PROTO=buildC130();
+  if (!C130_PROTO) C130_PROTO=supportProto('c130',buildC130);
   const s=ESC_ROUTE[0], n=ESC_ROUTE[1];
   const p=new T.Vector3(s[0],s[2],s[1]), fwd=new T.Vector3(n[0]-s[0],0,n[1]-s[1]).normalize();
   const m=C130_PROTO.clone(); m.position.copy(p); orient(m,fwd,0); scene.add(m);
@@ -8931,7 +9170,7 @@ function buildNetra(){   // Embraer ERJ-145 with the dorsal "balance beam" radar
 function awacsReset(){
   if (NETRA){ scene.remove(NETRA.m); NETRA=null; }
   if (!AWACS) return;
-  if (!NETRA_PROTO) NETRA_PROTO=buildNetra();
+  if (!NETRA_PROTO) NETRA_PROTO=supportProto('netra',buildNetra);
   const th=Math.PI*0.5, p=new T.Vector3(AW.cx+Math.cos(th)*AW.R, AW.y, AW.cz+Math.sin(th)*AW.R), fwd=new T.Vector3(Math.sin(th),0,-Math.cos(th));
   const m=NETRA_PROTO.clone(); m.position.copy(p); orient(m,fwd,0); scene.add(m);
   NETRA={m, p, fwd, vel:fwd.clone().multiplyScalar(AW.v), speed:AW.v, hp:120, alive:true, friendly:true, name:'NETRA', short:'AEW', flares:16, bank:0, th, linkMsg:true};
@@ -9039,7 +9278,7 @@ function buildIL78(){
 function tankerReset(){
   if (TKR){ scene.remove(TKR.m); TKR=null; }
   if (!TANKER) return;
-  if (!TK_MESH) TK_MESH=buildIL78();
+  if (!TK_MESH) TK_MESH=useModel('il78') ? buildIL78Model() : buildIL78();
   TKR={m:TK_MESH, s:0, p:new T.Vector3(), fwd:new T.Vector3(0,0,-1), vel:new T.Vector3(), baskets:TK_MESH.userData.baskets, near:new T.Vector3(), bd:1e9, closure:0, fullMsg:false};
   scene.add(TK_MESH); tankerMove(0);
 }
@@ -9293,7 +9532,7 @@ function irReset(){
   RAID.targets=[]; RAID.ad=[]; S.td=null;   // nothing to designate until you find the train
   IR.intel.t=0; irPlace(); irIntel();
   S.killsBy={}; S.rwrLvl=0;
-  const LO=C.loadouts[prefs.plane]; if (LO){ S.gun=LO.gun; S.flares=LO.flares; }
+  const LO=C.loadouts[prefs.plane]; if (LO){ S.gun=LO.gun*GUN_K; S.flares=LO.flares; }
 }
 function irIntel(){   // a rough fix on the train from intelligence, refreshed every 25 s until you find it
   const n=IR.nuke ? IR.nuke.ref : {x:0,z:0}; IR.intel.x=n.x+(Math.random()-0.5)*2400; IR.intel.z=n.z+(Math.random()-0.5)*2400; IR.intel.t=25;
@@ -9831,9 +10070,9 @@ function frame(now){
       updateBombs(dt); updateAAA(dt); updateManpads(dt); updateLaser(); updateMissiles(dt); updateBullets(dt); updateSecondaries(dt);
       if (S.hitFlash>0) S.hitFlash=Math.max(0,S.hitFlash-dt);
     }
-    else if (mode==='raid'){ updateBombs(dt); updateRaidAD(dt); updateWingmen(dt); if (RAIL) updateIronRail(dt); if (PRECISE) updatePrecF16(dt); if (plainRaid() && !MP.coop) updateRaidClock(dt); if (SEAD) updateSead(dt); if (TANKER) updateTanker(dt); if (BRIDGE){ updateConvoy(dt); updateIllum(dt); } if (CSAR) updateCsar(dt); if (RECON) updateRecon(dt); if (TANKS) updateTanks(dt); updateLaser(); updateDogfight(dt); updateSecondaries(dt); }
+    else if (mode==='raid'){ updateBombs(dt); updateRaidAD(dt); updateNavBoat(dt); updateWingmen(dt); if (RAIL) updateIronRail(dt); if (PRECISE) updatePrecF16(dt); if (plainRaid() && !MP.coop) updateRaidClock(dt); if (SEAD) updateSead(dt); if (TANKER) updateTanker(dt); if (BRIDGE){ updateConvoy(dt); updateIllum(dt); } if (CSAR) updateCsar(dt); if (RECON) updateRecon(dt); if (TANKS) updateTanks(dt); updateLaser(); updateDogfight(dt); updateSecondaries(dt); }
     else if (mode==='training'){ updateBombs(dt); updateLaser(); updateDogfight(dt); updateTraining(dt); }
-    else { updateDogfight(dt); if (ESCORT) updateEscort(dt); if (AWACS) updateAwacs(dt); if (DRONES) updateDroneHunt(dt); if (FLEET && state==='fly') updateFleet(dt); }
+    else { updateDogfight(dt); if (LADAKH) updateLadRecon(dt); if (ESCORT) updateEscort(dt); if (AWACS) updateAwacs(dt); if (DRONES) updateDroneHunt(dt); if (FLEET && state==='fly') updateFleet(dt); }
     updatePip(dt);
     if (S.msg){ S.msg.t-=dt; if (S.msg.t<=0) S.msg=null; }
     if (S.banner){ S.banner.t-=dt; if (S.banner.t<=0) S.banner=null; }
