@@ -5994,7 +5994,7 @@ function musicSync(){
   try {
     const want=musicWanted(), a=want ? musicEl() : MFILE.el;
     if (a && !MFILE.failed){
-      if (want && !MFILE.on){ MFILE.on=true; musicFade(MUSIC_FILE_VOL,2);
+      if (want && !MFILE.on){ MFILE.on=true; musicFade(MUSIC_FILE_VOL,0.6);
         const p=a.play(); if (p && p.catch) p.catch(()=>{ MFILE.on=false; }); }   // browsers refuse sound before the first tap: the next tap or key tries again
       else if (!want && MFILE.on){ MFILE.on=false; musicFade(0,1.2); }
       if (!MUS || !MUS.on) return;
@@ -6018,6 +6018,9 @@ function musicUI(){ const on=$('musicOn').checked, b=$('openMusic');
   b.setAttribute('aria-pressed',String(on)); b.querySelector('span').textContent=on ? 'Music on' : 'Music off'; b.classList.toggle('off',!on); }
 try { $('musicOn').checked = localStorage.getItem('thinair.music')!=='0'; } catch (e) {}
 musicUI();
+// start downloading the track as the page opens (it cannot play yet), so it is ready by the first tap instead of
+// starting to load only then, which left 5 or 6 seconds of silence
+if ($('musicOn').checked) musicEl();
 $('musicOn').addEventListener('change',()=>{ try { localStorage.setItem('thinair.music',$('musicOn').checked?'1':'0'); } catch (e) {} musicUI(); musicSync(); });
 $('diffSel').addEventListener('change',()=>{ const v=$('diffSel').value; prefs.diff=['easy','normal','hard'].includes(v) ? v : 'normal'; applyPrefs(); });
 $('openMusic').addEventListener('click',()=>{ $('musicOn').checked=!$('musicOn').checked; $('musicOn').dispatchEvent(new Event('change')); });
