@@ -3787,7 +3787,7 @@ function phoneGauge(x,side,unit,val,label,sub,col,subCol){
 function pipFollow(o,kind){ if (isTouch){ o.pipMine=true; return; } pip.o=o; pip.hold=0; pip.label=null; pip.kind=kind; }
 function touchResult(label,col){
   const L=String(label||'');
-  const text = L==='SPLASH' ? 'PLANE DESTROYED' : /DESTROYED/.test(L) || L==='DIRECT HIT' ? 'TARGET DESTROYED'   // 'DIRECT HIT' alone: mission 1's sangar going down
+  const text = /^SPLASH/.test(L) ? (L.slice(7)||'PLANE')+' DESTROYED' : /DESTROYED/.test(L) || L==='DIRECT HIT' ? 'TARGET DESTROYED'   // 'DIRECT HIT' alone: mission 1's sangar going down
              : /^HIT · /.test(L) ? 'TARGET HIT · '+L.slice(6) : L==='HIT' ? 'TARGET HIT' : /^DIRECT HIT · /.test(L) ? 'DIRECT HIT'
              : L==='DEFEATED' ? 'MISSILE DEFEATED' : /^MISS/.test(L) ? 'MISSED' : L;
   S.banner={text, col: text==='MISSED' || text==='MISSILE DEFEATED' ? AMB : HUD, t:2.2};
@@ -4510,6 +4510,8 @@ function updateWrecks(dt){
   for (const wm of wingmen) if (wm.alive && wm.hp<60 && wm.fwd) puff(wm,wm.p,wm.fwd,isTouch ? 0.2 : 0.12,0x5a5550);
   if (S.alive && state==='fly' && S.hp<40 && !MP.on){ axes(); puff(S,S.pos,vF,isTouch ? 0.22 : 0.14,0x4a4643); }
 }
+// what the kill banner calls it: a drone, an anti-ship missile, a boat, or a plane
+const killWord=e=>{ const t=(e && e.type) || {}; return (t.drone || t.uav) ? 'DRONE' : t.asm ? 'MISSILE' : t.boat ? 'BOAT' : 'PLANE'; };
 function killEnemy(e,how){
   if (!e.alive) return;
   e.alive=false;
@@ -4520,7 +4522,7 @@ function killEnemy(e,how){
   const base = how==='gun' ? 200 : how==='crash' ? 50 : 100, pts=base+25*Math.max(0,S.wave-1);
   S.score+=pts; if (e.type.asm) S.asmDown++; else S.kills++;   // fleet defence counts missiles stopped apart from jets downed
   const nm=e.type.name;
-  if (isTouch && how!=='mate') S.banner={text: how==='wing' ? 'WINGMAN · PLANE DESTROYED' : 'PLANE DESTROYED', col:HUD, t:2.2};   // phone: the big banner says it
+  if (isTouch && how!=='mate') S.banner={text: (how==='wing' ? 'WINGMAN · ' : '')+killWord(e)+' DESTROYED', col:HUD, t:2.2};   // phone: the big banner says it
   S.msg={text: how==='mate' ? `${nm} DOWN` : how==='gun' ? `GUN KILL · ${nm} +${pts}` : how==='crash' ? `${nm} CRASHED +${pts}` : how==='wing' ? `WINGMAN SPLASH · ${nm} +${pts}` : `SPLASH ONE · ${nm} +${pts}`, col:HUD, t:2};
   if (S.lockTgt===e){ S.lockTgt=null; S.lockT=0; S.locked=false; }
   if (mode==='training'){ TR.kill=how; return; }
@@ -5394,7 +5396,7 @@ function detonate(m,how){
       else damagePlayer(55);
     }
     else if (m.target && m.target.friendly) damageWing(m.target,55);
-    else if (m.target && m.target.alive){ killEnemy(m.target, m.own==='w' ? 'wing' : 'msl'); label='SPLASH'; col=HUD; }
+    else if (m.target && m.target.alive){ killEnemy(m.target, m.own==='w' ? 'wing' : 'msl'); label='SPLASH '+killWord(m.target); col=HUD; }
   }
   pipImpact(m,m.p,m.v,label,col);
 }
