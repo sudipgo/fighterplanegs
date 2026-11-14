@@ -3783,11 +3783,12 @@ function phoneGauge(x,side,unit,val,label,sub,col,subCol){
   if (sub) txt(sub,x,cy+h+26,subCol||HUD,'center',10,true);
 }
 // phone: no weapon camera. The bomb or missile is only marked as yours, and when it lands a big banner in the
-// middle of the screen says what happened: TARGET DESTROYED, PLANE DESTROYED or MISSED
+// middle of the screen says what happened: TARGET DESTROYED (only when it is gone), TARGET HIT (still standing), PLANE DESTROYED or MISSED
 function pipFollow(o,kind){ if (isTouch){ o.pipMine=true; return; } pip.o=o; pip.hold=0; pip.label=null; pip.kind=kind; }
 function touchResult(label,col){
   const L=String(label||'');
-  const text = L==='SPLASH' ? 'PLANE DESTROYED' : /HIT/.test(L) && !/^MISS/.test(L) ? (L==='HIT' ? 'HIT' : 'TARGET DESTROYED')
+  const text = L==='SPLASH' ? 'PLANE DESTROYED' : /DESTROYED/.test(L) || L==='DIRECT HIT' ? 'TARGET DESTROYED'   // 'DIRECT HIT' alone: mission 1's sangar going down
+             : /^HIT · /.test(L) ? 'TARGET HIT · '+L.slice(6) : L==='HIT' ? 'TARGET HIT' : /^DIRECT HIT · /.test(L) ? 'DIRECT HIT'
              : L==='DEFEATED' ? 'MISSILE DEFEATED' : /^MISS/.test(L) ? 'MISSED' : L;
   S.banner={text, col: text==='MISSED' || text==='MISSILE DEFEATED' ? AMB : HUD, t:2.2};
 }
@@ -4034,6 +4035,7 @@ function updateBombs(dt){
 }
 function bombImpact(b){
   spawnExplosion(b.p,false);
+  if (b.own!=='w' && lsBombHit(b)) return;   // a launcher of the SAM belt beyond the line
   if (mode==='training'){
     let best=TR_TGTS[0], bd=Infinity;
     trTargets().forEach(t=>{ const k=Math.hypot(b.p.x-t.x,b.p.z-t.z); if (k<bd){ bd=k; best=t; } });
@@ -4142,7 +4144,7 @@ function raidBombImpact(b){
   if (RAIL){ railImpact(b); return; }   // Iron Rail: wagons with hit points, bombs and laser missiles alike
   if (b.own==='w'){   // wingmen bomb the air defences only; the four main targets are yours
     let hit=null, dm=null;
-    RAID.ad.forEach(a=>{ if (!a.alive) return; const d=Math.hypot(b.p.x-a.x,b.p.z-a.z); if (d<=adR(a)){ if (hitGround(a,groundDmg(d,adR(a),false))) hit=a; else dm=a; } });
+    RAID.ad.forEach(a=>{ if (!a.alive) return; const d=Math.hypot(b.p.x-a.x,b.p.z-a.z); if (d<=adR(a)){ if (hitGround(a,adDmg(a,d))) hit=a; else dm=a; } });
     S.msg = hit ? {text:`${b.by.name} · ${hit.kind} DESTROYED`, col:HUD, t:2.6} : dm ? {text:`${b.by.name} · ${dm.kind} HIT · ${Math.round(dm.hp)}%`, col:AMB, t:2.2} : {text:`${b.by.name} · BOMB WIDE`, col:AMB, t:1.6};
     return;
   }
@@ -4151,14 +4153,14 @@ function raidBombImpact(b){
   if (lorries) hits.push(lorries>1 ? `${lorries} LORRIES` : 'LORRY');
   // every object inside its hit radius takes damage: full for a direct hit, less for a near miss; it dies at 0 hit points
   RAID.targets.forEach(t=>{ if (!t.alive) return; const d=Math.hypot(b.p.x-t.x,b.p.z-t.z); if (d<=t.r){ if (hitGround(t,groundDmg(d,t.r,!t.conv))) hits.push(t.name); else dmgd.push(`${t.name} ${Math.round(t.hp)}%`); } });
-  RAID.ad.forEach(a=>{ if (!a.alive) return; const d=Math.hypot(b.p.x-a.x,b.p.z-a.z); if (d<=adR(a)){ if (hitGround(a,groundDmg(d,adR(a),false))) hits.push(a.kind); else dmgd.push(`${a.kind} ${Math.round(a.hp)}%`); } });
+  RAID.ad.forEach(a=>{ if (!a.alive) return; const d=Math.hypot(b.p.x-a.x,b.p.z-a.z); if (d<=adR(a)){ if (hitGround(a,adDmg(a,d))) hits.push(a.kind); else dmgd.push(`${a.kind} ${Math.round(a.hp)}%`); } });
   if (CSAR && CMP && CMP.alive && Math.hypot(b.p.x-CMP.x,b.p.z-CMP.z)<=30){ killCmp(); hits.push('MANPADS'); }
   let nd=Infinity, nt=null;
   RAID.targets.forEach(t=>{ if (!t.alive) return; const d=Math.hypot(b.p.x-t.x,b.p.z-t.z); if (d<nd){ nd=d; nt=t; } });
   if (nt) S.bestMiss=Math.min(S.bestMiss,nd);
   else RAID.ad.forEach(a=>{ if (!a.alive) return; const d=Math.hypot(b.p.x-a.x,b.p.z-a.z); if (d<nd){ nd=d; nt={name:a.kind}; } });   // no main targets (rescue cover): measure from the nearest gun
   if (hits.length) pipImpact(b,b.p,b.v,`${hits.join(' + ')} DESTROYED`,HUD);
-  else if (dmgd.length){ pipImpact(b,b.p,b.v,'HIT',AMB); S.msg={text:`HIT · ${dmgd.join(' · ')}`, col:AMB, t:3}; }
+  else if (dmgd.length){ pipImpact(b,b.p,b.v,`HIT · ${dmgd.join(' · ')}`,AMB); S.msg={text:`TARGET HIT · ${dmgd.join(' · ')} · HIT IT AGAIN`, col:AMB, t:3}; }
   else {
     pipImpact(b,b.p,b.v,`MISS ${Math.round(nd)} M`,AMB);
     S.msg={text:`MISS ${Math.round(nd)} M FROM ${nt ? nt.name : 'TARGET'}`, col:AMB, t:3};
@@ -4166,6 +4168,8 @@ function raidBombImpact(b){
   raidAfter(hits);
 }
 // hit points on ground objects
+// an AAA gun is light: any bomb or laser missile landing inside its hit circle destroys it. SAM sites keep the near-miss scale.
+const adDmg=(a,d)=>a.kind==='AAA' ? 100 : groundDmg(d,adR(a),false);
 function groundDmg(d,R,structure){
   const f=d<=R*0.35 ? GROUND_DMG.direct : lerp(GROUND_DMG.near[0],GROUND_DMG.near[1],clamp((d-R*0.35)/(R*0.65),0,1));
   return f*(structure ? GROUND_DMG.structure : 1);
@@ -5627,7 +5631,7 @@ function reset(){
   growGround();
   if (SWARM && SEA) SEA.ad.forEach(a=>{ a.g.visible=false; a.wreck.visible=false; });   // the night swarm: a friendly coast, no port guns
   awacsReset();
-  S.rwrLvl=0; ladReconReset(); if (RAIL) irReset(); if (AIRB) abReset();   // Iron Rail: the train back at its start, nothing designated until it is found
+  S.rwrLvl=0; ladReconReset(); lsReset(); if (RAIL) irReset(); if (AIRB) abReset();   // Iron Rail: the train back at its start, nothing designated until it is found
   if (AWACS && PUN){ hideRaidSet(PUN); hideRaidSet(PUN.tank); PUN.chute.visible=false; }   // Punjab without the rescue's guns or the tank column
   Object.assign(S,{fuel: TANKER ? TANKER_FUEL0 : 0, contact:false, rtb:false, bingo:false, autoRef:false, leaks:0, obs:null, obsT:3, cvHits:0, asmDown:0, photos:0, photoFlash:0});
   REC_SITES.forEach(s=>{ s.done=false; }); REC_CAM=null;
@@ -6781,6 +6785,7 @@ function applyPrefs(){
   if (BRIDGE || RECON){ if (BRIDGE) BRG.targets.forEach(t=>{ t.intact.visible=t.alive; t.wreck.visible=!t.alive; }); RAID_K.targets.forEach(t=>{ t.intact.visible=true; t.wreck.visible=false; t.extras.forEach(o=>{ o.visible=true; }); }); RAID_K.ad.forEach(a=>{ a.g.visible=true; a.wreck.visible=false; }); }
   updateOuter();   // multiplayer and the airbase strike: widen the arena to 80 km
   abSync();   // the airbase strike: its base out in the ring, and the old forward base's targets hidden
+  lsSync();   // the SAM belt 5 km beyond the LoC / LAC
   if (!PRECISE){ PREC.targets.forEach(t=>{ t.intact.visible=false; t.wreck.visible=false; }); PREC.ad.forEach(a=>{ a.g.visible=false; a.wreck.visible=false; }); }
   document.querySelectorAll('[data-map-opt]').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.mapOpt===prefs.map)));
   if (mode==='strike') prefs.plane='mig21';   // mission 1: the MiG-21 with plain bombs
@@ -6933,7 +6938,7 @@ function applyPrefs(){
     const total=AW_WAVES.slice(1).reduce((a,w)=>a+w.length,0);
     $('briefEyebrow').textContent='Thin Air · High-value asset protection · Punjab · what-if scenario';
     $('briefTitle').textContent='Guard the Netra';
-    $('briefBody').textContent=`A Netra AEW&C radar jet is flying a ${AW.R*2/1000} km circle ${((AW.cz-pbBorderZ(0))/1000).toFixed(0)} km south of the border in Punjab, watching the other side. The other side wants it gone. ${AW_WAVES.length-1} waves of fighters (${total} in all, ending with J-10Cs and an F-16) will come from the north for the Netra, not for you, and from the second wave on two of them sneak in low on the flanks, one from the west and one from the east, while the rest come from the north. The Netra can take two missile hits; a third brings it down and ends the mission. While you stay within ${AW_LINK/1000} km of the Netra its datalink puts every bandit on your HUD and map; stray further and you see only what your own radar sees (${((p.radar||9000)/1000).toFixed(0)} km). Meet each wave north of the orbit, take the closest threat to the Netra first, and do not cross the border. You are rearmed between waves. Your ${p.name} carries ${mslTxt({...p, msl:loadout().msl})}, ${p.gun} gun rounds and ${FLARES} flares.`;
+    $('briefBody').textContent=`A Netra AEW&C radar jet is flying a ${AW.R*2/1000} km circle ${((AW.cz-pbBorderZ(0))/1000).toFixed(0)} km south of the border in Punjab, watching the other side. The other side wants it gone. ${AW_WAVES.length-1} waves of fighters (${total} in all, ending with J-10Cs and an F-16) will come from the north for the Netra, not for you, and from the second wave on two of them sneak in low on the flanks, one from the west and one from the east, while the rest come from the north. The Netra can take two missile hits; a third brings it down and ends the mission. While you stay within ${AW_LINK/1000} km of the Netra its datalink puts every bandit on your HUD and map; stray further and you see only what your own radar sees (${((p.radar||9000)/1000).toFixed(0)} km). Meet each wave north of the orbit, take the closest threat to the Netra first. You are rearmed between waves. Your ${p.name} carries ${mslTxt({...p, msl:loadout().msl})}, ${p.gun} gun rounds and ${FLARES} flares.`;
     setFacts('briefFacts',[[String(AW_WAVES.length-1),'Waves'],[String(total),'Bandits'],[`${AW_LINK/1000} km`,'Datalink range'],['2','Hits Netra can take']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. MSL once a bandit reads LOCK, hold GUN up close, FLR the moment MISSILE flashes. Stay near the Netra (green circle) to keep the datalink.';
   } else if (SWARM){
@@ -6947,20 +6952,20 @@ function applyPrefs(){
     const R=lockRange(p)*FOES.uav.stealth, total=DRONE_WAVES.reduce((a,b)=>a+b,0);
     $('briefEyebrow').textContent='Thin Air · Drone hunt · Arunachal Pradesh · what-if scenario';
     $('briefTitle').textContent='Drones over the jungle';
-    $('briefBody').textContent=`Small attack drones are slipping across the Line of Actual Control into Arunachal Pradesh, skimming low over the jungle canopy and along the river valleys towards four Indian posts: Tawang with its monastery, Jang, Lumla and Sela Pass (green squares on the minimap). The hills are thick with forest and the morning haze is heavy, so a grey drone over the trees is very hard to pick out. Each one dives on its post when it gets there. ${total} drones come in three waves; if ${DRONE_LEAKS} of them get through, the sortie fails. They are slow, but hard to find: you only see one within ${DRONE_VIS/1000} km, and your ${p.name} can lock one only inside about ${(R/1000).toFixed(1)} km, because it is so small. Ground observers radio a rough position every few seconds: follow the amber OBSERVER REPORT arrow and the dashed circle on the minimap, then look low, against the hillsides. Close in, lock and fire, or use the gun (it takes a few hits). A missile fired at a drone hugging the ground can hit the hill instead. You carry ${mslTxt({...p, msl:loadout().msl})}, ${p.gun} gun rounds, and you are rearmed between waves. Do not cross the LAC (the red line to the north) yourself: that ends the sortie.`;
+    $('briefBody').textContent=`Small attack drones are slipping across the Line of Actual Control into Arunachal Pradesh, skimming low over the jungle canopy and along the river valleys towards four Indian posts: Tawang with its monastery, Jang, Lumla and Sela Pass (green squares on the minimap). The hills are thick with forest and the morning haze is heavy, so a grey drone over the trees is very hard to pick out. Each one dives on its post when it gets there. ${total} drones come in three waves; if ${DRONE_LEAKS} of them get through, the sortie fails. They are slow, but hard to find: you only see one within ${DRONE_VIS/1000} km, and your ${p.name} can lock one only inside about ${(R/1000).toFixed(1)} km, because it is so small. Ground observers radio a rough position every few seconds: follow the amber OBSERVER REPORT arrow and the dashed circle on the minimap, then look low, against the hillsides. Close in, lock and fire, or use the gun (it takes a few hits). A missile fired at a drone hugging the ground can hit the hill instead. You carry ${mslTxt({...p, msl:loadout().msl})}, ${p.gun} gun rounds, and you are rearmed between waves.`;
     setFacts('briefFacts',[[String(total),'Drones, 3 waves'],['4','Posts to protect'],[`${DRONE_VIS/1000} km`,'Seen within'],[`${DRONE_LEAKS}`,'Strikes and you fail']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. Follow the amber OBSERVER REPORT arrow. MSL fires once a drone reads LOCK; hold GUN with the cross inside the lead circle.';
   } else if (ESCORT){
     $('briefEyebrow').textContent='Thin Air · Escort · eastern Ladakh · what-if scenario';
     $('briefTitle').textContent='Bring the Hercules in';
-    $('briefBody').textContent=`A C-130J Super Hercules is flying troops and supplies to a high-altitude airstrip close to the LAC (a stand-in for Daulat Beg Oldi). It flies a fixed route west along the valleys, then turns south for a steep tactical approach over Pangong Tso and lands on the strip. You are its escort, just behind it as the sortie starts. About 15 seconds in, two J-10Cs cross the LAC and go for the transport; two J-20 stealth fighters follow later, and your radar sees them only at short range. They want the Hercules, not you, so stay between it and the LAC and shoot them before they reach missile range of it. The C-130J pops flares against heat-seekers and can survive two missile hits; a third brings it down. The mission is won when it touches down. It shows on the HUD as a green circle, and the airstrip as an amber square marked DBO. Your ${p.name} carries ${mslTxt({...p, msl:loadout().msl})}, ${p.gun} gun rounds and ${FLARES} flares. Do not cross the LAC (the red line to the north): that ends the sortie.`;
+    $('briefBody').textContent=`A C-130J Super Hercules is flying troops and supplies to a high-altitude airstrip close to the LAC (a stand-in for Daulat Beg Oldi). It flies a fixed route west along the valleys, then turns south for a steep tactical approach over Pangong Tso and lands on the strip. You are its escort, just behind it as the sortie starts. About 15 seconds in, two J-10Cs cross the LAC and go for the transport; two J-20 stealth fighters follow later, and your radar sees them only at short range. They want the Hercules, not you, so stay between it and the LAC and shoot them before they reach missile range of it. The C-130J pops flares against heat-seekers and can survive two missile hits; a third brings it down. The mission is won when it touches down. It shows on the HUD as a green circle, and the airstrip as an amber square marked DBO. Your ${p.name} carries ${mslTxt({...p, msl:loadout().msl})}, ${p.gun} gun rounds and ${FLARES} flares.`;
     setFacts('briefFacts',[['1','C-130J to protect'],['4','Bandits, 2 waves'],['3','Hits it can take'],[String(loadout().msl),'Missiles']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. Stay near the green circle (the Hercules). MSL fires once a bandit reads LOCK; hold GUN with the cross inside the lead circle; tap FLR when MISSILE flashes.';
   } else if (LADAKH){
     const R=lockRange(p), Rs=R*FOES.j20.stealth;
     $('briefEyebrow').textContent='Thin Air · Intercept · eastern Ladakh · what-if scenario';
     $('briefTitle').textContent='Four J-20s across the LAC';
-    $('briefBody').textContent=`Four J-20 stealth fighters have crossed the Line of Actual Control near Pangong Tso and are flying into Indian airspace in two pairs. You are scrambled alone to intercept. Shoot down all four. The J-20 is hard to see on radar: your ${p.name} locks a normal jet at ${(R/1000).toFixed(1).replace('.0','')} km but a J-20 only inside about ${(Rs/1000).toFixed(1).replace('.0','')} km, and its box reads STEALTH until then. Each J-20 carries the long-range PL-15 radar missile and the agile PL-10 heat-seeker, so it can shoot first${p.stealth ? `, but your AMCA is a stealth jet too: their radars lock you only inside about ${(Math.min(FOES.j20.range, AAM.pl15.lock*0.85)*p.stealth/1000).toFixed(1)} km instead of ${(Math.min(FOES.j20.range, AAM.pl15.lock*0.85)/1000).toFixed(0)} km, so it becomes a fair fight` : ''}. When RADAR MISSILE flashes, turn so the missile is on your wingtip (beam it) to break its lock; against the PL-10, pop flares and turn hard. Close in, then fire once the box reads LOCK and IN RANGE, and use the gun up close. These J-20 pilots are good: they spot your missile early, break hard across its path with a dive, and time their flares well, so a long shot often misses. Fire close and from behind, and follow up with the gun. Your jet carries ${mslTxt({...p, msl:loadout().msl})}, ${p.gun} gun rounds and ${FLARES} flares. The air here is thin: the valleys sit at 4,300 m and the ridges reach 6,400 m. Once the J-20s are down, you get a second task: the enemy has set up a camp on the Indian side, above the north shore of Pangong Tso about 3.75 km south of the LAC, guarded by a SAM launcher that reaches 9 km. Film it: fly within ${LR_R/1000} km of the camp, below ${LR_ALT} m above the ground and with the wings level, for 2 km in all. Below ${LR_ALT} m the SAM radar cannot see you, and a ridge in between hides you too. Then report back by flying ${LR_HOME/1000} km south of the LAC. Do not cross the LAC (the red line on the ground to the north) yourself: that ends the sortie.`;
+    $('briefBody').textContent=`Four J-20 stealth fighters have crossed the Line of Actual Control near Pangong Tso and are flying into Indian airspace in two pairs. You are scrambled alone to intercept. Shoot down all four. The J-20 is hard to see on radar: your ${p.name} locks a normal jet at ${(R/1000).toFixed(1).replace('.0','')} km but a J-20 only inside about ${(Rs/1000).toFixed(1).replace('.0','')} km, and its box reads STEALTH until then. Each J-20 carries the long-range PL-15 radar missile and the agile PL-10 heat-seeker, so it can shoot first${p.stealth ? `, but your AMCA is a stealth jet too: their radars lock you only inside about ${(Math.min(FOES.j20.range, AAM.pl15.lock*0.85)*p.stealth/1000).toFixed(1)} km instead of ${(Math.min(FOES.j20.range, AAM.pl15.lock*0.85)/1000).toFixed(0)} km, so it becomes a fair fight` : ''}. When RADAR MISSILE flashes, turn so the missile is on your wingtip (beam it) to break its lock; against the PL-10, pop flares and turn hard. Close in, then fire once the box reads LOCK and IN RANGE, and use the gun up close. These J-20 pilots are good: they spot your missile early, break hard across its path with a dive, and time their flares well, so a long shot often misses. Fire close and from behind, and follow up with the gun. Your jet carries ${mslTxt({...p, msl:loadout().msl})}, ${p.gun} gun rounds and ${FLARES} flares. The air here is thin: the valleys sit at 4,300 m and the ridges reach 6,400 m. Once the J-20s are down, you get a second task: the enemy has set up a camp on the Indian side, above the north shore of Pangong Tso about 3.75 km south of the LAC, guarded by a SAM launcher that reaches 9 km. Film it: fly within ${LR_R/1000} km of the camp, below ${LR_ALT} m above the ground and with the wings level, for 2 km in all. Below ${LR_ALT} m the SAM radar cannot see you, and a ridge in between hides you too. Then report back by flying ${LR_HOME/1000} km south of the LAC.`;
     setFacts('briefFacts',[['4','J-20s'],[`${(Rs/1000).toFixed(1).replace('.0','')} km`,'Your lock on a J-20'],[String(loadout().msl),'Missiles'],['4,225 m','Pangong Tso']]);
     $('touchNote').textContent='Left stick flies the jet (drag down to pull up). Right slider is the throttle. MSL fires once a J-20 reads LOCK; hold GUN with the cross inside the lead circle; tap FLR when MISSILE flashes, and turn across a radar missile to beam it.';
   } else if (WORLD==='pune'){
@@ -7352,8 +7357,7 @@ function missionObjectives(){
   if (ESCORT) return [['Escort the C-130J until it lands',false],[`Shoot down the bandits (${k}/4)`,k>=4,true],['The C-130J can take two hits',false,'rule']];
   if (LADAKH) return [[`Shoot down the four J-20s (${k}/4)`,k>=4],
     [LR.ph==='fight' ? 'Then: film the enemy camp near the LAC' : `Film the enemy camp: 2 km below ${LR_ALT} m (${(LR.film/1000).toFixed(1)}/${LR_FILM/1000} km)`, LR.ph==='rtb'],
-    [`Report back: ${LR_HOME/1000} km south of the LAC`,false],
-    ['Stay south of the LAC',false,'rule']];
+    [`Report back: ${LR_HOME/1000} km south of the LAC`,false]];
   if (mode==='dogfight') return [[`Shoot down both JF-17s and the J-10C (${k}/3)`,k>=3]];
   return null;
 }
@@ -7808,7 +7812,8 @@ function drawHUD(now){
     else if (missiles.some(m=>m.target==='player' && m.mt && m.mt.seeker==='RADAR')) warns.push(['RADAR MISSILE · BEAM IT: TURN 90° TO IT',RED,true]);
     else if (missiles.some(m=>m.target==='player')) warns.push([isTouch?'MISSILE · FLR':'MISSILE · FLARES Z',RED,true]);
     if (!dog && S.aaFiring) warns.push(['AAA FIRE',AMB,false]);
-    if ((raid || LADAKH) && S.samTrack) warns.push((RAIL || LADAKH) ? (S.rwrLvl===2 ? ['SAM LOCK · GET LOW OR BREAK LINE OF SIGHT',RED,true] : ['RADAR SEARCH · SAM ACQUIRING',AMB,false]) : ['SAM RADAR',AMB,false]);
+    if (LS.track) warns.push(LS.lock ? [`SAM LOCK · TURN BACK OVER THE ${lineName()}`,RED,true] : [`SAM RADAR ACROSS THE ${lineName()}`,AMB,false]);
+    else if ((raid || LADAKH) && S.samTrack) warns.push((RAIL || LADAKH) ? (S.rwrLvl===2 ? ['SAM LOCK · GET LOW OR BREAK LINE OF SIGHT',RED,true] : ['RADAR SEARCH · SAM ACQUIRING',AMB,false]) : ['SAM RADAR',AMB,false]);
     if (raid && !PRECISE){}
     else if (S.dLoc<1000) warns.push([`${lineName()} ${(Math.max(0,S.dLoc)/1000).toFixed(1)} KM · TURN SOUTH`,RED,true]);
     else if (S.dLoc<LOC_WARN) warns.push([`${lineName()} ${(S.dLoc/1000).toFixed(1)} KM`,AMB,false]);
@@ -10046,7 +10051,7 @@ function railImpact(b){
   }
   const by=!mine && b.by ? b.by.name+' · ' : '';
   if (killed.length){ if (mine) pipImpact(b,b.p,b.v,`${killed.join(' + ')} DESTROYED`,HUD); S.msg={text:`${by}${killed.join(' · ')} DESTROYED`, col:HUD, t:3}; }
-  else if (dmgd.length){ if (mine) pipImpact(b,b.p,b.v,'HIT',AMB); S.msg={text:`${by}HIT · ${dmgd.join(' · ')}`, col:AMB, t:3}; }
+  else if (dmgd.length){ if (mine) pipImpact(b,b.p,b.v,`HIT · ${dmgd.join(' · ')}`,AMB); S.msg={text:`${by}TARGET HIT · ${dmgd.join(' · ')}`, col:AMB, t:3}; }
   else { if (mine) pipImpact(b,b.p,b.v,`MISS ${Math.round(nd)} M`,AMB); S.msg={text:`${by}MISS ${Math.round(nd)} M FROM THE ${nn}`, col:AMB, t:3}; }
   if (mine) irOutCheck();
 }
@@ -10441,6 +10446,72 @@ function abMinimap(mp,k){   // the LoC across the whole widened map, and the HQ-
   const [ax,ay]=mp(hq.x,hq.z); c.beginPath(); c.moveTo(ax,ay-4); c.lineTo(ax+3.5,ay+3); c.lineTo(ax-3.5,ay+3); c.closePath(); c.fillStyle=RED; c.fill();
 }
 
+// ---------- the SAM belt beyond the line: launchers 5 km on the far side of the LoC (Kargil) and of the LAC (Ladakh and
+// Arunachal). On the Indian side they never see you; cross the line and every launcher within range locks on (2.5 s) and fires.
+// Fly back across and their radars lose you: a missile in the air goes dumb a second later. Bombs and laser missiles kill them.
+// Not in the multiplayer arena, nor in the airbase strike (its own HQ-9 radar rules), nor in mission 1 and the precision strike
+// (crossing the LoC ends those).
+const LS_BACK=5000, LS_RANGE=9000, LS_STEP=6000, LS_WORLDS=['kargil','ladakh','jungle'];
+const LS={sets:{}, list:[], track:false, lock:false};
+function lsBuild(w){
+  const L=[];
+  for (let x=-15000; x<=15000; x+=LS_STEP){
+    const z=lineZ(x)-LS_BACK;
+    if (z<-HALF+1500) continue;   // off the map
+    if (w==='kargil' && Math.hypot(x-BASE.x, z-BASE.z)<3000) continue;   // the enemy base already has its own SAM there
+    if (w==='ladakh' && lakeD(x,z).d<1500) continue;   // not on Pangong Tso
+    const a=makeSAM(x-BASE.x, z-BASE.z);   // makeSAM and its wreck are placed relative to BASE, on this world's ground
+    a.belt=true; a.name='SAM'; L.push(a);
+  }
+  return L;
+}
+function lsReset(){ LS.list.forEach(a=>{ a.alive=true; a.g.visible=true; a.wreck.visible=false; a.unit=samUnit({missiles:4, lockTime:2.5, reload:14}); }); LS.track=LS.lock=false; }
+function lsOn(){ return LS_WORLDS.includes(WORLD) && !MP.on && !AIRB && !PRECISE && mode!=='strike' && mode!=='training'; }
+function lsSync(){   // after the world is set (applyPrefs): this world's belt shown, the others hidden
+  const on=lsOn();
+  if (on && !LS.sets[WORLD]) LS.sets[WORLD]=lsBuild(WORLD);
+  Object.entries(LS.sets).forEach(([w,L])=>L.forEach(a=>{ a.g.visible=on && w===WORLD && a.alive; a.wreck.visible=on && w===WORLD && !a.alive; }));
+  LS.list = on ? LS.sets[WORLD] : [];
+  lsReset();
+}
+function updateLineSams(dt){
+  LS.track=LS.lock=false;
+  if (!LS.list.length) return;
+  const fly=state==='fly' && S.alive;
+  const over=()=>S.alive && S.dLoc<0 && S.pos.y<16000 && !(RECON && S.agl<REC_MASK);   // only once you are across the line
+  for (const a of LS.list){
+    if (!a.alive) continue;
+    _t.copy(S.pos).sub(a.g.position); const hd=Math.hypot(_t.x,_t.z);
+    const see=fly && over() && hd<LS_RANGE*DIFF.samRange;
+    const ev=samStep(a.unit,see,dt,missiles.some(m=>m.sam===a));
+    a.radar.rotation.y+=dt*(see ? 4 : 1.4);
+    if (see){ LS.track=true; if (a.unit.st==='locked') LS.lock=true;
+      a.yaw.rotation.y=Math.atan2(-_t.x,-_t.z)-a.g.rotation.y; a.pitch.rotation.x=clamp(Math.atan2(_t.y,hd),0.35,1.2); }
+    if (ev==='launch'){
+      const p=a.g.position.clone(); p.y+=6; _d.copy(_t).normalize(); _d.y=Math.max(_d.y,0.5); _d.normalize();
+      const m=spawnMissile(p,_d.clone().multiplyScalar(90),'player','e'); m.sam=a; m.maxLife=16; m.mesh.scale.setScalar(1.8);
+      effects.push(makeFx(p.clone(),0xd8d2c4,false,3,3,16,0.7,3));
+      S.msg={text:`SAM LAUNCH ACROSS THE ${lineName()} · FLARES, BREAK SOUTH`, col:RED, t:2.4};
+    }
+  }
+  for (const m of missiles){   // back on the Indian side, the radars lose you and their missiles go dumb a second later
+    if (!m.sam || !m.sam.belt || m.target!=='player') continue;
+    if (over()) m.nlos=0;
+    else { m.nlos=(m.nlos||0)+dt; if (m.nlos>1){ m.target=null; S.msg={text:`BACK OVER THE ${lineName()} · SAM LOST YOU`, col:HUD, t:1.8}; } }
+  }
+}
+function lsBombHit(b){   // a bomb or laser missile on a belt launcher: one hit kills it. True when it hit one.
+  for (const a of LS.list){
+    if (!a.alive || Math.hypot(b.p.x-a.x,b.p.z-a.z)>adR(a)) continue;
+    a.alive=false; a.g.visible=false; a.wreck.visible=true;
+    missiles.forEach(m=>{ if (m.sam===a) m.target=null; });
+    spawnExplosion(new T.Vector3(a.x,a.y+3,a.z),true);
+    pipImpact(b,b.p,b.v,'SAM DESTROYED',HUD); S.msg={text:`SAM SITE DESTROYED · ${LS.list.filter(x=>x.alive).length} LEFT ALONG THE ${lineName()}`, col:HUD, t:3};
+    return true;
+  }
+  return false;
+}
+
 // ---------- multiplayer arena, 80 km across: the detailed 40 km map in the middle, and around it a coarse ring of the
 // same terrain (625 m cells) so the extra room costs little. Only the dogfight maps (Kargil, Pune) and co-op use it.
 const OMAP=80000, OHALF=OMAP/2, OSEG=128, OSTEP=OMAP/OSEG, ON=OSEG+1;
@@ -10733,10 +10804,12 @@ function frame(now){
           if (ex>edge) mpDown('LEFT THE SECTOR');
           else if (ex>warn && !S.msg) S.msg={text:'SECTOR EDGE · TURN BACK', col:AMB, t:1};
         }
-        else if (S.dLoc<0 && AWACS) endMission(false,'Crossed the border','You flew across the international border. Guard the Netra from the Indian side: meet the bandits as they come south and let any that run north go.',0.8);
-        else if (S.dLoc<0 && (LADAKH || ESCORT || DRONES)) endMission(false,'Crossed the LAC',`You flew across the Line of Actual Control. Fight on the Indian side: ${DRONES ? 'catch the drones south of the line, after they cross' : 'when a J-20 runs north, let it go and turn back'}, or press B to break south.`,0.8);
-        else if (S.dLoc<0) endMission(false,'Crossed the Line of Control','In 1999 pilots were ordered to stay on the Indian side of the LoC. Turn away early, or press B to break south.',0.8);
-        else if (Math.abs(S.pos.x)>19000||Math.abs(S.pos.z)>19000) endMission(false,'Left the sector','The sortie area is about 38 km across. Turn back toward the middle of the minimap.',0.5);
+        // only the Point 4875 strike and the precision strike end at the LoC (the 1999 rule); every other mission just warns once
+        else if (S.dLoc<0 && (mode==='strike' || PRECISE)) endMission(false,'Crossed the Line of Control','In 1999 pilots were ordered to stay on the Indian side of the LoC. Turn away early, or press B to break south.',0.8);
+        else {
+          if (S.dLoc<0 && !S.locMsg){ S.locMsg=true; S.msg={text:`CROSSED THE ${lineName()} · ENEMY TERRITORY`, col:AMB, t:2.5}; }
+          if (Math.abs(S.pos.x)>19000||Math.abs(S.pos.z)>19000) endMission(false,'Left the sector','The sortie area is about 38 km across. Turn back toward the middle of the minimap.',0.5);
+        }
       }
     }
     if (mode==='strike'){
@@ -10746,6 +10819,7 @@ function frame(now){
     else if (mode==='raid'){ updateBombs(dt); updateRaidAD(dt); updateNavBoat(dt); updateWingmen(dt); if (RAIL) updateIronRail(dt); if (AIRB) updateAirbase(dt); if (PRECISE) updatePrecF16(dt); if (plainRaid() && !MP.coop) updateRaidClock(dt); if (SEAD) updateSead(dt); if (TANKER) updateTanker(dt); if (BRIDGE){ updateConvoy(dt); updateIllum(dt); } if (CSAR) updateCsar(dt); if (RECON) updateRecon(dt); if (TANKS) updateTanks(dt); updateLaser(); updateDogfight(dt); updateSecondaries(dt); }
     else if (mode==='training'){ updateBombs(dt); updateLaser(); updateDogfight(dt); updateTraining(dt); }
     else { updateDogfight(dt); if (LADAKH) updateLadRecon(dt); if (ESCORT) updateEscort(dt); if (AWACS) updateAwacs(dt); if (DRONES) updateDroneHunt(dt); if (FLEET && state==='fly') updateFleet(dt); }
+    updateLineSams(dt);   // the SAM belt beyond the LoC / LAC (any mission that has one)
     updatePip(dt);
     if (S.msg){ S.msg.t-=dt; if (S.msg.t<=0) S.msg=null; }
     if (S.banner){ S.banner.t-=dt; if (S.banner.t<=0) S.banner=null; }
