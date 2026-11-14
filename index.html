@@ -10454,8 +10454,7 @@ function abMinimap(mp,k){   // the LoC across the whole widened map, and the HQ-
 // ---------- the SAM belt beyond the line: launchers 5 km on the far side of the LoC (Kargil) and of the LAC (Ladakh and
 // Arunachal). On the Indian side they never see you; cross the line and every launcher within range locks on (2.5 s) and fires.
 // Fly back across and their radars lose you: a missile in the air goes dumb a second later. Bombs and laser missiles kill them.
-// Not in the multiplayer arena, nor in the airbase strike (its own HQ-9 radar rules), nor in mission 1 and the precision strike
-// (crossing the LoC ends those).
+// Only in the bridge strike, the drone hunt and the escort (see lsOn).
 const LS_BACK=5000, LS_RANGE=9000, LS_STEP=6000, LS_WORLDS=['kargil','ladakh','jungle'];
 const LS={sets:{}, list:[], track:false, lock:false};
 function lsBuild(w){
@@ -10471,7 +10470,8 @@ function lsBuild(w){
   return L;
 }
 function lsReset(){ LS.list.forEach(a=>{ a.alive=true; a.g.visible=true; a.wreck.visible=false; a.unit=samUnit({missiles:4, lockTime:2.5, reload:14}); }); LS.track=LS.lock=false; }
-function lsOn(){ return LS_WORLDS.includes(WORLD) && !MP.on && !AIRB && !PRECISE && mode!=='strike' && mode!=='training'; }
+// not in the recon (its own SAMs), the base raid (the base's own defences) or the Ladakh intercept (the enemy camp's SAM)
+function lsOn(){ return LS_WORLDS.includes(WORLD) && !MP.on && !AIRB && !PRECISE && !RECON && !LADAKH && !plainRaid() && mode!=='strike' && mode!=='training'; }
 function lsSync(){   // after the world is set (applyPrefs): this world's belt shown, the others hidden
   const on=lsOn();
   if (on && !LS.sets[WORLD]) LS.sets[WORLD]=lsBuild(WORLD);
