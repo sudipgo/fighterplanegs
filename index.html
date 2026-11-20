@@ -5589,7 +5589,11 @@ function updateDogfight(dt){
 const MP_MSL=12, MP_GUN=5000, MP_FLARES=40;
 const MP_GUN_LIFE=3.0, MP_GUN_RANGE=3500, MP_GUN_HIT=12;   // shells live 3 s (about 3.5 km), cue and assist out to 3.5 km, a slightly bigger hit zone on other pilots
 function loadout(){ const L=loadout0(); if (MP.on) L.msl=MP_MSL; return L; }
-function loadout0(){ const A=S.ac, agm=(mode==='raid'||(mode==='training' && LESSONS[prefs.lesson].weapon==='precision')) ? 2 : 0;   // the Kargil strike: plain bombs only
+// the ground-attack missions carry twice the bombs listed below (Point 4875, precision, bridge, naval, tanks, tanker,
+// SEAD, the base raid and the airbase strike); the air-to-air missions, recon, rescue cover and Iron Rail are unchanged
+const bombsX2=()=>!MP.on && (mode==='strike' || PRECISE || BRIDGE || NAVAL || TANKS || TANKER || SEAD || plainRaid() || AIRB);
+function loadout0(){ const L=loadoutBase(); if (bombsX2()) L.bombs*=2; return L; }
+function loadoutBase(){ const A=S.ac, agm=(mode==='raid'||(mode==='training' && LESSONS[prefs.lesson].weapon==='precision')) ? 2 : 0;   // the Kargil strike: plain bombs only
   if (RAIL){ const L=irCfg().loadouts[prefs.plane]; if (L) return {bombs:L.bombs, msl:L.msl, agm:L.agm}; }   // Iron Rail: from the config
   if (LADAKH) return {bombs:A.bombs, msl:8, agm};   // the Ladakh intercept: the Tejas Mk1A gets eight Astras for four J-20s (they flare well: about one shot in three is decoyed)
   if (AIRB) return {bombs:6, msl:6, agm:4};      // the airbase strike: 7 hits needed (runway crossing 2, hangars 2 + 2, HQ-9 1) from 10 weapons; 6 air-to-air for up to 6 fighters once you are seen
