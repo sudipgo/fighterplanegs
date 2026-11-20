@@ -530,7 +530,7 @@ html.short .mfilter button{padding:3px 8px;font-size:9px;}
     <div class="rankline st-play" id="rankLine"></div>
     <div class="lbl st-play">How do you want to fly?</div>
     <div class="seg playseg st-play">
-      <button class="opt" type="button" data-play="single"><b>Single player</b><span>All 19 missions, from the Kargil strike to Operation Iron Rail</span></button>
+      <button class="opt" type="button" data-play="single"><b>Single player</b><span>7 missions, from the Kargil strike to Operation Iron Rail</span></button>
       <button class="opt" type="button" data-play="multi"><b>Multiplayer</b><span>Live dogfight or co-op raid with friends who open this page</span></button>
       <button class="opt" type="button" data-play="train"><b>Training</b><span>Learn to fly and fight, step by step</span></button>
     </div>
@@ -755,10 +755,13 @@ html.short .mfilter button{padding:3px 8px;font-size:9px;}
 'use strict';
 const $ = id => document.getElementById(id);
 let prefs = {mode:'strike', plane:'m2k', lesson:0, map:'pune', diff:'normal'};
+// the single-player missions on offer, in order (easiest first). The other twelve are still in the code, only hidden:
+// to bring one back, add its key here (dogfight, raid, naval, sead, escort, tanker, bridge, drones, csar, recon, swarm, awacs).
+const LIVE_MISSIONS=['strike','precision','tanks','fleet','airbase','ladakh','ironrail'];
 try {
   const s = JSON.parse(localStorage.getItem('thinair.hangar') || 'null');
   if (s && ['strike','precision','dogfight','raid','naval','ladakh','sead','escort','tanker','bridge','drones','fleet','csar','recon','tanks','swarm','awacs','ironrail','airbase','training','versus','coop'].includes(s.mode) && typeof s.plane==='string')
-    prefs = {mode:s.mode, plane:s.plane, lesson:Number.isInteger(s.lesson) ? Math.max(0,Math.min(4,s.lesson)) : 0, map:s.map==='kargil' ? 'kargil' : 'pune',
+    prefs = {mode:(LIVE_MISSIONS.includes(s.mode) || ['training','versus','coop'].includes(s.mode)) ? s.mode : 'strike', plane:s.plane,   // a saved pick of a hidden mission: back to Point 4875 lesson:Number.isInteger(s.lesson) ? Math.max(0,Math.min(4,s.lesson)) : 0, map:s.map==='kargil' ? 'kargil' : 'pune',
              diff:['easy','normal','hard'].includes(s.diff) ? s.diff : 'normal'};
 } catch (e) {}
 
@@ -5662,13 +5665,11 @@ function crash(){
   if (WORLD==='jungle'){ endMission(false,'Into the jungle','Down among the hills the trees and ridges come up fast. Hunt from 400 to 800 m above the ground, dive on a drone only when you can see it, and pull up the moment you see the PULL UP cue.',2.2); return; }
   endMission(false,'Hit the terrain','Ridge tops here reach well above 5,000 m. Watch the radar altitude and pull up the moment you see the PULL UP cue.',2.2);
 }
-// ---------- stars and rank: each mission gives up to 3 stars, kept as your best; the total sets your rank
-const STAR_MODES=['strike','precision','dogfight','raid','naval','ladakh','sead','escort','tanker','bridge','drones','fleet','csar','recon','tanks','swarm','awacs','ironrail','airbase'];
-const RANKS=[[0,'Pilot Officer'],[3,'Flying Officer'],[8,'Flight Lieutenant'],[15,'Squadron Leader'],[24,'Wing Commander'],[34,'Group Captain'],[45,'Air Commodore']];
+// ---------- stars: each mission gives up to 3 stars, kept as your best (no ranks any more: v191)
+const STAR_MODES=LIVE_MISSIONS.slice();   // stars count only the missions on offer (7 × 3 = 21)
 const BEST={};   // best stars per mission
 try { const d=JSON.parse(localStorage.getItem('thinair.stars')||'null'); if (d && typeof d==='object') STAR_MODES.forEach(k=>{ const v=Math.floor(+d[k]); if (v>=1 && v<=3) BEST[k]=v; }); } catch (e) {}
 const starTotal=()=>STAR_MODES.reduce((a,k)=>a+(BEST[k]||0),0);
-function rankOf(n){ let i=0; while (i+1<RANKS.length && n>=RANKS[i+1][0]) i++; return i; }
 const starStr=n=>'★'.repeat(n)+'☆'.repeat(3-n);
 function missionStars(){
   const used=Math.max(0,S.maxM-S.msl)+Math.max(0,S.maxB-S.bombs)+Math.max(0,S.maxA-S.agm), total=S.maxM+S.maxB+S.maxA;
@@ -5682,21 +5683,21 @@ function paintStars(){
     if (!s){ s=document.createElement('span'); s.className='stars'; head.appendChild(s); }
     s.textContent=starStr(BEST[k]||0); s.classList.toggle('none',!BEST[k]); b.classList.toggle('won',!!BEST[k]);
   });
-  const n=starTotal(), i=rankOf(n), nx=RANKS[i+1];
+  const n=starTotal();
   { const done=STAR_MODES.filter(k=>BEST[k]).length, N=STAR_MODES.length;   // mission step: how far through the campaign you are
     $('mProgTxt').innerHTML=`<b>${done}</b> of ${N} missions complete · <b>${n}</b> of ${N*3} ★`; $('mProgBar').style.width=Math.round(100*done/N)+'%'; }
-  $('rankLine').innerHTML=`<b>${RANKS[i][1]}</b> · ${n} of ${STAR_MODES.length*3} ★${nx ? ` · ${nx[0]-n} more for ${nx[1]}` : ' · the highest rank'}`;
+  $('rankLine').innerHTML=`<b>${n}</b> of ${STAR_MODES.length*3} ★`;   // stars only (no ranks)
 }
 function showStars(){
   const es=$('endStars'); es.hidden=true;
   if (!endInfo.win || MP.on || mode==='training' || !STAR_MODES.includes(prefs.mode)) return;
-  const r=missionStars(), old=BEST[prefs.mode]||0, before=starTotal();
+  const r=missionStars(), old=BEST[prefs.mode]||0;
   if (r.n>old){ BEST[prefs.mode]=r.n; try { localStorage.setItem('thinair.stars',JSON.stringify(BEST)); } catch (e) {} }
-  const after=starTotal(), rk=RANKS[rankOf(after)][1], up=rankOf(after)>rankOf(before);
+  const after=starTotal();
   es.innerHTML=`<div class="big" aria-label="${r.n} of 3 stars">${starStr(r.n)}</div>`
     + `<ul>${r.crit.map(([t,ok])=>`<li class="${ok?'ok':''}">${ok?'★':'☆'} ${t}</li>`).join('')}</ul>`
     + `<p>${r.n>old && old ? `New best for this mission (was ${old} ★). ` : r.n<old ? `Your best here is still ${old} ★. ` : ''}`
-    + `${up ? `Promoted to <b>${rk}</b>!` : `Rank: <b>${rk}</b> · ${after} ★ in all`}</p>`;
+    + `${after} of ${STAR_MODES.length*3} ★ in all</p>`;
   es.hidden=false; paintStars();
 }
 function fmtTime(t){ const s=Math.floor(t); return Math.floor(s/60)+':'+String(s%60).padStart(2,'0'); }
@@ -5745,7 +5746,7 @@ function showEnd(){
   }
   showStars();
   // after a successful strike, offer the next mission straight away
-  const NEXT={strike:'precision', precision:'dogfight', dogfight:'raid', raid:'naval', naval:'ladakh', ladakh:'sead', sead:'escort', escort:'tanker', tanker:'bridge', bridge:'drones', drones:'fleet', fleet:'csar', csar:'recon', recon:'tanks', tanks:'swarm', swarm:'awacs', awacs:'ironrail', ironrail:'airbase'}, NAMES={airbase:'Airbase strike', ironrail:'Operation Iron Rail', swarm:'Night drone swarm', awacs:'AWACS defence',fleet:'Fleet defence', csar:'Rescue cover', recon:'Recon photo run', tanks:'Tank column strike',escort:'Escort transport', tanker:'Tanker refuel strike', bridge:'Night bridge strike', drones:'Drone hunt',precision:'Precision strike', dogfight:'Dogfight', raid:'Base raid', naval:'Naval strike', ladakh:'Ladakh intercept', sead:'SEAD radar hunt'};
+  const NEXT=Object.fromEntries(LIVE_MISSIONS.slice(0,-1).map((k,i)=>[k,LIVE_MISSIONS[i+1]])), /* the missions on offer, in order */ NAMES={airbase:'Airbase strike', ironrail:'Operation Iron Rail', swarm:'Night drone swarm', awacs:'AWACS defence',fleet:'Fleet defence', csar:'Rescue cover', recon:'Recon photo run', tanks:'Tank column strike',escort:'Escort transport', tanker:'Tanker refuel strike', bridge:'Night bridge strike', drones:'Drone hunt',precision:'Precision strike', dogfight:'Dogfight', raid:'Base raid', naval:'Naval strike', ladakh:'Ladakh intercept', sead:'SEAD radar hunt'};
   const nx=$('next'), nextMode=endInfo.win && !MP.on ? NEXT[prefs.mode] : undefined, chain=!!nextMode;
   nx.hidden=!chain;
   if (chain){ nx.dataset.next=nextMode; nx.textContent=`Next mission: ${NAMES[nextMode]} ›`; }
@@ -6486,7 +6487,7 @@ const MISSION_ART={
   swarm:['sea',1,['Drones','Night']], awacs:['plains',0,['Escort','Punjab']], training:['plains',0,['Lessons']],
   versus:['city',0,['Live','Free for all']], coop:['mount',0,['Live','Co-op']],
   ironrail:['desert',0,['Story','Train hunt']], airbase:['mount',0,['Low level','Deep strike']],
-  _single:['mount',0,['19 missions']], _multi:['city',1,['Live','Voice']], _train:['plains',0,['Step by step']] };
+  _single:['mount',0,['7 missions']], _multi:['city',1,['Live','Voice']], _train:['plains',0,['Step by step']] };
 const ART_PAL={   // sky top, sky bottom, far, mid, near
   mount:['#6fa3d0','#d8e7f2','#a5b6c8','#71859a','#3c4a58'], desert:['#e9a865','#f6dfb8','#dcab72','#c0844a','#8a5a30'],
   sea:['#79b6e2','#dcedf9','#9db7c8','#2f6f99','#1d4e72'], snow:['#9cc4e6','#eef6fb','#e3ebf2','#b6c5d4','#7d8ea0'],
@@ -6530,8 +6531,9 @@ function artSVG(key,idx){
     `<rect width="300" height="120" fill="url(#${id})"/>${sky}${jet}${land}</svg>`;
 }
 // single-player missions ranked from easiest (1) to hardest (17); the cards are in this order in the hangar
-const MISSION_RANK=['strike','drones','dogfight','precision','bridge','naval','tanks','recon','tanker','fleet','csar','swarm','escort','sead','awacs','raid','airbase','ladakh','ironrail'];
-const DIFF_TIERS=[{n:'Easy',c:'d1',to:3},{n:'Medium',c:'d2',to:8},{n:'Hard',c:'d3',to:13},{n:'Expert',c:'d4',to:19}];
+// the full order was: strike drones dogfight | precision bridge naval tanks recon | tanker fleet csar swarm escort | sead awacs raid airbase ladakh ironrail
+const MISSION_RANK=LIVE_MISSIONS.slice();   // Easy: strike · Medium: precision, tanks · Hard: fleet · Expert: airbase, ladakh, ironrail
+const DIFF_TIERS=[{n:'Easy',c:'d1',to:1},{n:'Medium',c:'d2',to:3},{n:'Hard',c:'d3',to:4},{n:'Expert',c:'d4',to:7}];
 function missionDiff(key){ const r=MISSION_RANK.indexOf(key)+1; if (!r) return null;
   const k=DIFF_TIERS.findIndex(t=>r<=t.to); return {rank:r, tier:k+1, name:DIFF_TIERS[k].n, cls:DIFF_TIERS[k].c}; }
 function diffBadge(key){ const d=missionDiff(key); if (!d) return '';
@@ -6683,7 +6685,7 @@ const playOf=m=> m==='training' ? 'train' : (m==='versus' || m==='coop') ? 'mult
 const planesShown=()=>[...document.querySelectorAll('[data-plane]')].filter(b=>!b.hidden);
 function hangarSync(){   // called from applyPrefs: which missions belong to the chosen kind of play
   const pl=playOf(prefs.mode);
-  const all=[...document.querySelectorAll('[data-mode-opt]')], mine=all.filter(b=>playOf(b.dataset.modeOpt)===pl && pl!=='train');
+  const all=[...document.querySelectorAll('[data-mode-opt]')], mine=all.filter(b=>playOf(b.dataset.modeOpt)===pl && pl!=='train' && (pl!=='single' || LIVE_MISSIONS.includes(b.dataset.modeOpt)));   // hidden missions never show
   if (pl==='single' && !mine.some(b=>filterPass(b.dataset.modeOpt))) HSTEP.filter='all';   // a filter with nothing left to show falls back to All
   all.forEach(b=>{ b.hidden = !mine.includes(b) || (pl==='single' && !filterPass(b.dataset.modeOpt)); });
   $('mFilter').hidden = $('mProg').hidden = pl!=='single'; filterPaint(mine);
